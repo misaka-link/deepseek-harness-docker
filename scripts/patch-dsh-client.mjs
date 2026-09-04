@@ -54,21 +54,21 @@ function findClientFiles(baseDir) {
 }
 
 function patchServerConnection(baseDir) {
-  // 1. 服务端鉴权：统一由网关接管认证，为回环转发请求提供放行补丁，彻底消除 token 换取时序差引发的 401
+  // 1. 服务端鉴权：统一由网关接管认证，彻底消除 /api 与 WebSocket 连接中 token 换取的 401 拦截
   const connTarget = path.join(baseDir, 'dsh-client-connection/lib/index.js');
   if (fs.existsSync(connTarget)) {
     try {
       let cContent = fs.readFileSync(connTarget, 'utf8');
-      if (cContent.includes('writeUnauthorized(req, res);') && !cContent.includes('/* dsh-patch: auth-bypass */')) {
+      if (cContent.includes('isAuthenticated(request) {') && !cContent.includes('/* dsh-patch: auth-bypass-all */')) {
         cContent = cContent.replace(
-          'if (this.isAuthenticated(req)) return true;',
-          '/* dsh-patch: auth-bypass */ if (req.socket?.remoteAddress === "127.0.0.1" || req.socket?.remoteAddress === "::1" || this.isAuthenticated(req)) return true;'
+          'isAuthenticated(request) {',
+          'isAuthenticated(request) {\n\t\t/* dsh-patch: auth-bypass-all */ return true;'
         );
         fs.writeFileSync(connTarget, cContent, 'utf8');
-        console.log(`[patch-dsh-client] 成功修补服务端回环免鉴权放行: ${connTarget}`);
+        console.log(`[patch-dsh-client] 成功修补服务端免鉴权直连 (由网关统一收口认证): ${connTarget}`);
       }
     } catch (err) {
-      console.warn(`[patch-dsh-client] 修补服务端回环放行失败: ${err.message}`);
+      console.warn(`[patch-dsh-client] 修补服务端放行失败: ${err.message}`);
     }
   }
 
