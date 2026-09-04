@@ -14,6 +14,7 @@ export DSH_DESKTOP_DEPTH="${DSH_DESKTOP_DEPTH:-24}"
 export CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-/root/.config/chromium}"
 export DSH_WEB_LOG="/tmp/dsh-web.log"
 export NODE_OPTIONS="${NODE_OPTIONS} --no-deprecation"
+export NODE_PATH="/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules:/usr/local/lib/node_modules:${NODE_PATH}"
 
 child_pid=""
 
@@ -35,6 +36,14 @@ echo "========================================================"
 # 1. 确保必要目录就绪
 mkdir -p "${DSH_WORKSPACE}" "/root/.dsh" "/root/.dsh-snapshots" "${CHROME_USER_DATA_DIR}" "/tmp/dsh-desktop"
 touch "${DSH_WEB_LOG}"
+
+# 1.1 修复 .dsh 目录与凭据文件的严格权限 (DSH 凭据服务强制校验 mode 600，拒绝 777/644 等跨权限读取崩溃)
+if [ -d "/root/.dsh" ]; then
+  chmod 700 /root/.dsh 2>/dev/null || true
+  find /root/.dsh -name "*credentials*.yaml" -o -name "*credentials*.yml" 2>/dev/null | while read -r f; do
+    chmod 600 "$f" || true
+  done
+fi
 
 # 2. 自动注册并安装 dsh-browser-desktop 插件到 DSH profile
 if [ -f "/app/scripts/install-plugin.mjs" ]; then

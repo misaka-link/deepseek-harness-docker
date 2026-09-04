@@ -54,10 +54,25 @@ function findClientFiles(baseDir) {
 }
 
 function patchServerConnection(baseDir) {
-  // 服务端鉴权完全由网关基于进程标准输出动态换取官方会话 Cookie，
-  // 真正实现零侵入、零篡改 DSH 服务端源码，此处无需对 dsh-client-connection/lib/index.js 进行任何修改！
+  // 1. 服务端鉴权：统一由网关接管认证，为回环转发请求提供放行补丁，彻底消除 token 换取时序差引发的 401
+  const connTarget = path.join(baseDir, 'dsh-client-connection/lib/index.js');
+  if (fs.existsSync(connTarget)) {
+    try {
+      let cContent = fs.readFileSync(connTarget, 'utf8');
+      if (cContent.includes('writeUnauthorized(req, res);') && !cContent.includes('/* dsh-patch: auth-bypass */')) {
+        cContent = cContent.replace(
+          'if (this.isAuthenticated(req)) return true;',
+          '/* dsh-patch: auth-bypass */ if (req.socket?.remoteAddress === "127.0.0.1" || req.socket?.remoteAddress === "::1" || this.isAuthenticated(req)) return true;'
+        );
+        fs.writeFileSync(connTarget, cContent, 'utf8');
+        console.log(`[patch-dsh-client] 成功修补服务端回环免鉴权放行: ${connTarget}`);
+      }
+    } catch (err) {
+      console.warn(`[patch-dsh-client] 修补服务端回环放行失败: ${err.message}`);
+    }
+  }
 
-  // 3. 目录选择器根路径微调 (若存在)
+  // 2. 目录选择器根路径微调 (若存在)
   const pickerTarget = path.join(baseDir, 'dsh-host-directory-picker-browse/lib/index.js');
   if (fs.existsSync(pickerTarget)) {
     try {
@@ -146,7 +161,7 @@ for (const searchDir of SEARCH_DIRS) {
         if (startIdx !== -1 && endIdx !== -1) {
           gContent = gContent.slice(0, startIdx) + 'function SettingsDocumentAction() { return null; }\n\t\t' + gContent.slice(endIdx);
           fs.writeFileSync(generalClientTarget, gContent, 'utf8');
-          console.log(`[patch-dsh-client] 成功消除“打开配置文件”按钮 (啥也不显示，return null): ${generalClientTarget}`);
+          console.log(`[patch-dsh-client] 成功消除“配置文件”按钮: ${generalClientTarget}`);
         }
       }
     } catch (err) {

@@ -113,8 +113,14 @@ RUN set -eux; \
     fi; \
     go version
 
-# 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm
-RUN npm install -g pnpm @deepseek-ai/dsh
+# 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm，并补齐全局依赖链接
+RUN npm install -g pnpm @deepseek-ai/dsh \
+    && for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \
+         pkg_name=$(basename "$d"); \
+         if [ "$pkg_name" != "dsh" ] && [ ! -e "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name" ]; then \
+           ln -s "$d" "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name"; \
+         fi; \
+       done
 
 # 3.1 按需预装社区插件清单 (默认关闭 PREINSTALL_PLUGINS=0；设为 1 时自动安装 plugins.market.list)
 ARG PREINSTALL_PLUGINS=0

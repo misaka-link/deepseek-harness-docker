@@ -11,6 +11,36 @@ const pluginSource = '/app/plugins/dsh-browser-desktop';
 
 fs.mkdirSync(linkDir, { recursive: true });
 
+// 0. 全局依赖自动补齐：将 DSH 内置的 @deepseek-ai/* 兄弟包链接至全局 /usr/local/lib/node_modules/@deepseek-ai
+// 彻底解决 dshmarket 等第三方插件因无法在上一级目录找到 @deepseek-ai/schemastery 等库而启动崩溃的问题
+const dshCoreModules = [
+  '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai',
+  '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai'
+].find(d => fs.existsSync(d));
+
+const globalScopeDir = [
+  '/usr/local/lib/node_modules/@deepseek-ai',
+  '/opt/dsh/lib/node_modules/@deepseek-ai'
+].find(d => fs.existsSync(d));
+
+if (dshCoreModules && globalScopeDir) {
+  try {
+    const pkgs = fs.readdirSync(dshCoreModules);
+    for (const p of pkgs) {
+      if (p === 'dsh') continue;
+      const target = path.join(globalScopeDir, p);
+      const src = path.join(dshCoreModules, p);
+      try {
+        if (!fs.existsSync(target)) {
+          fs.symlinkSync(src, target);
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('[install-plugin] 补齐全局 @deepseek-ai 依赖失败:', e.message);
+  }
+}
+
 // 1. 建立插件依赖软链接 (schemastery)
 const possibleSchemasterySources = [
   '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery',
@@ -153,12 +183,19 @@ for (const p of marketPlugins) {
       if (fs.existsSync(targetLnk)) fs.unlinkSync(targetLnk);
       fs.symlinkSync(p.path, targetLnk);
 
-      // 确保插件内部 node_modules/@deepseek-ai 指向全局依赖
+      // 确保插件内部 node_modules/@deepseek-ai 指向全局依赖 (使用 lstatSync 处理悬空软链)
       const peerLinkDir = path.join(p.path, 'node_modules/@deepseek-ai');
-      if (!fs.existsSync(peerLinkDir)) {
-        fs.mkdirSync(path.dirname(peerLinkDir), { recursive: true });
-        fs.symlinkSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai', peerLinkDir);
-      }
+      try {
+        try {
+          if (fs.lstatSync(peerLinkDir).isSymbolicLink() || fs.existsSync(peerLinkDir)) {
+            fs.unlinkSync(peerLinkDir);
+          }
+        } catch {}
+        if (dshCoreModules) {
+          fs.mkdirSync(path.dirname(peerLinkDir), { recursive: true });
+          fs.symlinkSync(dshCoreModules, peerLinkDir);
+        }
+      } catch (e) {}
 
       if (fs.existsSync(pkgPath)) {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));

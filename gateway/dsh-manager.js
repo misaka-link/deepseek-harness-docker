@@ -77,6 +77,19 @@ class DshManager {
     return new Promise(resolve => {
       if (this.proc) return resolve({ ok: true, alreadyRunning: true });
 
+      // 启动前检查并修复 .credentials.yaml 与 .dsh 权限 (DSH 凭据服务强制校验 mode 600)
+      try {
+        const credPath = path.join(DSH_DIR, '.credentials.yaml');
+        if (fs.existsSync(credPath)) {
+          fs.chmodSync(credPath, 0o600);
+        }
+        if (fs.existsSync(DSH_DIR)) {
+          fs.chmodSync(DSH_DIR, 0o700);
+        }
+      } catch (err) {
+        console.warn('[dsh-manager] 校验/修复凭据文件权限失败:', err.message);
+      }
+
       console.log(`[dsh-manager] 启动 DSH 进程 (工作区: ${DSH_WORKSPACE}, 端口: ${DSH_PORT})...`);
       this.ready = false;
 
@@ -86,7 +99,7 @@ class DshManager {
         DSH_PORT: String(DSH_PORT)
       };
 
-      const p = spawn('dsh', ['web', '--port', String(DSH_PORT)], {
+      const p = spawn('dsh', ['web', '--port', String(DSH_PORT), '--no-open'], {
         cwd: DSH_WORKSPACE,
         env,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -378,9 +391,9 @@ class DshManager {
 
       console.log(`[dsh-manager] 创建 DSH 配置文件快照: ${filename}...`);
 
-      // tar -czf targetPath -C /root .dsh
-      const res = spawnSync('tar', ['-czf', targetPath, '-C', '/root', '.dsh'], { encoding: 'utf8' });
-      if (res.status !== 0) {
+      // tar -czf targetPath -C /root .dsh (忽略读取中文件变化的非致命状态)
+      const res = spawnSync('tar', ['--warning=no-file-changed', '-czf', targetPath, '-C', '/root', '.dsh'], { encoding: 'utf8' });
+      if (res.status !== 0 && !fs.existsSync(targetPath)) {
         throw new Error(res.stderr || 'tar 打包失败');
       }
 
