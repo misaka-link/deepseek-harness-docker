@@ -7,6 +7,7 @@ const DSH_WORKSPACE = process.env.DSH_WORKSPACE || '/workspace';
 const DSH_WEB_LOG = process.env.DSH_WEB_LOG || '/tmp/dsh-web.log';
 const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
 const DSH_DIR = '/root/.dsh';
+const backupService = require('./backup-service');
 
 fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
 fs.mkdirSync(DSH_WORKSPACE, { recursive: true });
@@ -379,132 +380,51 @@ class DshManager {
     }
   }
 
-  // === 配置文件快照与备份管理 ===
+  // === 配置文件快照与备份管理 (委托给异步非阻塞 backupService) ===
   ensureDefaultSnapshot() {
     const defaultMarker = path.join(SNAPSHOTS_DIR, '.default_snapshot_created');
     if (fs.existsSync(defaultMarker)) {
       return { ok: true, alreadyExists: true };
     }
 
-    const existing = this.listSnapshots().snapshots || [];
+    const existing = backupService.listBackups().snapshots || [];
     const hasDefault = existing.some(s => s.filename.includes('default') || s.filename.includes('initial'));
     if (hasDefault) {
       try { fs.writeFileSync(defaultMarker, new Date().toISOString()); } catch {}
       return { ok: true, alreadyExists: true };
     }
 
-    console.log('[dsh-manager] 首次启动：自动创建初始默认配置快照...');
-    const res = this.createSnapshot('default-initial');
-    if (res.ok) {
-      try { fs.writeFileSync(defaultMarker, new Date().toISOString()); } catch {}
-      console.log(`[dsh-manager] 默认初始配置快照创建成功: ${res.snapshot.filename}`);
-    }
-    return res;
+    console.log('[dsh-manager] 首次启动：异步非阻塞创建初始默认配置快照...');
+    backupService.createBackup('default-initial')
+      .then(res => {
+        try { fs.writeFileSync(defaultMarker, new Date().toISOString()); } catch {}
+        console.log(`[dsh-manager] 默认初始配置快照创建成功: ${res.snapshot.filename}`);
+      })
+      .catch(err => {
+        console.warn('[dsh-manager] 创建初始快照非致命跳过:', err.message);
+      });
+
+    return { ok: true, pending: true };
   }
 
   createSnapshot(name = '') {
-    try {
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const safeName = name ? name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_') : 'manual';
-      const filename = `dsh-snapshot-${ts}-${safeName}.tar.gz`;
-      const targetPath = path.join(SNAPSHOTS_DIR, filename);
-
-      console.log(`[dsh-manager] 创建 DSH 配置文件快照: ${filename}...`);
-
-      // tar -czf targetPath -C /root .dsh (忽略读取中文件变化的非致命状态)
-      const res = spawnSync('tar', ['--warning=no-file-changed', '-czf', targetPath, '-C', '/root', '.dsh'], { encoding: 'utf8' });
-      if (res.status !== 0 && !fs.existsSync(targetPath)) {
-        throw new Error(res.stderr || 'tar 打包失败');
-      }
-
-      const stat = fs.statSync(targetPath);
-      return {
-        ok: true,
-        snapshot: {
-          filename,
-          sizeBytes: stat.size,
-          sizeFormatted: `${(stat.size / 1024 / 1024).toFixed(2)} MB`,
-          createdAt: stat.mtime.toISOString(),
-          name: safeName
-        }
-      };
-    } catch (err) {
-      console.error('[dsh-manager] 快照创建失败:', err.message);
-      return { ok: false, error: err.message };
-    }
+    return backupService.createBackup(name);
   }
 
   listSnapshots() {
-    try {
-      const files = fs.readdirSync(SNAPSHOTS_DIR).filter(f => f.endsWith('.tar.gz'));
-      const list = files.map(filename => {
-        const filePath = path.join(SNAPSHOTS_DIR, filename);
-        const stat = fs.statSync(filePath);
-        return {
-          filename,
-          sizeBytes: stat.size,
-          sizeFormatted: `${(stat.size / 1024 / 1024).toFixed(2)} MB`,
-          createdAt: stat.mtime.toISOString()
-        };
-      }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-      return { ok: true, snapshots: list };
-    } catch (err) {
-      return { ok: false, error: err.message, snapshots: [] };
-    }
+    return backupService.listBackups();
   }
 
-  async restoreSnapshot(filename) {
-    try {
-      const safeFilename = path.basename(filename);
-      const snapshotPath = path.join(SNAPSHOTS_DIR, safeFilename);
-      if (!fs.existsSync(snapshotPath)) {
-        return { ok: false, error: '快照文件不存在' };
-      }
-
-      console.log(`[dsh-manager] 从快照恢复配置: ${safeFilename}...`);
-
-      // 1. 停止 DSH 进程
-      await this.stop();
-
-      // 2. 解包覆盖 /root/.dsh
-      const res = spawnSync('tar', ['-xzf', snapshotPath, '-C', '/root'], { encoding: 'utf8' });
-      if (res.status !== 0) {
-        throw new Error(res.stderr || 'tar 解压失败');
-      }
-
-      // 3. 执行补丁确保回环与 host 模式
-      if (fs.existsSync('/app/scripts/patch-dsh-client.mjs')) {
-        spawnSync('node', ['/app/scripts/patch-dsh-client.mjs']);
-      }
-
-      // 4. 重启 DSH
-      const bootRes = await this.boot();
-      return { ok: true, dshReady: bootRes.ok };
-    } catch (err) {
-      console.error('[dsh-manager] 快照恢复失败:', err.message);
-      return { ok: false, error: err.message };
-    }
+  restoreSnapshot(filename) {
+    return backupService.restoreBackup(filename, this);
   }
 
   deleteSnapshot(filename) {
-    try {
-      const safeFilename = path.basename(filename);
-      const filePath = path.join(SNAPSHOTS_DIR, safeFilename);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        return { ok: true };
-      }
-      return { ok: false, error: '文件不存在' };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
+    return backupService.deleteBackup(filename);
   }
 
   getSnapshotPath(filename) {
-    const safeFilename = path.basename(filename);
-    const filePath = path.join(SNAPSHOTS_DIR, safeFilename);
-    return fs.existsSync(filePath) ? filePath : null;
+    return backupService.getBackupPath(filename);
   }
 }
 

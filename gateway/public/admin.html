@@ -301,7 +301,15 @@
       <div class="card">
         <div class="card-title">
           <span>DSH 配置文件快照与备份</span>
-          <button class="btn btn-primary" onclick="createSnapshot()">+ 创建新快照</button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="file" id="snapshotFileInput" accept=".tar.gz" style="display:none;" onchange="handleImportSnapshot(event)" />
+            <button class="btn" id="btnImportSnapshot" onclick="document.getElementById('snapshotFileInput').click()" title="从本地上传导入 .tar.gz 快照归档">📥 导入快照 (.tar.gz)</button>
+            <button class="btn btn-primary" id="btnCreateSnapshot" onclick="createSnapshot()">+ 创建新快照</button>
+          </div>
+        </div>
+        <div id="snapshotTaskBanner" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; align-items:center; gap:8px;">
+          <span class="spinner" style="border-top-color:#1d4ed8; display:inline-block;"></span>
+          <span id="snapshotTaskMsg">正在后台处理任务...</span>
         </div>
         <p class="card-desc">对 /root/.dsh 下的模型配置、插件配置、预设与历史进行整体存档与还原。首次启动会自动建立初始默认快照。</p>
 
@@ -607,14 +615,33 @@
       await loadStatus();
     }
 
+    function updateTaskBanner(task) {
+      const banner = document.getElementById('snapshotTaskBanner');
+      const msg = document.getElementById('snapshotTaskMsg');
+      const btnCreate = document.getElementById('btnCreateSnapshot');
+      const btnImport = document.getElementById('btnImportSnapshot');
+      if (!banner) return;
+      if (task) {
+        banner.style.display = 'flex';
+        msg.textContent = `正在后台异步执行「${task.label}」任务，主 Web 服务保持完全通畅响应...`;
+        if (btnCreate) btnCreate.disabled = true;
+        if (btnImport) btnImport.disabled = true;
+      } else {
+        banner.style.display = 'none';
+        if (btnCreate) btnCreate.disabled = false;
+        if (btnImport) btnImport.disabled = false;
+      }
+    }
+
     async function loadSnapshots() {
       const tbody = document.getElementById('snapshotsTableBody');
       try {
         const res = await fetch(`${adminBase}/api/snapshots`);
         const data = await res.json();
+        updateTaskBanner(data.activeTask);
         tbody.innerHTML = '';
         if (!data.snapshots || data.snapshots.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">暂无快照，可点击右上角创建</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">暂无快照，可点击右上角创建或导入</td></tr>';
           return;
         }
 
@@ -642,33 +669,104 @@
     async function createSnapshot() {
       const name = prompt('请输入快照备注名称 (如: my_custom_models):', '');
       if (name === null) return;
-      const res = await fetch(`${adminBase}/api/snapshots/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        alert('快照创建成功: ' + data.snapshot.filename);
+      const btn = document.getElementById('btnCreateSnapshot');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ 正在异步打包备份...';
+      updateTaskBanner({ label: '创建新快照' });
+
+      try {
+        const res = await fetch(`${adminBase}/api/snapshots/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          alert('快照创建成功: ' + data.snapshot.filename);
+          await loadSnapshots();
+        } else {
+          alert('快照创建失败: ' + (data.error || '未知错误'));
+        }
+      } catch (err) {
+        alert('网络请求异常: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+        updateTaskBanner(null);
         await loadSnapshots();
-      } else {
-        alert('快照创建失败: ' + data.error);
+      }
+    }
+
+    async function handleImportSnapshot(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.name.endsWith('.tar.gz')) {
+        alert('请选择后缀为 .tar.gz 的有效快照压缩文件！');
+        e.target.value = '';
+        return;
+      }
+      if (!confirm(`确定要上传并导入快照归档 "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) 吗？`)) {
+        e.target.value = '';
+        return;
+      }
+
+      const btn = document.getElementById('btnImportSnapshot');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ 正在流式导入上传...';
+      updateTaskBanner({ label: '导入上传快照' });
+
+      try {
+        const res = await fetch(`${adminBase}/api/snapshots/import?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'x-filename': encodeURIComponent(file.name)
+          },
+          body: file
+        });
+        const data = await res.json();
+        if (data.ok) {
+          alert('快照导入成功！已存入快照清单: ' + data.snapshot.filename);
+          await loadSnapshots();
+        } else {
+          alert('快照导入失败: ' + (data.error || '未知错误'));
+        }
+      } catch (err) {
+        alert('导入上传发生网络异常: ' + err.message);
+      } finally {
+        e.target.value = '';
+        btn.disabled = false;
+        btn.textContent = origText;
+        updateTaskBanner(null);
+        await loadSnapshots();
       }
     }
 
     async function restoreSnapshot(filename) {
-      if (!confirm(`警告：确定要从快照 ${filename} 恢复配置吗？现有 /root/.dsh 将被覆盖并重启 DSH！`)) return;
-      const res = await fetch(`${adminBase}/api/snapshots/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        alert('快照恢复成功，DSH 已重新就绪！');
-        await loadStatus();
-      } else {
-        alert('快照恢复失败: ' + data.error);
+      if (!confirm(`警告：确定要从快照 ${filename} 恢复配置吗？现有 /root/.dsh 将被覆盖并重新拉起 DSH 服务！`)) return;
+      const btn = document.getElementById('btnCreateSnapshot');
+      updateTaskBanner({ label: '还原快照并重启' });
+
+      try {
+        const res = await fetch(`${adminBase}/api/snapshots/restore`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          alert('快照还原成功，DSH 服务已重新就绪！');
+          await loadStatus();
+        } else {
+          alert('快照还原失败: ' + (data.error || '未知错误'));
+        }
+      } catch (err) {
+        alert('恢复过程网络异常: ' + err.message);
+      } finally {
+        updateTaskBanner(null);
+        await loadSnapshots();
       }
     }
 

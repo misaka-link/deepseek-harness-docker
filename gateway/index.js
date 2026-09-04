@@ -18,6 +18,7 @@ const {
 const { ensureUpstreamCookie, injectPolyfill } = require('./token-crawler');
 const desktopManager = require('./desktop-manager');
 const dshManager = require('./dsh-manager');
+const backupService = require('./backup-service');
 
 // ── 配置文件持久化与动态读取 ──────────────────────────────────
 const CONFIG_FILE = process.env.GATEWAY_CONFIG_FILE || '/root/.dsh/gateway.config.json';
@@ -328,32 +329,50 @@ async function handleAdminApi(req, res, pathname, query) {
       return sendJson(res, 200, { ok: true, status: desktopManager.getStatus() });
     }
 
-    // 6. 配置快照备份与恢复
+    // 6. 配置快照备份、恢复与导入 (完全与 Web 服务解耦，异步非阻塞执行)
     if (subPath === '/api/snapshots' && req.method === 'GET') {
-      return sendJson(res, 200, dshManager.listSnapshots());
+      return sendJson(res, 200, backupService.listBackups());
     }
 
     if (subPath === '/api/snapshots/create' && req.method === 'POST') {
       const body = await readJsonBody(req);
-      const r = dshManager.createSnapshot(body.name);
-      return sendJson(res, r.ok ? 200 : 500, r);
+      try {
+        const r = await backupService.createBackup(body.name);
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
     }
 
     if (subPath === '/api/snapshots/restore' && req.method === 'POST') {
       const body = await readJsonBody(req);
-      const r = await dshManager.restoreSnapshot(body.filename);
-      return sendJson(res, r.ok ? 200 : 500, r);
+      try {
+        const r = await backupService.restoreBackup(body.filename, dshManager);
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
+    }
+
+    if (subPath === '/api/snapshots/import' && req.method === 'POST') {
+      const filename = query.get('filename') || req.headers['x-filename'] || 'imported-snapshot.tar.gz';
+      try {
+        const r = await backupService.importBackupStream(req, filename);
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
     }
 
     if (subPath === '/api/snapshots/delete' && req.method === 'POST') {
       const body = await readJsonBody(req);
-      const r = dshManager.deleteSnapshot(body.filename);
+      const r = backupService.deleteBackup(body.filename);
       return sendJson(res, r.ok ? 200 : 500, r);
     }
 
     if (subPath === '/api/snapshots/download' && req.method === 'GET') {
       const file = query.get('file') || '';
-      const filePath = dshManager.getSnapshotPath(file);
+      const filePath = backupService.getBackupPath(file);
       if (!filePath) return sendJson(res, 404, { ok: false, error: '快照文件未找到' });
 
       res.writeHead(200, {
