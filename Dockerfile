@@ -60,6 +60,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-wqy-microhei \
     fonts-noto-color-emoji \
     fonts-symbola \
+    # 高性能多线程压缩与归档工具 (7-Zip 与多核并行 gzip 加速)
+    p7zip-full \
+    pigz \
     && echo "zh_CN.UTF-8 UTF-8" >> /etc/locale.gen \
     && locale-gen zh_CN.UTF-8 \
     && mkdir -p /etc/fonts \

@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -25,6 +25,15 @@ function sanitizeName(name) {
 function verifyGzipMagic(headerBuffer) {
   if (!headerBuffer || headerBuffer.length < 2) return false;
   return headerBuffer[0] === 0x1f && headerBuffer[1] === 0x8b;
+}
+
+function hasPigz() {
+  try {
+    const res = spawnSync('which', ['pigz'], { encoding: 'utf8' });
+    return res.status === 0 && res.stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -80,15 +89,25 @@ async function createBackup(name = '') {
 
   try {
     // 排除庞大且不影响配置的临时与缓存目录，极大提升打包速度
+    const isMultiThread = hasPigz();
+    if (isMultiThread) {
+      console.log('[backup-service] 检测到 pigz，已启用全核心多线程并行压缩加速');
+    }
+
     const tarArgs = [
       '--warning=no-file-changed',
       '--exclude=.dsh/.pnpm-store',
       '--exclude=**/node_modules/.cache',
-      '--exclude=.dsh/tmp',
-      '-czf', tmpPath,
-      '-C', '/root',
-      '.dsh'
+      '--exclude=.dsh/tmp'
     ];
+
+    if (isMultiThread) {
+      tarArgs.push('-I', 'pigz');
+    } else {
+      tarArgs.push('-z');
+    }
+
+    tarArgs.push('-cf', tmpPath, '-C', '/root', '.dsh');
 
     const res = await runTarAsync(tarArgs);
 
@@ -155,8 +174,16 @@ async function restoreBackup(filename, dshManager) {
       await dshManager.stop();
     }
 
-    // 3. 异步解压覆盖到 /root/.dsh
-    const extractRes = await runTarAsync(['-xzf', snapshotPath, '-C', '/root']);
+    // 3. 异步多线程/标准解压覆盖到 /root/.dsh
+    const isMultiThread = hasPigz();
+    const extractArgs = ['--warning=no-file-changed'];
+    if (isMultiThread) {
+      extractArgs.push('-I', 'pigz');
+    } else {
+      extractArgs.push('-z');
+    }
+    extractArgs.push('-xf', snapshotPath, '-C', '/root');
+    const extractRes = await runTarAsync(extractArgs);
     if (extractRes.code !== 0) {
       throw new Error('tar 解压还原失败: ' + (extractRes.stderr || '未知错误'));
     }
