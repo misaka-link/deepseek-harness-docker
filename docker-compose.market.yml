@@ -1,11 +1,6 @@
 services:
   deepseek-harness:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PREINSTALL_PLUGINS: 1
-    image: deepseek-harness-docker:market
+    image: ghcr.io/misaka-link/deepseek-harness-docker:market
     container_name: deepseek-harness-market
     restart: unless-stopped
     ports:
