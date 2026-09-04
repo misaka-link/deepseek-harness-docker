@@ -1,0 +1,27 @@
+services:
+  deepseek-harness:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PREINSTALL_PLUGINS: 1
+    image: deepseek-harness-docker:market
+    container_name: deepseek-harness-market
+    restart: unless-stopped
+    ports:
+      # 仅暴露单个统一端口（包含 DSH Web、管理面板与 VNC 桌面，共享同一套认证）
+      - "3080:3080"
+    environment:
+      # 访问认证码（必须通过此认证码才可访问 DSH Web、管理后台和 VNC 桌面；留空则禁用认证）
+      - AUTH_TOKEN=${AUTH_TOKEN:-admin}
+      # 统一对外访问端口
+      - PROXY_PORT=3080
+    volumes:
+      # 1. DSH 系统与配置目录（存储插件、预设、配置文件与会话历史）
+      - ./data/dsh:/root/.dsh
+      # 2. 独立项目工作区目录（AI 生成的项目代码、文档，与 DSH 系统隔离）
+      - ./workspace:/workspace
+      # 3. DSH 配置文件快照与备份存档目录
+      - ./data/snapshots:/root/.dsh-snapshots
+      # 4. Chromium 用户数据缓存（可选持久化保存浏览器登录状态与 Cookies）
+      - ./data/browser:/root/.config/chromium

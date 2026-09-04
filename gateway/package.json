@@ -1,0 +1,12 @@
+{
+  "name": "dsh-gateway",
+  "version": "1.0.0",
+  "description": "Unified reverse proxy gateway and authentication layer for DeepSeek Harness and Container Browser VNC",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}

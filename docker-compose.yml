@@ -1,0 +1,34 @@
+services:
+  deepseek-harness:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: deepseek-harness-docker:latest
+    container_name: deepseek-harness
+    restart: unless-stopped
+    ports:
+      # 仅暴露单个统一端口（包含 DSH Web、管理面板与 VNC 桌面，共享同一套认证）
+      - "3080:3080"
+    environment:
+      # 访问认证码（必须通过此认证码才可访问 DSH Web、管理后台和 VNC 桌面；留空则禁用认证）
+      - AUTH_TOKEN=${AUTH_TOKEN:-admin}
+      # 统一对外访问端口
+      - PROXY_PORT=3080
+
+      # --- 以下参数均已在容器和网关内置默认值，默认注释保持简洁，按需启用：---
+      # - ADMIN_PATH=/admin                  # 自定义管理面板访问路径 (默认 /admin)
+      # - VNC_PATH=/vnc                      # 自定义桌面 VNC 访问路径 (默认 /vnc)
+      # - DSH_WORKSPACE=/workspace           # 默认工作区目录
+      # - DSH_DESKTOP_ENABLED=1              # 是否启用内置 Chromium 图形桌面 (1: 开启, 0: 关闭)
+      # - DSH_IDLE_TIMEOUT_MINUTES=30        # 浏览器桌面空闲休眠时间 (分钟，0为不休眠始终保持)
+      # - DSH_DESKTOP_WIDTH=1440             # 虚拟桌面宽度分辨率
+      # - DSH_DESKTOP_HEIGHT=900             # 虚拟桌面高度分辨率
+    volumes:
+      # 1. DSH 系统与配置目录（存储插件、预设、配置文件与会话历史）
+      - ./data/dsh:/root/.dsh
+      # 2. 独立项目工作区目录（AI 生成的项目代码、文档，与 DSH 系统隔离）
+      - ./workspace:/workspace
+      # 3. DSH 配置文件快照与备份存档目录
+      - ./data/snapshots:/root/.dsh-snapshots
+      # 4. Chromium 用户数据缓存（可选持久化保存浏览器登录状态与 Cookies）
+      - ./data/browser:/root/.config/chromium

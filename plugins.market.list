@@ -1,0 +1,14 @@
+# ========================================================
+# deepseek-harness 预装插件清单 (plugins.market.list)
+# 每行一个 npm 包名或 Git 仓库。
+# 构建时若开启 PREINSTALL_PLUGINS=1 (或使用 ./build.sh --market)，
+# 将自动将本列表中的插件预装进镜像 (镜像名 deepseek-harness-docker:market)。
+# ========================================================
+
+# 1. DSH 社区应用市场插件
+# 项目地址: https://github.com/dsh-market/dsh-market
+dshmarket
+
+# 2. 思考强度调节插件
+# 项目地址: https://github.com/hytime/dsh-thinking-effort#readme
+@hytime/dsh-thinking-effort

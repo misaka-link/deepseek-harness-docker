@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment files & credentials
+.env
+.env.local
+*.pem
+*.key
+
+# Runtime data & Docker volume directories
+data/
+workspace/
+tmp/
+*.log
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# DSH temporary & cache
+.dsh/
+.dsh-snapshots/

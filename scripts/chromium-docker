@@ -1,0 +1,15 @@
+#!/bin/sh
+# Chromium container launcher wrapper
+exec /usr/bin/chromium \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
+  --disable-software-rasterizer \
+  --disable-background-networking \
+  --disable-default-apps \
+  --no-first-run \
+  --no-default-browser-check \
+  --password-store=basic \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  "$@"
