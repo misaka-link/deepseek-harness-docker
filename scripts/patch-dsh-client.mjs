@@ -186,6 +186,25 @@ for (const searchDir of SEARCH_DIRS) {
       console.warn(`[patch-dsh-client] 跳过内测声明弹窗失败: ${err.message}`);
     }
   }
+
+  // 6. 修补 dsh-settings 兼容性：补齐 settingsNamespace 导出 (解决 dsh-better-sidebar 等市场插件因缺失 settingsNamespace 崩溃)
+  const settingsTarget = path.join(searchDir, 'dsh-settings/lib/index.js');
+  if (fs.existsSync(settingsTarget)) {
+    try {
+      let sContent = fs.readFileSync(settingsTarget, 'utf8');
+      if (!sContent.includes('settingsNamespace')) {
+        const polyfill = `function settingsNamespace(val) { return val; }\n`;
+        sContent = sContent.replace(
+          'export { SettingsConflictError,',
+          polyfill + 'export { settingsNamespace, SettingsConflictError,'
+        );
+        fs.writeFileSync(settingsTarget, sContent, 'utf8');
+        console.log(`[patch-dsh-client] 成功修补 dsh-settings 的 settingsNamespace 导出: ${settingsTarget}`);
+      }
+    } catch (err) {
+      console.warn(`[patch-dsh-client] 修补 dsh-settings 失败: ${err.message}`);
+    }
+  }
 }
 
 console.log(`[patch-dsh-client] 补丁扫描完成，共修补 ${patchedCount} 个客户端文件 (已检查 ${checkedDirs} 个根目录)`);

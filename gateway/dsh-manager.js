@@ -16,6 +16,7 @@ class DshManager {
     this.proc = null;
     this.ready = false;
     this.installing = false;
+    this.stopping = false;
     this.installLog = [];
     this.registry = process.env.NPM_REGISTRY || 'https://registry.npmmirror.com';
     this.launchToken = '';
@@ -140,6 +141,15 @@ class DshManager {
           this.proc = null;
           this.ready = false;
         }
+        // 若非主动调用 stop()，自动执行守护拉起 (例如插件生效重载或配置变更触发的自重启)
+        if (!this.stopping && !this.installing) {
+          console.log('[dsh-manager] DSH 进程退出，守护管理器将在 1 秒后自动重新拉起 DSH...');
+          setTimeout(() => {
+            if (!this.stopping && !this.installing && !this.proc) {
+              this.boot().catch(err => console.error('[dsh-manager] 自动拉起 DSH 失败:', err.message));
+            }
+          }, 1000);
+        }
       });
 
       // Probe ready
@@ -156,10 +166,14 @@ class DshManager {
 
   stop() {
     return new Promise(resolve => {
+      this.stopping = true;
       const p = this.proc;
       this.proc = null;
       this.ready = false;
-      if (!p) return resolve({ ok: true });
+      if (!p) {
+        this.stopping = false;
+        return resolve({ ok: true });
+      }
 
       console.log('[dsh-manager] 停止 DSH 进程...');
       const timer = setTimeout(() => {
@@ -168,10 +182,16 @@ class DshManager {
 
       p.once('exit', () => {
         clearTimeout(timer);
+        this.stopping = false;
         resolve({ ok: true });
       });
 
-      try { p.kill('SIGTERM'); } catch { resolve({ ok: true }); }
+      try {
+        p.kill('SIGTERM');
+      } catch {
+        this.stopping = false;
+        resolve({ ok: true });
+      }
     });
   }
 
