@@ -11,6 +11,15 @@ services:
       - AUTH_TOKEN=${AUTH_TOKEN:-admin}
       # 统一对外访问端口
       - PROXY_PORT=3080
+
+      # --- 以下参数均已在容器和网关内置默认值，默认注释保持简洁，按需启用：---
+      # - ADMIN_PATH=/admin                  # 自定义管理面板访问路径 (默认 /admin)
+      # - VNC_PATH=/vnc                      # 自定义桌面 VNC 访问路径 (默认 /vnc)
+      # - DSH_WORKSPACE=/workspace           # 默认工作区目录
+      # - DSH_DESKTOP_ENABLED=1              # 是否启用内置 Chromium 图形桌面 (1: 开启, 0: 关闭)
+      # - DSH_IDLE_TIMEOUT_MINUTES=30        # 浏览器桌面空闲休眠时间 (分钟，0为不休眠始终保持)
+      # - DSH_DESKTOP_WIDTH=1440             # 虚拟桌面宽度分辨率
+      # - DSH_DESKTOP_HEIGHT=900             # 虚拟桌面高度分辨率
     volumes:
       # 1. DSH 系统与配置目录（存储插件、预设、配置文件与会话历史）
       - ./data/dsh:/root/.dsh
