@@ -524,6 +524,17 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
+  if (pathname === '/favicon.svg' || pathname === '/favicon.ico') {
+    const staticFile = path.join(__dirname, 'public', pathname.slice(1));
+    if (fs.existsSync(staticFile)) {
+      res.writeHead(200, {
+        'Content-Type': pathname.endsWith('.svg') ? 'image/svg+xml' : 'image/x-icon',
+        'Cache-Control': 'public, max-age=86400'
+      });
+      return fs.createReadStream(staticFile).pipe(res);
+    }
+  }
+
   // 2. 本地回环免鉴权内部接口 (供容器内插件工具通信)
   if (pathname.startsWith('/__internal/desktop/')) {
     const isLoopbackReq = ['127.0.0.1', '::1', 'localhost'].includes(req.socket.remoteAddress);

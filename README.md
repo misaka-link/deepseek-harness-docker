@@ -4,15 +4,6 @@
 
 ---
 
-## ⚠️ 远程服务器调试说明 (必读)
-
-> **如果需要对本项目进行远程服务器联调、文件同步或命令调试：**
-> - **远程服务器分配目录**：`/www/wwwroot/deepseek-harness-docker`
-> - **调试运行环境**：请使用本容器内 **`/root/bt`** 目录下的宝塔 MCP 桥接器（`node /root/bt/mcp.mjs ...`）
-> - **详细操作手册**：请参阅 [**`REMOTE_DEBUG.md`**](./REMOTE_DEBUG.md)。
-
----
-
 ## 🌟 项目核心亮点与功能特性
 
 本项目深度吸取并升级了社区两大优秀项目（[`runzhliu/deepseek-harness-docker`](https://github.com/runzhliu/deepseek-harness-docker) 与 [`smanx/deepseek-harness-docker`](https://github.com/smanx/deepseek-harness-docker)）的长处，并彻底解决了它们的遗留缺陷：
@@ -181,8 +172,6 @@ deepseek-harness-docker/
 ├── docker-compose.yml          # 开箱即用的容器编排配置
 ├── .env.example                # 环境变量配置模板
 ├── README.md                   # 项目使用与部署说明文档
-├── REMOTE_DEBUG.md             # 远程服务器调试与 MCP 联动指南
-├── PROJECT_PLAN.md             # 架构规划与深度技术设计文档
 ├── scripts/
 │   ├── entrypoint.sh           # 容器统一入口：启动网关与自动修补
 │   ├── patch-dsh-client.mjs    # 客户端 bundle 固化补丁脚本 (根治 memory 模式与 loopback 限制)

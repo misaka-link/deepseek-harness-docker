@@ -27,3 +27,10 @@ __pycache__/
 # DSH temporary & cache
 .dsh/
 .dsh-snapshots/
+
+# Private local documentation (strictly local development only, do not upload)
+PROJECT_PLAN.md
+REMOTE_DEBUG.md
+*DEBUG.md
+*PLAN.md
+
