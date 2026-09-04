@@ -263,7 +263,6 @@
 
       <form id="authForm" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label class="form-label" for="tokenInput">访问认证码 (Access Code)</label>
           <div class="input-wrapper">
             <span class="input-icon">
               <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -274,6 +273,7 @@
               type="password"
               id="tokenInput"
               class="form-input"
+              aria-label="访问认证码 (Access Code)"
               placeholder="请输入环境变量配置的 AUTH_TOKEN"
               required
               autocomplete="current-password"
