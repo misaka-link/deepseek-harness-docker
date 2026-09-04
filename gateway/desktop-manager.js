@@ -18,8 +18,8 @@ class DesktopManager {
 
     this.config = {
       display: process.env.DISPLAY || ':99',
-      width: Number(process.env.DSH_DESKTOP_WIDTH) || 1440,
-      height: Number(process.env.DSH_DESKTOP_HEIGHT) || 900,
+      width: Number(process.env.DSH_DESKTOP_WIDTH) || 1920,
+      height: Number(process.env.DSH_DESKTOP_HEIGHT) || 1080,
       depth: Number(process.env.DSH_DESKTOP_DEPTH) || 24,
       idleTimeoutMinutes: Number(process.env.DSH_IDLE_TIMEOUT_MINUTES) || 30, // 0 = disabled
       enableCdp: process.env.DSH_ENABLE_CDP !== '0',
@@ -67,12 +67,21 @@ class DesktopManager {
 
   async start(options = {}) {
     if (this.running) {
+      const reqWidth = options.width ? Number(options.width) : null;
+      const reqHeight = options.height ? Number(options.height) : null;
+      if ((reqWidth && reqWidth !== this.config.width) ||
+          (reqHeight && reqHeight !== this.config.height)) {
+        console.log(`[desktop-manager] 收到分辨率变更请求 (${this.config.width}x${this.config.height} -> ${reqWidth}x${reqHeight})，重新应用分辨率...`);
+        return this.restart(options);
+      }
       this.touchActivity(options.durationMinutes);
       return { ok: true, alreadyRunning: true, status: this.getStatus() };
     }
 
     const width = Number(options.width) || this.config.width;
     const height = Number(options.height) || this.config.height;
+    this.config.width = width;
+    this.config.height = height;
     const durationMinutes = options.durationMinutes;
 
     console.log(`[desktop-manager] 启动虚拟桌面 (分辨率: ${width}x${height}, CDP: ${this.config.enableCdp ? this.config.cdpPort : '关闭'})...`);

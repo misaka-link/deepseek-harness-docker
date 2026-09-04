@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     git \
+    openssh-client \
     ca-certificates \
     procps \
     locales \
@@ -70,6 +71,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && fc-cache -f \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# 1.1 安装 GitHub CLI 官方工具 (gh)
+RUN (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null \
+     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+     && apt-get update && apt-get install -y --no-install-recommends gh) \
+    || (ARCH=$(dpkg --print-architecture) \
+        && curl -sSL "https://github.com/cli/cli/releases/download/v2.60.1/gh_2.60.1_linux_${ARCH}.tar.gz" -o /tmp/gh.tar.gz \
+        && tar -C /tmp -xzf /tmp/gh.tar.gz \
+        && mv /tmp/gh_*/bin/gh /usr/local/bin/gh \
+        && rm -rf /tmp/gh*) \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && gh --version
 
 # 2. 安装最新官方 Golang 开发环境 (内置国内与海外加速源切换)
 ARG GO_VERSION=""

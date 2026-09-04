@@ -9,7 +9,9 @@ window.__ModuleLoader__.load({
       title: zh ? '容器浏览器' : 'Container Browser',
       description: zh ? '控制容器内 Chromium 图形浏览器、虚拟分辨率、CDP 调试与空闲休眠策略。' : 'Controls container Chromium browser, virtual resolution, CDP debugging, and idle sleep policy.',
       resolution: zh ? '虚拟桌面分辨率' : 'Virtual Resolution',
-      resolutionHint: zh ? 'X11 虚拟显示器分辨率（例如 1440x900 或 1920x1080）' : 'X11 virtual display resolution (e.g. 1440x900 or 1920x1080).',
+      resolutionHint: zh ? 'X11 虚拟显示器与浏览器分辨率（默认 1920x1080 1080p，AI 调用时亦可自适应调整）' : 'Virtual resolution (default 1920x1080, AI can also select per tool call).',
+      screenshotQuality: zh ? 'AI 截图工具默认画质' : 'Default Screenshot Quality',
+      screenshotQualityHint: zh ? 'AI 调用截图工具时的默认画质策略（高画质无损原图 / 中画质体积平衡 / 低画质高压缩）' : 'Default quality for AI screenshot tool (high/medium/low).',
       idleTimeout: zh ? '空闲休眠时间（分钟）' : 'Idle Sleep Timeout (Minutes)',
       idleTimeoutHint: zh ? '无操作自动休眠以节约 CPU/内存资源，设为 0 则不休眠' : 'Automatically stops desktop when idle to save CPU/RAM. Set 0 to disable.',
       enableCdp: zh ? 'CDP 远程调试' : 'CDP Remote Debugging',
@@ -32,7 +34,8 @@ window.__ModuleLoader__.load({
       const [savedMsg, setSavedMsg] = React.useState(false);
 
       const [form, setForm] = React.useState({
-        resolution: '1440x900',
+        resolution: '1920x1080',
+        screenshotQuality: 'high',
         idleTimeoutMinutes: 30,
         enableCdp: true,
         cdpPort: 9222,
@@ -46,7 +49,8 @@ window.__ModuleLoader__.load({
           .then(data => {
             if (data && data.desktop) {
               const loaded = {
-                resolution: (data.desktop.width && data.desktop.height) ? (data.desktop.width + 'x' + data.desktop.height) : '1440x900',
+                resolution: (data.desktop.width && data.desktop.height) ? (data.desktop.width + 'x' + data.desktop.height) : '1920x1080',
+                screenshotQuality: 'high',
                 idleTimeoutMinutes: data.desktop.idleTimeoutMinutes !== undefined ? data.desktop.idleTimeoutMinutes : 30,
                 enableCdp: data.desktop.enableCdp !== undefined ? data.desktop.enableCdp : true,
                 cdpPort: data.desktop.cdpPort || 9222,
@@ -163,11 +167,31 @@ window.__ModuleLoader__.load({
                 value: form.resolution,
                 onChange: e => updateField('resolution', e.target.value)
               },
-              React.createElement('option', { value: '1440x900' }, '1440 x 900 (默认推荐)'),
-              React.createElement('option', { value: '1920x1080' }, '1920 x 1080 (高清)'),
-              React.createElement('option', { value: '1280x720' }, '1280 x 720 (小屏节能)')
+              React.createElement('option', { value: '1920x1080' }, '1920 x 1080 (1080p 全高清 默认推荐)'),
+              React.createElement('option', { value: '1440x900' }, '1440 x 900 (宽屏均衡)'),
+              React.createElement('option', { value: '1280x720' }, '1280 x 720 (720p 节能小屏)'),
+              React.createElement('option', { value: '2560x1440' }, '2560 x 1440 (2K 超清)')
             ),
             React.createElement('p', { className: 'At1oFq_hint' }, labels.resolutionHint)
+          ),
+
+          // 字段 1.5: 截图工具默认画质
+          React.createElement(
+            'div',
+            { className: 'At1oFq_field' },
+            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.screenshotQuality)),
+            React.createElement(
+              'select',
+              {
+                className: 'At1oFq_input',
+                value: form.screenshotQuality || 'high',
+                onChange: e => updateField('screenshotQuality', e.target.value)
+              },
+              React.createElement('option', { value: 'high' }, zh ? '高画质 (无损 PNG 原图，默认)' : 'High (Lossless PNG)'),
+              React.createElement('option', { value: 'medium' }, zh ? '中画质 (压缩 JPEG 80% 质量，兼顾清晰与体积)' : 'Medium (Balanced JPEG 80%)'),
+              React.createElement('option', { value: 'low' }, zh ? '低画质 (压缩 JPEG 40% 质量，极致小体积)' : 'Low (Compact JPEG 40%)')
+            ),
+            React.createElement('p', { className: 'At1oFq_hint' }, labels.screenshotQualityHint)
           ),
 
           // 字段 2: 空闲休眠时间
