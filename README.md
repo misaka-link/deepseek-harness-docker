@@ -76,7 +76,30 @@ cp .env.example .env
 # VNC_PATH=/vnc
 ```
 
-### 2. 镜像构建与启动
+### 2. 镜像获取与启动
+
+#### 方式一：直接使用 GitHub Packages (GHCR) 预构建镜像（推荐，省时免编译）
+
+本项目已配置 GitHub Actions 自动构建全套生产镜像，可直接拉取使用：
+
+```bash
+# 1. 基础纯净版 (不带商店，体积更轻)
+docker pull ghcr.io/misaka-link/deepseek-harness-docker:latest
+# 或指定版本号
+# docker pull ghcr.io/misaka-link/deepseek-harness-docker:0.0.1
+
+# 2. 社区市场版 (预装 dshmarket 商店与思考强度调节插件)
+docker pull ghcr.io/misaka-link/deepseek-harness-docker:market
+# 或指定版本号
+# docker pull ghcr.io/misaka-link/deepseek-harness-docker:0.0.1-market
+```
+
+若直接使用 `docker-compose.yml`，只需将 `image` 改为对应 GHCR 地址并启动即可：
+```bash
+docker compose up -d
+```
+
+#### 方式二：本地自行构建镜像
 
 本项目提供构建脚本 `./build.sh`，支持选择是否预装社区常用插件：
 

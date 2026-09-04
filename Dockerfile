@@ -20,10 +20,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
 
-# 0. 配置国内 USTC 镜像源加速 (Debian + npm)
-RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list 2>/dev/null || true \
-    && npm config set registry https://registry.npmmirror.com
+# 0. 配置国内 USTC 镜像源加速 (Debian + npm，默认开启；在 GitHub Actions 或海外构建可传 USE_CHINA_MIRROR=0)
+ARG USE_CHINA_MIRROR=1
+RUN if [ "$USE_CHINA_MIRROR" = "1" ] || [ "$USE_CHINA_MIRROR" = "true" ]; then \
+      sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+      sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list 2>/dev/null || true; \
+      npm config set registry https://registry.npmmirror.com; \
+    fi
 
 # 1. 安装基础依赖、编译工具、X11/VNC 桌面环境、Chromium 与中文字体
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -67,7 +70,7 @@ RUN if [ "$PREINSTALL_PLUGINS" = "1" ] || [ "$PREINSTALL_PLUGINS" = "true" ]; th
       echo "===> 正在根据 plugins.market.list 预装社区插件清单 (Market 变体)..." \
       && sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' /app/plugins.market.list \
          | grep -v '^$' \
-         | xargs -r npm install -g --registry=https://registry.npmmirror.com \
+         | xargs -r npm install -g \
       && for p in dshmarket @hytime/dsh-thinking-effort; do \
            if [ -d "/usr/local/lib/node_modules/$p" ]; then \
              mkdir -p "/usr/local/lib/node_modules/$p/node_modules"; \
