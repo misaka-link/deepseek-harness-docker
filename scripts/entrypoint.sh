@@ -45,6 +45,19 @@ if [ -d "/root/.dsh" ]; then
   done
 fi
 
+# 1.2 预设已确认内测声明，防止新环境出现阻塞弹窗
+if [ ! -f "/root/.dsh/settings.yaml" ]; then
+  cat <<'EOF' > /root/.dsh/settings.yaml
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+EOF
+elif ! grep -q "welcomeNoticeVersion" "/root/.dsh/settings.yaml" 2>/dev/null; then
+  printf '
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+' >> /root/.dsh/settings.yaml
+fi
+
 # 2. 自动注册并安装 dsh-browser-desktop 插件到 DSH profile
 if [ -f "/app/scripts/install-plugin.mjs" ]; then
   echo "[entrypoint] 注册 dsh-browser-desktop 插件到 Web Profile..."

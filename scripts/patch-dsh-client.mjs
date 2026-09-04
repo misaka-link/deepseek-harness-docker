@@ -168,6 +168,24 @@ for (const searchDir of SEARCH_DIRS) {
       console.warn(`[patch-dsh-client] 消除设置页按钮失败: ${err.message}`);
     }
   }
+
+  // 5. 模型与引导：消除“内测声明”弹窗 (直接 return null 并通知 complete 放行，彻底消除卡死弹窗)
+  const modelsClientTarget = path.join(searchDir, 'dsh-client-ui-settings-models/lib/client.js');
+  if (fs.existsSync(modelsClientTarget)) {
+    try {
+      let mContent = fs.readFileSync(modelsClientTarget, 'utf8');
+      if (mContent.includes('function WelcomeNotice(') && !mContent.includes('/* dsh-patch: welcome-notice-bypass */')) {
+        mContent = mContent.replace(
+          'function WelcomeNotice(props) {',
+          '/* dsh-patch: welcome-notice-bypass */ function WelcomeNotice(props) { props?.complete?.(); return null;'
+        );
+        fs.writeFileSync(modelsClientTarget, mContent, 'utf8');
+        console.log(`[patch-dsh-client] 成功跳过内测声明弹窗: ${modelsClientTarget}`);
+      }
+    } catch (err) {
+      console.warn(`[patch-dsh-client] 跳过内测声明弹窗失败: ${err.message}`);
+    }
+  }
 }
 
 console.log(`[patch-dsh-client] 补丁扫描完成，共修补 ${patchedCount} 个客户端文件 (已检查 ${checkedDirs} 个根目录)`);
