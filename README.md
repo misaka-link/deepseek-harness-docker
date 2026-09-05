@@ -77,12 +77,12 @@ cp .env.example .env
 # 1. 基础纯净版 (不带商店，体积更轻)
 docker pull ghcr.io/misaka-link/deepseek-harness-docker:latest
 # 或指定版本号
-# docker pull ghcr.io/misaka-link/deepseek-harness-docker:0.0.1
+# docker pull ghcr.io/misaka-link/deepseek-harness-docker:0.0.3
 
 # 2. 社区市场版 (预装 dshmarket 商店与思考强度调节插件)
 docker pull ghcr.io/misaka-link/deepseek-harness-docker:market
 # 或指定版本号
-# docker pull ghcr.io/misaka-link/deepseek-harness-docker:0.0.1-market
+# docker pull ghcr.io/misaka-link/deepseek-harness-docker:0.0.3-market
 ```
 
 若直接使用 `docker-compose.yml`，只需将 `image` 改为对应 GHCR 地址并启动即可：

@@ -48,7 +48,18 @@ class DshManager {
     this.restartTimer = null;
     this.recentCrashCount = 0;
     this.lastCrashTime = 0;
+    this.manualStopped = false;
     try { fs.mkdirSync(this.versionsCacheDir, { recursive: true }); } catch {}
+  }
+
+  getStatus() {
+    const running = !!this.proc && this.proc.exitCode === null && !this.proc.killed;
+    return {
+      version: this.getCurrentVersion(),
+      running,
+      ready: this.ready,
+      manualStopped: !!this.manualStopped
+    };
   }
 
   getCurrentVersion() {
@@ -102,6 +113,7 @@ class DshManager {
 
   boot() {
     return new Promise(async resolve => {
+      this.manualStopped = false;
       if (this.proc) return resolve({ ok: true, alreadyRunning: true });
       this.stopping = false;
       if (this.restartTimer) {
@@ -175,6 +187,11 @@ class DshManager {
         if (this.proc === p) {
           this.proc = null;
           this.ready = false;
+        }
+        // 若处于手动停止状态，不自动拉起
+        if (this.manualStopped) {
+          console.log('[dsh-manager] DSH 处于手动停止状态，守护管理器已暂停自动重新拉起');
+          return;
         }
         // 若非主动调用 stop()，自动执行守护拉起 (带频次熔断保护)
         if (!this.stopping && !this.installing) {

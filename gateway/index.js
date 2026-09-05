@@ -97,10 +97,13 @@ const vncProxy = httpProxy.createProxyServer({
 });
 
 dshProxy.on('error', (err, req, res) => {
-  console.warn('[dsh-proxy] 上游连接等待中 (DSH 启动阶段):', err.message);
+  console.warn('[dsh-proxy] 上游连接等待中 (DSH 启动/停止阶段):', err.message);
   if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+    const errorMsg = dshManager.manualStopped
+      ? 'DeepSeek Harness 服务当前处于手动停止状态。如需使用，请前往管理面板手动点击【启动 DSH】。'
+      : 'DeepSeek Harness 正在启动就绪中，请稍候数秒后刷新';
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ ok: false, error: 'DeepSeek Harness 正在启动就绪中，请稍候数秒后刷新' }));
+    res.end(JSON.stringify({ ok: false, error: errorMsg }));
   }
 });
 
@@ -253,10 +256,7 @@ async function handleAdminApi(req, res, pathname, query) {
     // 1. 全局状态
     if (subPath === '/api/status' && req.method === 'GET') {
       return sendJson(res, 200, {
-        dsh: {
-          version: dshManager.getCurrentVersion(),
-          ready: dshManager.ready
-        },
+        dsh: dshManager.getStatus(),
         desktop: desktopManager.getStatus(),
         paths: {
           admin: ADMIN_PATH,
@@ -300,8 +300,21 @@ async function handleAdminApi(req, res, pathname, query) {
       return;
     }
 
-    // 4. 重启 DSH
+    // 4. DSH 服务启停与重启控制
+    if (subPath === '/api/dsh/start' && req.method === 'POST') {
+      dshManager.manualStopped = false;
+      const r = await dshManager.boot();
+      return sendJson(res, r.ok ? 200 : 500, r);
+    }
+
+    if (subPath === '/api/dsh/stop' && req.method === 'POST') {
+      dshManager.manualStopped = true;
+      const r = await dshManager.stop();
+      return sendJson(res, 200, r);
+    }
+
     if (subPath === '/api/dsh/restart' && req.method === 'POST') {
+      dshManager.manualStopped = false;
       const r = await dshManager.restart();
       return sendJson(res, r.ok ? 200 : 500, r);
     }

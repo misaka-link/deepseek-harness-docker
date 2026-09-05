@@ -216,12 +216,29 @@
     <section id="tab-dsh" class="tab-pane active">
       <div class="card">
         <div class="card-title">
-          <span>DSH 核心版本切换</span>
+          <span>DSH 核心服务与版本管理</span>
           <span class="status-badge status-running" id="dshStatusBadge">
             <span class="dot"></span> 运行中
           </span>
         </div>
-        <p class="card-desc">支持在线检查官方 npm 仓库所有发布版本，一键切换并自动执行回环热修补与服务端适配。</p>
+        <p class="card-desc">控制 DSH 主进程的手动启动、停止与重启，并在需要时在线切换官方核心版本。</p>
+
+        <!-- DSH 进程启停控制栏 -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 20px; padding: 14px 18px; background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius-md); flex-wrap: wrap;">
+          <div style="font-weight: 600; font-size: 13px; color: var(--text-main); margin-right: 6px;">
+            服务启停控制:
+          </div>
+          <button class="btn btn-primary" onclick="startDsh()" id="startDshBtn">
+            <span class="dot" style="background:#10b981;"></span> 启动 DSH
+          </button>
+          <button class="btn btn-danger" onclick="stopDsh()" id="stopDshBtn">
+            <span class="dot" style="background:#ef4444;"></span> 停止 DSH
+          </button>
+          <button class="btn" onclick="restartDsh()" id="restartDshBtn">
+            重启 DSH
+          </button>
+          <span id="dshStatusDetail" style="font-size: 12px; color: var(--text-muted); margin-left: auto;"></span>
+        </div>
 
         <div class="form-grid">
           <div class="form-group">
@@ -241,7 +258,6 @@
 
         <div style="display:flex; gap:10px;">
           <button class="btn btn-primary" onclick="installSelectedVersion()" id="installBtn">安装并切换版本</button>
-          <button class="btn" onclick="restartDsh()" id="restartDshBtn">重启 DSH 进程</button>
           <button class="btn" onclick="loadVersions(true)">刷新版本列表</button>
         </div>
 
@@ -653,6 +669,35 @@
         document.getElementById('linkToVnc').href = data.paths?.vnc || '/vnc/';
         document.getElementById('vncDirectBtn').href = data.paths?.vnc || '/vnc/';
 
+        // DSH status & controls
+        const dshBadge = document.getElementById('dshStatusBadge');
+        const startDshBtn = document.getElementById('startDshBtn');
+        const stopDshBtn = document.getElementById('stopDshBtn');
+        const dshDetail = document.getElementById('dshStatusDetail');
+
+        const isDshRunning = !!data.dsh?.running;
+        const isDshReady = !!data.dsh?.ready;
+        const isManualStopped = !!data.dsh?.manualStopped;
+
+        if (dshBadge) {
+          if (isDshRunning) {
+            dshBadge.className = 'status-badge status-running';
+            dshBadge.innerHTML = `<span class="dot"></span> ${isDshReady ? '运行中 (已就绪)' : '启动中...'}`;
+          } else {
+            dshBadge.className = 'status-badge status-stopped';
+            dshBadge.innerHTML = `<span class="dot"></span> ${isManualStopped ? '已手动停止' : '已停止'}`;
+          }
+        }
+        if (startDshBtn) startDshBtn.disabled = isDshRunning;
+        if (stopDshBtn) stopDshBtn.disabled = !isDshRunning;
+        if (dshDetail) {
+          if (isDshRunning) {
+            dshDetail.textContent = isDshReady ? 'DSH 服务就绪，可正常访问 Web 界面' : 'DSH 正在启动加载插件...';
+          } else {
+            dshDetail.textContent = isManualStopped ? '已手动停止，守护管理器暂停自动拉起' : '服务未运行';
+          }
+        }
+
         // Desktop status
         const dsBadge = document.getElementById('desktopStatusBadge');
         if (data.desktop?.running) {
@@ -777,6 +822,37 @@
         appendLog(`❌ 网络请求异常: ${err.message}`);
       } finally {
         document.getElementById('installBtn').disabled = false;
+      }
+    }
+
+    async function startDsh() {
+      const btn = document.getElementById('startDshBtn');
+      if (btn) btn.disabled = true;
+      appendLog('>>> 正在手动启动 DSH 服务...');
+      try {
+        const res = await fetch(`${adminBase}/api/dsh/start`, { method: 'POST' });
+        const data = await res.json();
+        appendLog(data.ok ? '>>> DSH 启动成功并就绪' : '>>> DSH 启动异常: ' + (data.error || '未就绪'));
+      } catch (err) {
+        appendLog('>>> DSH 启动请求异常: ' + err.message);
+      } finally {
+        await loadStatus();
+      }
+    }
+
+    async function stopDsh() {
+      if (!confirm('确定要手动停止 DSH 服务吗？停止后主工作区将暂停服务，守护管理器不会自动拉起，直到您再次点击启动。')) return;
+      const btn = document.getElementById('stopDshBtn');
+      if (btn) btn.disabled = true;
+      appendLog('>>> 正在停止 DSH 服务并释放端口...');
+      try {
+        const res = await fetch(`${adminBase}/api/dsh/stop`, { method: 'POST' });
+        const data = await res.json();
+        appendLog(data.ok ? '>>> DSH 服务已安全停止' : '>>> DSH 停止异常: ' + (data.error || '未知错误'));
+      } catch (err) {
+        appendLog('>>> DSH 停止请求异常: ' + err.message);
+      } finally {
+        await loadStatus();
       }
     }
 
