@@ -2,11 +2,6 @@ name: Build and Publish Docker Images
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Image version tag'
-        required: true
-        default: '0.0.4'
   push:
     tags:
       - 'v*'
@@ -38,19 +33,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Determine Version
-        id: meta-version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
-            VERSION="${BASH_REMATCH[1]}"
-          else
-            VERSION="0.0.4"
-          fi
-          VERSION="${VERSION#v}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -66,20 +48,19 @@ jobs:
         run: |
           IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/deepseek-harness-docker"
           IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
-          VERSION="${{ steps.meta-version.outputs.version }}"
           SUFFIX="${{ matrix.suffix }}"
           LATEST_TAG="${{ matrix.latest_tag }}"
 
+          # 获取镜像内置的官方 DeepSeek Harness 版本号（非外层仓库编号）
           DSH_VERSION=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "0.1.2-rc.1")
           if [ -z "$DSH_VERSION" ]; then
             DSH_VERSION="0.1.2-rc.1"
           fi
-          echo "Detected DSH Version: ${DSH_VERSION}"
+          echo "Detected built-in DSH Version: ${DSH_VERSION}"
 
           TAGS=""
-          TAGS="${TAGS}${IMAGE_NAME}:${VERSION}${SUFFIX},"
-          TAGS="${TAGS}${IMAGE_NAME}:v${VERSION}${SUFFIX},"
-          TAGS="${TAGS}${IMAGE_NAME}:dsh-${DSH_VERSION}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:${DSH_VERSION}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:v${DSH_VERSION}${SUFFIX},"
           TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG}"
 
           if [ "${{ matrix.variant }}" = "market" ]; then
