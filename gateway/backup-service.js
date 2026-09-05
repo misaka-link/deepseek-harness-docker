@@ -169,12 +169,40 @@ async function restoreBackup(filename, dshManager) {
     // 1. 预先校验快照文件完整性，防损坏文件破坏现有环境
     await testArchiveIntegrity(snapshotPath);
 
-    // 2. 优雅停止 DSH
+    // 2. 优雅停止 DSH 并彻底清理可能占用端口的外部孤儿进程
     if (dshManager && typeof dshManager.stop === 'function') {
       await dshManager.stop();
     }
+    try { spawnSync('fuser', ['-k', '-9', '3079/tcp'], { stdio: 'ignore' }); } catch {}
+    try {
+      const psOut = spawnSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8' });
+      if (psOut.status === 0 && psOut.stdout) {
+        for (const line of psOut.stdout.split('\n')) {
+          if (/dsh\s+web|dsh-market-restart/i.test(line)) {
+            const m = line.trim().match(/^(\d+)/);
+            if (m && Number(m[1]) !== process.pid) {
+              try { process.kill(Number(m[1]), 'SIGKILL'); } catch {}
+            }
+          }
+        }
+      }
+    } catch {}
 
-    // 3. 异步多线程/标准解压覆盖到 /root/.dsh
+    // 3. 还原前深度清理脏依赖与损坏插件配置，避免 tar -xf 增量覆盖导致坏插件残留
+    const webProfileDir = path.join(DSH_DIR, 'profiles', 'web');
+    if (fs.existsSync(webProfileDir)) {
+      try {
+        console.log('[backup-service] 正在清理现有插件残留目录与补丁，确保干净还原...');
+        fs.rmSync(path.join(webProfileDir, 'node_modules'), { recursive: true, force: true });
+        fs.rmSync(path.join(webProfileDir, 'cordis.patch.yml'), { force: true });
+        fs.rmSync(path.join(webProfileDir, 'package.json'), { force: true });
+        fs.rmSync(path.join(DSH_DIR, 'plugins'), { recursive: true, force: true });
+      } catch (cleanErr) {
+        console.warn('[backup-service] 预清理提示:', cleanErr.message);
+      }
+    }
+
+    // 4. 异步多线程/标准解压覆盖到 /root/.dsh
     const isMultiThread = hasPigz();
     const extractArgs = ['--warning=no-file-changed'];
     if (isMultiThread) {
@@ -188,7 +216,22 @@ async function restoreBackup(filename, dshManager) {
       throw new Error('tar 解压还原失败: ' + (extractRes.stderr || '未知错误'));
     }
 
-    // 4. 执行权限自愈与补丁
+    // 5. 若解压后 node_modules 为空（轻量清单备份），自动依据 package.json 补全
+    const targetNodeModules = path.join(webProfileDir, 'node_modules');
+    const targetPkgJson = path.join(webProfileDir, 'package.json');
+    if (fs.existsSync(targetPkgJson) && (!fs.existsSync(targetNodeModules) || fs.readdirSync(targetNodeModules).length === 0)) {
+      console.log('[backup-service] 检测到快照未包含完整的 node_modules，正在通过 pnpm 自动补全依赖...');
+      await new Promise(resolve => {
+        const pnpmInstall = spawn('pnpm', ['install', '--no-frozen-lockfile'], {
+          cwd: webProfileDir,
+          stdio: 'ignore'
+        });
+        pnpmInstall.on('close', resolve);
+        pnpmInstall.on('error', resolve);
+      });
+    }
+
+    // 6. 执行权限自愈与补丁
     try {
       if (fs.existsSync(DSH_DIR)) fs.chmodSync(DSH_DIR, 0o700);
       const credPath = path.join(DSH_DIR, '.credentials.yaml');
@@ -208,11 +251,14 @@ async function restoreBackup(filename, dshManager) {
       });
     }
 
-    // 5. 重新拉起 DSH
+    // 7. 重新拉起 DSH 并真实验证就绪状态
     let dshReady = false;
     if (dshManager && typeof dshManager.boot === 'function') {
       const bootRes = await dshManager.boot();
-      dshReady = bootRes.ok;
+      dshReady = bootRes.ok === true;
+      if (!dshReady) {
+        throw new Error('快照解压完成，但 DSH 启动超时或未能成功就绪，请在终端查看日志');
+      }
     }
 
     console.log(`[backup-service] 快照 ${safeFilename} 还原完成，DSH 服务就绪状态: ${dshReady}`);

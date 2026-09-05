@@ -235,3 +235,16 @@ for (const p of marketPlugins) {
     }
   }
 }
+
+// 8. 确保 dsh-market 禁用独立进程重启 (由容器 dsh-manager 统一守护，防止双重启端口冲突)
+const settingsPath = '/root/.dsh/settings.yaml';
+try {
+  if (fs.existsSync(settingsPath)) {
+    let sContent = fs.readFileSync(settingsPath, 'utf8');
+    if (!sContent.includes('dsh-market:')) {
+      sContent += '\ndsh-market:\n  allowRestart: false\n';
+      fs.writeFileSync(settingsPath, sContent, 'utf8');
+      console.log('[install-plugin] 成功注入 dsh-market.allowRestart: false 到 settings.yaml');
+    }
+  }
+} catch (e) {}

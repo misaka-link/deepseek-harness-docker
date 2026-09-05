@@ -45,17 +45,27 @@ if [ -d "/root/.dsh" ]; then
   done
 fi
 
-# 1.2 预设已确认内测声明，防止新环境出现阻塞弹窗
+# 1.2 预设已确认内测声明与插件市场安全重启配置，防止弹窗阻塞与守护管理器双重启冲突
 if [ ! -f "/root/.dsh/settings.yaml" ]; then
   cat <<'EOF' > /root/.dsh/settings.yaml
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
+dsh-market:
+  allowRestart: false
 EOF
-elif ! grep -q "welcomeNoticeVersion" "/root/.dsh/settings.yaml" 2>/dev/null; then
-  printf '
+else
+  if ! grep -q "welcomeNoticeVersion" "/root/.dsh/settings.yaml" 2>/dev/null; then
+    printf '
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
 ' >> /root/.dsh/settings.yaml
+  fi
+  if ! grep -q "dsh-market:" "/root/.dsh/settings.yaml" 2>/dev/null; then
+    printf '
+dsh-market:
+  allowRestart: false
+' >> /root/.dsh/settings.yaml
+  fi
 fi
 
 # 2. 自动注册并安装 dsh-browser-desktop 插件到 DSH profile

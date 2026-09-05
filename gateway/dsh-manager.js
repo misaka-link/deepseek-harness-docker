@@ -9,8 +9,30 @@ const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
 const DSH_DIR = '/root/.dsh';
 const backupService = require('./backup-service');
 
-fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
-fs.mkdirSync(DSH_WORKSPACE, { recursive: true });
+try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
+try { fs.mkdirSync(DSH_WORKSPACE, { recursive: true }); } catch {}
+
+function killPortProcess(port) {
+  try {
+    spawnSync('fuser', ['-k', '-9', `${port}/tcp`], { stdio: 'ignore' });
+  } catch {}
+  try {
+    const res = spawnSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8' });
+    if (res.status === 0 && res.stdout) {
+      for (const line of res.stdout.split('\n')) {
+        if (/dsh\s+web|dsh-market-restart/i.test(line)) {
+          const m = line.trim().match(/^(\d+)/);
+          if (m) {
+            const pid = Number(m[1]);
+            if (pid !== process.pid) {
+              try { process.kill(pid, 'SIGKILL'); } catch {}
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+}
 
 class DshManager {
   constructor() {
@@ -23,6 +45,9 @@ class DshManager {
     this.launchToken = '';
     this.upstreamCookie = '';
     this.versionsCacheDir = '/app/.dsh-versions-cache';
+    this.restartTimer = null;
+    this.recentCrashCount = 0;
+    this.lastCrashTime = 0;
     try { fs.mkdirSync(this.versionsCacheDir, { recursive: true }); } catch {}
   }
 
@@ -76,8 +101,13 @@ class DshManager {
   }
 
   boot() {
-    return new Promise(resolve => {
+    return new Promise(async resolve => {
       if (this.proc) return resolve({ ok: true, alreadyRunning: true });
+      this.stopping = false;
+      if (this.restartTimer) {
+        clearTimeout(this.restartTimer);
+        this.restartTimer = null;
+      }
 
       // 启动前检查并修复 .credentials.yaml 与 .dsh 权限 (DSH 凭据服务强制校验 mode 600)
       try {
@@ -91,6 +121,10 @@ class DshManager {
       } catch (err) {
         console.warn('[dsh-manager] 校验/修复凭据文件权限失败:', err.message);
       }
+
+      // 关键防冲突：清理可能遗留并霸占 DSH_PORT 的孤儿或外部重启进程
+      killPortProcess(DSH_PORT);
+      await new Promise(r => setTimeout(r, 250));
 
       console.log(`[dsh-manager] 启动 DSH 进程 (工作区: ${DSH_WORKSPACE}, 端口: ${DSH_PORT})...`);
       this.ready = false;
@@ -113,7 +147,7 @@ class DshManager {
         logStream.write(d);
         process.stdout.write(d);
 
-        // 优选方案4：实时从 stdout 管道动态捕获启动令牌，零延迟换取官方签名 Cookie
+        // 实时从 stdout 管道动态捕获启动令牌，零延迟换取官方签名 Cookie
         const str = d.toString('utf8');
         const m = str.match(/token=([A-Za-z0-9._~-]{16,})/i);
         if (m) {
@@ -142,23 +176,41 @@ class DshManager {
           this.proc = null;
           this.ready = false;
         }
-        // 若非主动调用 stop()，自动执行守护拉起 (例如插件生效重载或配置变更触发的自重启)
+        // 若非主动调用 stop()，自动执行守护拉起 (带频次熔断保护)
         if (!this.stopping && !this.installing) {
-          console.log('[dsh-manager] DSH 进程退出，守护管理器将在 1 秒后自动重新拉起 DSH...');
-          setTimeout(() => {
+          const now = Date.now();
+          if (now - this.lastCrashTime < 6000) {
+            this.recentCrashCount = (this.recentCrashCount || 0) + 1;
+          } else {
+            this.recentCrashCount = 1;
+          }
+          this.lastCrashTime = now;
+
+          if (this.recentCrashCount > 5) {
+            console.error('[dsh-manager] 警告: DSH 频繁崩溃 (>5次)，已暂停自动拉起以保护系统。请在管理后台检查配置或恢复快照。');
+            return;
+          }
+
+          const delay = Math.min(1000 * Math.pow(1.5, this.recentCrashCount - 1), 10000);
+          console.log(`[dsh-manager] DSH 进程退出，守护管理器将在 ${(delay / 1000).toFixed(1)} 秒后自动重新拉起 DSH...`);
+          clearTimeout(this.restartTimer);
+          this.restartTimer = setTimeout(() => {
             if (!this.stopping && !this.installing && !this.proc) {
               this.boot().catch(err => console.error('[dsh-manager] 自动拉起 DSH 失败:', err.message));
             }
-          }, 1000);
+          }, delay);
         }
       });
 
-      // Probe ready
+      // 等待真正就绪（杜绝外部假冒就绪）
       this.waitReady(60000).then(async ok => {
         this.ready = ok;
-        console.log(ok ? '[dsh-manager] DSH 已就绪' : '[dsh-manager] DSH 启动超时');
-        if (ok && this.launchToken) {
-          await this.exchangeSessionCookie(this.launchToken);
+        console.log(ok ? '[dsh-manager] DSH 已就绪' : '[dsh-manager] DSH 启动超时或崩溃');
+        if (ok) {
+          this.recentCrashCount = 0;
+          if (this.launchToken) {
+            await this.exchangeSessionCookie(this.launchToken);
+          }
         }
         resolve({ ok });
       });
@@ -168,9 +220,19 @@ class DshManager {
   stop() {
     return new Promise(resolve => {
       this.stopping = true;
+      if (this.restartTimer) {
+        clearTimeout(this.restartTimer);
+        this.restartTimer = null;
+      }
+      this.recentCrashCount = 0;
+
       const p = this.proc;
       this.proc = null;
       this.ready = false;
+
+      // 无论 this.proc 是否存在，强制清空 3079 端口及所有孤儿 node dsh 进程
+      killPortProcess(DSH_PORT);
+
       if (!p) {
         this.stopping = false;
         return resolve({ ok: true });
@@ -179,11 +241,13 @@ class DshManager {
       console.log('[dsh-manager] 停止 DSH 进程...');
       const timer = setTimeout(() => {
         try { p.kill('SIGKILL'); } catch {}
-      }, 5000);
+        killPortProcess(DSH_PORT);
+      }, 4000);
 
       p.once('exit', () => {
         clearTimeout(timer);
         this.stopping = false;
+        killPortProcess(DSH_PORT);
         resolve({ ok: true });
       });
 
@@ -236,10 +300,15 @@ class DshManager {
   async waitReady(timeoutMs = 60000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      if (!this.proc) return false;
+      // 若子进程已退出或崩溃，坚决判定为未就绪，杜绝外部假冒就绪
+      if (!this.proc || this.proc.exitCode !== null || this.proc.killed) {
+        return false;
+      }
       try {
         const res = await fetch(`http://127.0.0.1:${DSH_PORT}/`);
-        if (res.status < 500) return true;
+        if (res.status < 500 && this.proc && this.proc.exitCode === null) {
+          return true;
+        }
       } catch {}
       await new Promise(r => setTimeout(r, 800));
     }
