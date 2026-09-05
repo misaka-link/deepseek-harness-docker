@@ -2,7 +2,7 @@
 # deepseek-harness 预装插件清单 (plugins.market.list)
 # 每行一个 npm 包名或 Git 仓库。
 # 构建时若开启 PREINSTALL_PLUGINS=1 (或使用 ./build.sh --market)，
-# 将自动将本列表中的插件预装进镜像 (镜像名 deepseek-harness-docker:market)。
+# 将自动将本列表中的插件预装进镜像 (镜像名 deepseek-harness-docker:latest-market)。
 # ========================================================
 
 # 1. DSH 社区应用市场插件

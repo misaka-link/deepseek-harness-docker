@@ -32,7 +32,7 @@ jobs:
           - variant: market
             preinstall_plugins: "1"
             suffix: "-market"
-            latest_tag: "market"
+            latest_tag: "latest-market"
 
     steps:
       - name: Checkout repository
@@ -79,7 +79,7 @@ jobs:
           echo "Current Project Version: ${PROJ_VER}"
 
           TAGS=""
-          # 默认主标签 (:latest / :market)
+          # 默认主标签 (:latest / :latest-market)
           TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG},"
 
           # 额外标签一：内置官方 DeepSeek Harness 版本号
@@ -89,10 +89,6 @@ jobs:
           # 额外标签二：本项目工程版本号
           TAGS="${TAGS}${IMAGE_NAME}:${PROJ_VER}${SUFFIX},"
           TAGS="${TAGS}${IMAGE_NAME}:v${PROJ_VER}${SUFFIX}"
-
-          if [ "${{ matrix.variant }}" = "market" ]; then
-            TAGS="${TAGS},${IMAGE_NAME}:latest-market"
-          fi
 
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
           echo "Generated tags: ${TAGS}"
