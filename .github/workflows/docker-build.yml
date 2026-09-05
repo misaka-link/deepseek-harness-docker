@@ -70,9 +70,16 @@ jobs:
           SUFFIX="${{ matrix.suffix }}"
           LATEST_TAG="${{ matrix.latest_tag }}"
 
+          DSH_VERSION=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "0.1.2-rc.1")
+          if [ -z "$DSH_VERSION" ]; then
+            DSH_VERSION="0.1.2-rc.1"
+          fi
+          echo "Detected DSH Version: ${DSH_VERSION}"
+
           TAGS=""
           TAGS="${TAGS}${IMAGE_NAME}:${VERSION}${SUFFIX},"
           TAGS="${TAGS}${IMAGE_NAME}:v${VERSION}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:dsh-${DSH_VERSION}${SUFFIX},"
           TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG}"
 
           if [ "${{ matrix.variant }}" = "market" ]; then

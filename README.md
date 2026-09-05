@@ -1,7 +1,6 @@
 # DeepSeek Harness Docker
 
-> 📌 **当前版本**：`v0.0.4`  
-> 🏷️ **镜像标签规范**：后续每次发版与构建镜像，**镜像标签必须严格带上本文档所标注的具体版本号**（如 `:0.0.4`、`:0.0.4-market`），禁止仅使用宽泛的 `:latest` 标签，确保版本强对齐、可追溯与生产环境部署的稳定性。
+> 📌 **版本规范**：默认镜像标签统一保持 **`:latest`**（纯净版）与 **`:market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外自动生成一个标注 DSH 核心版本号的镜像标签**（如 `:dsh-0.1.2-rc.1`、`:dsh-0.1.2-rc.1-market`），便于在生产环境中精确锁定底层官方 DSH 版本。
 
 专为官方 DeepSeek Harness 打造的**生产就绪型容器化套件与可视化 Web Admin 控制台**。一键解决回环网络限制、集成访问认证、内置 Chromium 桌面 (noVNC)，并通过**强大的后台管理面板**实现版本在线热切换、插件市场、配置快照与备份。
 
@@ -35,14 +34,14 @@
 
 ---
 
-## 📦 镜像版本选择与标签规范
+## 📦 镜像版本选择与标签说明
 
-本项目所有镜像在发布时均严格推行**带版本号的标签（Versioned Tag）**与**滚动最新标签（Rolling Tag）**双重发布机制。在生产环境中，**强烈建议使用带版本号的固定标签**：
+本项目提供两种官方镜像，默认均以 **`:latest`** / **`:market`** 运行，同时每次构建均附带对应 **DSH 核心版本标签**：
 
-| 镜像分类 | 固定版本标签 (推荐，与文档版本号强绑定) | 滚动最新标签 | 特性与适用场景 |
+| 镜像分类 | 默认镜像标签 (推荐) | DSH 核心版本标签 (锁定底层 DSH 版本) | 特性与适用场景 |
 |---|---|---|---|
-| **基础纯净版** | `ghcr.io/misaka-link/deepseek-harness-docker:0.0.4`<br>(`...:v0.0.4`) | `...:latest` | 仅包含 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | `ghcr.io/misaka-link/deepseek-harness-docker:0.0.4-market`<br>(`...:v0.0.4-market`) | `...:market`<br>(`...:latest-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:dsh-0.1.2-rc.1`<br>(`...:0.0.4`) | 仅包含 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:market`** | `...:dsh-0.1.2-rc.1-market`<br>(`...:0.0.4-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
 
 ---
 
@@ -50,7 +49,7 @@
 
 ### 1. 单行命令极速启动 (推荐)
 
-#### 选项 A：启动基础纯净版 (指定 v0.0.4 版本)
+#### 选项 A：启动基础纯净版 (默认 `:latest`)
 ```bash
 docker run -d \
   --name deepseek-harness \
@@ -61,11 +60,10 @@ docker run -d \
   -v $(pwd)/workspace:/workspace \
   -v $(pwd)/data/snapshots:/root/.dsh-snapshots \
   -v $(pwd)/data/browser:/root/.config/chromium \
-  ghcr.io/misaka-link/deepseek-harness-docker:0.0.4
+  ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需始终跟进最新滚动构建，可将镜像名后标签替换为 `:latest`)*
 
-#### 选项 B：启动预装插件商店版 (指定 v0.0.4-market 版本，带 dshmarket 市场)
+#### 选项 B：启动预装插件商店版 (开箱即带 dshmarket 插件市场)
 ```bash
 docker run -d \
   --name deepseek-harness-market \
@@ -76,9 +74,8 @@ docker run -d \
   -v $(pwd)/workspace:/workspace \
   -v $(pwd)/data/snapshots:/root/.dsh-snapshots \
   -v $(pwd)/data/browser:/root/.config/chromium \
-  ghcr.io/misaka-link/deepseek-harness-docker:0.0.4-market
+  ghcr.io/misaka-link/deepseek-harness-docker:market
 ```
-*(若需始终跟进插件版最新滚动构建，可将镜像名后标签替换为 `:market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -94,7 +91,7 @@ docker run -d \
 ```yaml
 services:
   deepseek-harness:
-    image: ghcr.io/misaka-link/deepseek-harness-docker:0.0.4
+    image: ghcr.io/misaka-link/deepseek-harness-docker:latest
     container_name: deepseek-harness
     restart: unless-stopped
     ports:
@@ -114,7 +111,7 @@ services:
 ```yaml
 services:
   deepseek-harness:
-    image: ghcr.io/misaka-link/deepseek-harness-docker:0.0.4-market
+    image: ghcr.io/misaka-link/deepseek-harness-docker:market
     container_name: deepseek-harness-market
     restart: unless-stopped
     ports:
