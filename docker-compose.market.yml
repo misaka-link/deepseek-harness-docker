@@ -1,6 +1,6 @@
 services:
   deepseek-harness:
-    image: ghcr.io/misaka-link/deepseek-harness-docker:market
+    image: ghcr.io/misaka-link/deepseek-harness-docker:0.0.4-market
     container_name: deepseek-harness-market
     restart: unless-stopped
     ports:
