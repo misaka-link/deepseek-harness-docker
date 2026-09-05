@@ -1,6 +1,6 @@
 # DeepSeek Harness Docker
 
-专为官方 DeepSeek Harness 打造的**生产就绪型容器化套件与可视化 Web Admin 控制台**。一键解决回环网络限制、集成高颜值口令认证、内置 Chromium 桌面 (noVNC)，并通过**强大的后台管理面板**实现版本在线热切换、插件市场、配置快照与备份。
+专为官方 DeepSeek Harness 打造的**生产就绪型容器化套件与可视化 Web Admin 控制台**。一键解决回环网络限制、集成访问认证、内置 Chromium 桌面 (noVNC)，并通过**强大的后台管理面板**实现版本在线热切换、插件市场、配置快照与备份。
 
 简单来说：**自带强大 Admin 控制台，Docker 一键梭哈，开箱即用。**
 
@@ -25,10 +25,21 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 真实图形化桌面，配合 `dsh-browser-desktop` 插件，AI 可自主操作网页与实时截屏 |
 
-| 7. 极简高颜值访问认证页 (默认口令: `admin`) | 8. 官方 DSH Web 交互工作区 |
+| 7. 极简访问认证页 (默认口令: `admin`) | 8. 官方 DSH Web 交互工作区 |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，宿主模式与数据持久化完美运行 |
+
+---
+
+## 📦 镜像版本选择
+
+本项目提供两种官方预构建镜像，按需自选：
+
+| 镜像标签 | 特性说明 | 适用场景 |
+|---|---|---|
+| **`latest` / `0.0.4`** (基础纯净版) | 仅包含 DSH 核心、网关反代、访问认证与内置 Chromium 桌面插件 | 追求极致精简、轻量纯净，插件按需在后台自定义安装 |
+| **`market` / `0.0.4-market`** (预装插件商店版) | 在基础版之上，**预装了社区应用市场 (`dshmarket`)** 及思考强度调节等常用生态插件 | **开箱即用**，免去手动安装与软链配置，直接畅享插件市场扩展生态 |
 
 ---
 
@@ -36,8 +47,7 @@
 
 ### 1. 单行命令极速启动 (推荐)
 
-直接运行以下命令，一键拉取并启动：
-
+#### 选项 A：启动基础纯净版
 ```bash
 docker run -d \
   --name deepseek-harness \
@@ -51,6 +61,20 @@ docker run -d \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
 
+#### 选项 B：启动预装插件商店版 (开箱即带 dshmarket 插件市场)
+```bash
+docker run -d \
+  --name deepseek-harness-market \
+  --restart unless-stopped \
+  -p 3080:3080 \
+  -e AUTH_TOKEN=admin \
+  -v $(pwd)/data/dsh:/root/.dsh \
+  -v $(pwd)/workspace:/workspace \
+  -v $(pwd)/data/snapshots:/root/.dsh-snapshots \
+  -v $(pwd)/data/browser:/root/.config/chromium \
+  ghcr.io/misaka-link/deepseek-harness-docker:market
+```
+
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
 - **DSH Web 交互工作区**：`http://<服务器IP>:3080/`
@@ -61,8 +85,7 @@ docker run -d \
 
 ### 2. Docker 容器编排 (docker-compose)
 
-新建 `docker-compose.yml`：
-
+#### 基础纯净版 (`docker-compose.yml`)：
 ```yaml
 services:
   deepseek-harness:
@@ -76,24 +99,38 @@ services:
       - AUTH_TOKEN=admin
       - PROXY_PORT=3080
     volumes:
-      # DSH 配置与系统目录
       - ./data/dsh:/root/.dsh
-      # 项目独立工作区
       - ./workspace:/workspace
-      # 配置快照归档库
       - ./data/snapshots:/root/.dsh-snapshots
-      # 浏览器缓存目录
+      - ./data/browser:/root/.config/chromium
+```
+
+#### 预装插件商店版 (`docker-compose.market.yml`)：
+```yaml
+services:
+  deepseek-harness:
+    image: ghcr.io/misaka-link/deepseek-harness-docker:market
+    container_name: deepseek-harness-market
+    restart: unless-stopped
+    ports:
+      - "3080:3080"
+    environment:
+      - AUTH_TOKEN=admin
+      - PROXY_PORT=3080
+    volumes:
+      - ./data/dsh:/root/.dsh
+      - ./workspace:/workspace
+      - ./data/snapshots:/root/.dsh-snapshots
       - ./data/browser:/root/.config/chromium
 ```
 
 一键启动：
 ```bash
+# 启动基础纯净版
 docker compose up -d
-```
 
-停止或更新：
-```bash
-docker compose down && docker compose pull && docker compose up -d
+# 或启动预装插件商店版
+docker compose -f docker-compose.market.yml up -d
 ```
 
 ---
@@ -110,3 +147,11 @@ docker compose down && docker compose pull && docker compose up -d
 | `DSH_DESKTOP_ENABLED` | `1` | 是否启用内置 Chromium 图形桌面 (1: 开启, 0: 关闭) |
 | `DSH_DESKTOP_WIDTH` | `1920` | 桌面宽度分辨率 (支持后台动态调整) |
 | `DSH_DESKTOP_HEIGHT` | `1080` | 桌面高度分辨率 (支持后台动态调整) |
+
+---
+
+## 🙏 感谢与参考项目
+
+本项目在架构设计与容器化实现过程中，参考并借鉴了以下优秀开源项目，特此鸣谢：
+- [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker)
+- [smanx/deepseek-harness-docker](https://github.com/smanx/deepseek-harness-docker)
