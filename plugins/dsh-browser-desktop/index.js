@@ -33,7 +33,7 @@ export function apply(ctx, config = {}) {
   const vncPath = () => activeConfig.vncPath || '/vnc';
 
   // 内部网关管理接口基地址
-  const gatewayControlUrl = 'http://127.0.0.1:3080/__internal/desktop';
+  const gatewayControlUrl = `http://127.0.0.1:${process.env.PROXY_PORT || 3080}/__internal/desktop`;
 
   async function callDesktopManager(endpoint, body = {}) {
     try {

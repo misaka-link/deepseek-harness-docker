@@ -8,8 +8,7 @@ window.__ModuleLoader__.load({
       style.id = 'dsh-hide-open-doc-style';
       style.textContent = `
         [data-slot="settings.action"] button,
-        .me01iq_action button,
-        div[class*="_action"] button {
+        .me01iq_action button {
           display: none !important;
         }
       `;
