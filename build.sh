@@ -21,6 +21,7 @@ if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; 
   docker build \
     --build-arg PREINSTALL_PLUGINS=1 \
     -t "${IMAGE_NAME}:latest-market" \
+    -t "${IMAGE_NAME}:market" \
     -t "${IMAGE_NAME}:${DSH_VERSION}-market" \
     -t "${IMAGE_NAME}:dsh-${DSH_VERSION}-market" \
     -t "${IMAGE_NAME}:${PROJ_VER}-market" \

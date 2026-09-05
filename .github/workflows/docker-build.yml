@@ -90,6 +90,11 @@ jobs:
           TAGS="${TAGS}${IMAGE_NAME}:${PROJ_VER}${SUFFIX},"
           TAGS="${TAGS}${IMAGE_NAME}:v${PROJ_VER}${SUFFIX}"
 
+          # 兼容传统简写标签 (:market)
+          if [ "${{ matrix.variant }}" = "market" ]; then
+            TAGS="${TAGS},${IMAGE_NAME}:market"
+          fi
+
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
           echo "Generated tags: ${TAGS}"
 
@@ -100,6 +105,8 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: linux/amd64
+          provenance: false
+          sbom: false
           build-args: |
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
             USE_CHINA_MIRROR=0
