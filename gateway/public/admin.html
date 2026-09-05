@@ -206,6 +206,7 @@
     <!-- Tabs Header -->
     <nav class="tabs-header">
       <button class="tab-btn active" onclick="switchTab('tab-dsh')">DSH 版本管理</button>
+      <button class="tab-btn" onclick="switchTab('tab-plugins')">拓展与插件管理</button>
       <button class="tab-btn" onclick="switchTab('tab-desktop')">浏览器与桌面控制</button>
       <button class="tab-btn" onclick="switchTab('tab-snapshots')">配置快照与备份</button>
       <button class="tab-btn" onclick="switchTab('tab-settings')">网关与系统配置</button>
@@ -245,6 +246,45 @@
         </div>
 
         <div class="terminal" id="installTerminal">[日志] 管理面板已连接，就绪中...</div>
+      </div>
+    </section>
+
+    <!-- Tab: Plugins & Extensions Management -->
+    <section id="tab-plugins" class="tab-pane">
+      <div class="card">
+        <div class="card-title">
+          <span>DSH 拓展与插件管理</span>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="text" id="pluginSearchInput" placeholder="按插件名/描述搜索..." oninput="filterPlugins()" class="form-control" style="width: 200px; height: 34px; font-size: 13px;" />
+            <button class="btn" onclick="loadPlugins()" style="padding: 6px 12px; font-size: 12px;">刷新列表</button>
+            <button class="btn btn-primary" onclick="restartDshFromPlugins()" id="pluginRestartBtn" style="padding: 6px 14px; font-size: 12px;">
+              重启 DSH 生效
+            </button>
+          </div>
+        </div>
+        <p class="card-desc">
+          查看并管理当前 Web Profile 中已装配的官方核心组件与社区拓展插件。遇到坏插件导致 DSH 启动崩溃或端口冲突时，可在此<strong>一键禁用或卸载清理</strong>，免除手工进入容器排错。
+        </p>
+
+        <div style="overflow-x:auto; margin-top:12px;">
+          <table class="table" id="pluginsTable">
+            <thead>
+              <tr>
+                <th style="width: 250px;">拓展名称 / 包名</th>
+                <th style="width: 95px;">版本</th>
+                <th style="width: 105px;">类型</th>
+                <th style="width: 95px;">运行状态</th>
+                <th>功能简介</th>
+                <th style="width: 140px; text-align:right;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="pluginsTableBody">
+              <tr>
+                <td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">正在读取拓展清单...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -429,7 +469,166 @@
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       document.getElementById(tabId).classList.add('active');
-      event.currentTarget.classList.add('active');
+      if (window.event && window.event.currentTarget) {
+        window.event.currentTarget.classList.add('active');
+      }
+      if (tabId === 'tab-plugins') {
+        loadPlugins();
+      }
+    }
+
+    // ── DSH 拓展插件管理 ─────────────────────────────────────────
+    let allPlugins = [];
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function loadPlugins() {
+      const tbody = document.getElementById('pluginsTableBody');
+      try {
+        const res = await fetch(`${adminBase}/api/plugins`);
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '获取插件失败');
+
+        allPlugins = data.plugins || [];
+        renderPlugins(allPlugins);
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--danger); padding:20px;">加载拓展列表失败: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function filterPlugins() {
+      const q = (document.getElementById('pluginSearchInput').value || '').trim().toLowerCase();
+      if (!q) {
+        renderPlugins(allPlugins);
+        return;
+      }
+      const filtered = allPlugins.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description && p.description.toLowerCase().includes(q))
+      );
+      renderPlugins(filtered);
+    }
+
+    function renderPlugins(list) {
+      const tbody = document.getElementById('pluginsTableBody');
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">没有找到匹配的拓展插件</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(p => {
+        let typeBadge = '';
+        if (p.isCore) {
+          typeBadge = '<span class="nav-badge" style="background:#f1f5f9; color:#475569;">系统核心</span>';
+        } else if (p.isCustom) {
+          typeBadge = '<span class="nav-badge" style="background:#e0f2fe; color:#0284c7;">内置插件</span>';
+        } else {
+          typeBadge = '<span class="nav-badge" style="background:#fef3c7; color:#b45309;">社区拓展</span>';
+        }
+
+        const statusBadge = p.enabled
+          ? '<span class="status-badge status-running"><span class="dot"></span> 已启用</span>'
+          : '<span class="status-badge status-stopped"><span class="dot"></span> 已停用</span>';
+
+        let actionBtns = '';
+        if (p.isCore) {
+          actionBtns = '<span style="color:var(--text-muted); font-size:12px;">受保护 (系统必备)</span>';
+        } else {
+          const toggleBtn = p.enabled
+            ? `<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="togglePlugin('${escapeHtml(p.name)}', false)">禁用</button>`
+            : `<button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="togglePlugin('${escapeHtml(p.name)}', true)">启用</button>`;
+          
+          const uninstallBtn = !p.isCustom
+            ? `<button class="btn btn-danger" style="padding:4px 10px; font-size:12px; margin-left:6px;" onclick="uninstallPlugin('${escapeHtml(p.name)}')" title="彻底删除文件与Patch">卸载</button>`
+            : '';
+          actionBtns = toggleBtn + uninstallBtn;
+        }
+
+        return `
+          <tr>
+            <td>
+              <div style="font-weight:600; font-size:13px; color:var(--text-main);">${escapeHtml(p.name)}</div>
+            </td>
+            <td><code style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-size:12px;">v${escapeHtml(p.version)}</code></td>
+            <td>${typeBadge}</td>
+            <td>${statusBadge}</td>
+            <td style="color:var(--text-muted); font-size:12px; max-width:350px; line-height:1.4;">
+              ${escapeHtml(p.description || '暂无功能描述')}
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              ${actionBtns}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function togglePlugin(name, enable) {
+      const action = enable ? '启用' : '禁用';
+      if (!confirm(`确定要${action}拓展「${name}」吗？\n${action}后需要重启 DSH 进程生效。`)) return;
+
+      try {
+        const res = await fetch(`${adminBase}/api/plugins/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, enabled: enable })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || `${action}失败`);
+
+        alert(`拓展「${name}」已${action}！请点击右上角「重启 DSH 生效」使改动应用到运行时。`);
+        await loadPlugins();
+      } catch (err) {
+        alert(`${action}失败: ` + err.message);
+      }
+    }
+
+    async function uninstallPlugin(name) {
+      if (!confirm(`⚠️ 危险操作警告：\n\n确定要彻底卸载拓展「${name}」吗？\n该操作将同时清理 node_modules 目录与 cordis.patch.yml 中的补丁配置，可用于修复坏插件引发的系统崩溃。`)) return;
+
+      try {
+        const res = await fetch(`${adminBase}/api/plugins/uninstall`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '卸载失败');
+
+        alert(`拓展「${name}」已彻底卸载并清理残留配置！请重启 DSH 服务恢复正常运行。`);
+        await loadPlugins();
+      } catch (err) {
+        alert('卸载失败: ' + err.message);
+      }
+    }
+
+    async function restartDshFromPlugins() {
+      const btn = document.getElementById('pluginRestartBtn');
+      btn.disabled = true;
+      btn.textContent = '正在重启 DSH...';
+      try {
+        const res = await fetch(`${adminBase}/api/dsh/restart`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          alert('🎉 DSH 服务重启就绪！拓展改动已生效。');
+        } else {
+          alert('重启失败: ' + (data.error || '未知错误'));
+        }
+        await loadStatus();
+        await loadPlugins();
+      } catch (err) {
+        alert('重启异常: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '重启 DSH 生效';
+      }
     }
 
     function toggleTokenVisible() {
@@ -889,6 +1088,7 @@
     loadStatus();
     loadVersions();
     loadSnapshots();
+    loadPlugins();
     setInterval(loadStatus, 8000);
   </script>
 </body>

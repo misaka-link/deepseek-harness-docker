@@ -19,6 +19,7 @@ const { ensureUpstreamCookie, injectPolyfill } = require('./token-crawler');
 const desktopManager = require('./desktop-manager');
 const dshManager = require('./dsh-manager');
 const backupService = require('./backup-service');
+const pluginManager = require('./plugin-manager');
 
 // ── 配置文件持久化与动态读取 ──────────────────────────────────
 const CONFIG_FILE = process.env.GATEWAY_CONFIG_FILE || '/root/.dsh/gateway.config.json';
@@ -380,6 +381,38 @@ async function handleAdminApi(req, res, pathname, query) {
         'Content-Disposition': 'attachment; filename="' + path.basename(filePath) + '"'
       });
       return fs.createReadStream(filePath).pipe(res);
+    }
+
+    // 6.5 DSH 拓展插件识别、启用/禁用与清理卸载
+    if (subPath === '/api/plugins' && req.method === 'GET') {
+      try {
+        const r = pluginManager.getPlugins();
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
+    }
+
+    if (subPath === '/api/plugins/toggle' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      try {
+        if (!body || !body.name) throw new Error('缺少插件名称');
+        const r = pluginManager.togglePlugin(body.name, body.enabled !== false);
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
+    }
+
+    if (subPath === '/api/plugins/uninstall' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      try {
+        if (!body || !body.name) throw new Error('缺少插件名称');
+        const r = pluginManager.uninstallPlugin(body.name);
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
     }
 
     // 7. 保存网关与系统配置并立即重启
