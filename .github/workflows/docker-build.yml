@@ -2,6 +2,11 @@ name: Build and Publish Docker Images
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Project version tag (e.g. 0.0.4)'
+        required: false
+        default: '0.0.4'
   push:
     tags:
       - 'v*'
@@ -33,6 +38,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Determine Project Version
+        id: meta-version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            PROJ_VER="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+.[0-9]+.[0-9]+.*)$ ]]; then
+            PROJ_VER="${BASH_REMATCH[1]}"
+          else
+            PROJ_VER="0.0.4"
+          fi
+          PROJ_VER="${PROJ_VER#v}"
+          echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -50,18 +68,27 @@ jobs:
           IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
           SUFFIX="${{ matrix.suffix }}"
           LATEST_TAG="${{ matrix.latest_tag }}"
+          PROJ_VER="${{ steps.meta-version.outputs.project_version }}"
 
-          # 获取镜像内置的官方 DeepSeek Harness 版本号（非外层仓库编号）
+          # 1. 探测镜像内置的官方 DeepSeek Harness 核心版本号
           DSH_VERSION=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "0.1.2-rc.1")
           if [ -z "$DSH_VERSION" ]; then
             DSH_VERSION="0.1.2-rc.1"
           fi
           echo "Detected built-in DSH Version: ${DSH_VERSION}"
+          echo "Current Project Version: ${PROJ_VER}"
 
           TAGS=""
+          # 默认主标签 (:latest / :market)
+          TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG},"
+
+          # 额外标签一：内置官方 DeepSeek Harness 版本号
           TAGS="${TAGS}${IMAGE_NAME}:${DSH_VERSION}${SUFFIX},"
-          TAGS="${TAGS}${IMAGE_NAME}:v${DSH_VERSION}${SUFFIX},"
-          TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG}"
+          TAGS="${TAGS}${IMAGE_NAME}:dsh-${DSH_VERSION}${SUFFIX},"
+
+          # 额外标签二：本项目工程版本号
+          TAGS="${TAGS}${IMAGE_NAME}:${PROJ_VER}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:v${PROJ_VER}${SUFFIX}"
 
           if [ "${{ matrix.variant }}" = "market" ]; then
             TAGS="${TAGS},${IMAGE_NAME}:latest-market"
