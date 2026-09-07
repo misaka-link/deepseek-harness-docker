@@ -73,7 +73,41 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  async function openInChromium(url, durationMinutes, signal, customResolution) {
+  async function navigatePageViaCdp(webSocketDebuggerUrl, targetUrl) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch {}
+        reject(new Error('CDP Page.navigate 超时'));
+      }, 4000);
+
+      const ws = new WebSocket(webSocketDebuggerUrl);
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          id: 101,
+          method: 'Page.navigate',
+          params: { url: targetUrl }
+        }));
+      };
+      ws.onmessage = (event) => {
+        clearTimeout(timer);
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.id === 101) {
+            ws.close();
+            if (msg.error) return reject(new Error(msg.error.message));
+            resolve(msg.result);
+          }
+        } catch (e) { reject(e); }
+      };
+      ws.onerror = (err) => {
+        clearTimeout(timer);
+        try { ws.close(); } catch {}
+        reject(err);
+      };
+    });
+  }
+
+  async function openInChromium(url, durationMinutes, signal, customResolution, options = {}) {
     const targetUrl = url.includes('://') ? url : `https://${url}`;
 
     // 优先采用 AI 显式指定的分辨率，未指定时默认使用插件设置中心配置的分辨率 (默认 1920x1080)
@@ -90,6 +124,9 @@ export function apply(ctx, config = {}) {
       idleTimeoutMinutes: activeConfig.idleTimeoutMinutes
     });
 
+    let tabId = null;
+    let reused = false;
+
     // 等待 CDP 端口就绪 (若启用 CDP)
     if (activeConfig.enableCdp !== false) {
       let cdpReady = false;
@@ -102,14 +139,50 @@ export function apply(ctx, config = {}) {
       }
 
       if (cdpReady) {
-        // 调用 CDP 打开标签页
-        const res = await fetch(`${cdpBase()}/json/new?${encodeURIComponent(targetUrl)}`, {
-          method: 'PUT',
-          signal
-        });
-        if (res.ok) {
-          const page = await res.json();
-          try { await fetch(`${cdpBase()}/json/activate/${encodeURIComponent(page.id)}`, { signal }); } catch {}
+        const forceNewTab = options.newTab === true;
+
+        if (!forceNewTab) {
+          try {
+            const listRes = await fetch(`${cdpBase()}/json`, { signal });
+            if (listRes.ok) {
+              const allTargets = await listRes.json();
+              const pages = allTargets.filter(t => t.type === 'page');
+
+              let targetPage = null;
+              if (options.tabId) {
+                targetPage = pages.find(p => p.id === options.tabId);
+              }
+              if (!targetPage && pages.length > 0) {
+                // 优先复用空白页 (about:blank 或 chrome://newtab/)，其次复用已有页面
+                targetPage = pages.find(p => p.url === 'about:blank' || p.url === 'chrome://newtab/') || pages[pages.length - 1];
+              }
+
+              if (targetPage && targetPage.webSocketDebuggerUrl) {
+                await navigatePageViaCdp(targetPage.webSocketDebuggerUrl, targetUrl);
+                tabId = targetPage.id;
+                reused = true;
+                try {
+                  await fetch(`${cdpBase()}/json/activate/${encodeURIComponent(tabId)}`, { signal });
+                } catch {}
+              }
+            }
+          } catch (navErr) {
+            console.warn('[dsh-browser-desktop] 复用标签页导航失败，将降级新建标签页:', navErr.message);
+          }
+        }
+
+        // 若需要新建标签页或复用导航未成功，调用 CDP 新建标签页
+        if (!tabId) {
+          const res = await fetch(`${cdpBase()}/json/new?${encodeURIComponent(targetUrl)}`, {
+            method: 'PUT',
+            signal
+          });
+          if (res.ok) {
+            const page = await res.json();
+            tabId = page.id;
+            reused = false;
+            try { await fetch(`${cdpBase()}/json/activate/${encodeURIComponent(page.id)}`, { signal }); } catch {}
+          }
         }
       }
     }
@@ -121,23 +194,40 @@ export function apply(ctx, config = {}) {
 
     return {
       url: targetUrl,
+      tabId,
+      reused,
       resolution: `${width}x${height}`,
       vncUrl: `${vncPath()}/?autoconnect=1&resize=scale&view_only=0&reconnect=1`,
-      status: 'opened'
+      status: reused ? 'navigated' : 'opened'
     };
   }
 
-  // 双引擎截图实现：支持画质选择 (high 高/原图, medium 中, low 低)
-  async function captureScreenshotDual(savePath = '/workspace/screenshot.png', customQuality) {
+  // 双引擎截图实现：支持画质选择 (high 高/原图, medium 中, low 低)、指定 tabId 与自定义保存路径
+  async function captureScreenshotDual(savePath, customQuality, targetTabId) {
     const qualityLevel = (customQuality || activeConfig.screenshotQuality || 'high').toLowerCase();
     const isHigh = qualityLevel === 'high';
     const isLow = qualityLevel === 'low';
 
-    let targetFile = path.resolve(savePath);
-    // 高画质默认输出无损 PNG 原图；中/低画质输出压缩 JPEG 节约存储与传输带宽
-    if (!isHigh && targetFile.endsWith('.png')) {
-      targetFile = targetFile.replace(/\.png$/i, '.jpg');
+    // 智能路径处理：
+    // 1. 若 AI 传入路径，基于当前工作区 process.cwd() 解析（支持相对路径如 'screenshot.png'、'doc/test.png'，或绝对路径）；
+    // 2. 若 AI 未提供 savePath，在当前工作区自动生成唯一文件名（如 screenshot-20260906-120000.png），彻底避免多次截图互相覆盖；
+    // 3. 严格尊重 AI 指定的文件扩展名与路径，不再强制将 .png 改名为 .jpg（避免 AI 随后按指定路径查找时报 ENOENT 文件不存在）。
+    let targetFile;
+    if (typeof savePath === 'string' && savePath.trim()) {
+      targetFile = path.resolve(process.cwd(), savePath.trim());
+      // 如果没有扩展名，根据画质自动补齐合适后缀
+      if (!path.extname(targetFile)) {
+        targetFile += (isHigh ? '.png' : '.jpg');
+      }
+    } else {
+      const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+      targetFile = path.resolve(process.cwd(), `screenshot-${timestamp}.${isHigh ? 'png' : 'jpg'}`);
     }
+
+    const ext = path.extname(targetFile).toLowerCase();
+    const isJpeg = ext === '.jpg' || ext === '.jpeg';
+    const captureFormat = isJpeg ? 'jpeg' : 'png';
+
     fs.mkdirSync(path.dirname(targetFile), { recursive: true });
 
     // 唤醒桌面运行
@@ -149,7 +239,19 @@ export function apply(ctx, config = {}) {
         const listRes = await fetch(`${cdpBase()}/json`, { signal: AbortSignal.timeout(1500) });
         if (listRes.ok) {
           const targets = await listRes.json();
-          const page = targets.find(t => t.type === 'page') || targets[0];
+          const pages = targets.filter(t => t.type === 'page');
+          let page = null;
+          if (targetTabId) {
+            page = pages.find(p => p.id === targetTabId);
+          }
+          if (!page) {
+            page = pages[0] || targets[0];
+          }
+
+          if (page && page.id) {
+            try { await fetch(`${cdpBase()}/json/activate/${encodeURIComponent(page.id)}`); } catch {}
+          }
+
           if (page && page.webSocketDebuggerUrl) {
             const wsResult = await new Promise((resolve, reject) => {
               const timer = setTimeout(() => {
@@ -160,10 +262,10 @@ export function apply(ctx, config = {}) {
               const ws = new WebSocket(page.webSocketDebuggerUrl);
               ws.onopen = () => {
                 const captureParams = {
-                  format: isHigh ? 'png' : 'jpeg'
+                  format: captureFormat
                 };
-                if (!isHigh) {
-                  captureParams.quality = isLow ? 40 : 80;
+                if (captureFormat === 'jpeg') {
+                  captureParams.quality = isLow ? 40 : (isHigh ? 95 : 80);
                 }
                 ws.send(JSON.stringify({
                   id: 200,
@@ -186,7 +288,7 @@ export function apply(ctx, config = {}) {
                       title: page.title || '',
                       url: page.url || '',
                       quality: qualityLevel,
-                      engine: `CDP (${isHigh ? 'PNG无损原图' : 'JPEG质量' + (isLow ? '40' : '80')})`,
+                      engine: `CDP (${captureFormat === 'png' ? 'PNG无损原图' : 'JPEG质量' + (isLow ? '40' : (isHigh ? '95' : '80'))})`,
                       status: 'captured'
                     });
                   }
@@ -209,7 +311,9 @@ export function apply(ctx, config = {}) {
     // 2. 当关闭 CDP 或 CDP 未就绪时：通过 X11 原生截屏引擎 (scrot) 直接抓取 :99 虚拟屏幕
     const display = process.env.DISPLAY || ':99';
     const { spawnSync } = await import('node:child_process');
-    const scrotArgs = isHigh ? ['-z', targetFile] : ['-q', isLow ? '40' : '80', targetFile];
+    const scrotArgs = captureFormat === 'png'
+      ? ['-z', targetFile]
+      : ['-q', isLow ? '40' : (isHigh ? '95' : '80'), targetFile];
     const scrotRes = spawnSync('scrot', scrotArgs, {
       env: { ...process.env, DISPLAY: display }
     });
@@ -225,21 +329,29 @@ export function apply(ctx, config = {}) {
       title: 'Container Desktop Screen',
       url: 'x11://display' + display,
       quality: qualityLevel,
-      engine: `X11 scrot (${isHigh ? 'PNG无损原图' : 'JPEG质量' + (isLow ? '40' : '80')})`,
+      engine: `X11 scrot (${captureFormat === 'png' ? 'PNG无损原图' : 'JPEG质量' + (isLow ? '40' : (isHigh ? '95' : '80'))})`,
       status: 'captured'
     };
   }
 
-  // 1. 注册 browser_open 工具 (打开网页，支持 AI 决定分辨率)
+  // 1. 注册 browser_open 工具 (打开网页，支持 AI 决定分辨率、智能复用/新开标签页)
   ctx.tools.register({
     name: 'browser_open',
-    description: '在容器内置的 Chromium 图形浏览器中打开指定网页。支持 AI 自主决定分辨率或工作时长。若未传分辨率则默认采用插件设置配置的参数 (默认 1920x1080 1080p)。',
+    description: '在容器内置的 Chromium 图形浏览器中打开指定网页。默认优先智能复用当前空白或活跃标签页以节约容器内存（可通过 newTab: true 显式新开标签页）。支持 AI 自主决定分辨率或工作时长。返回当前标签页的 tabId。',
     parameters: {
       type: 'object',
       properties: {
         url: {
           type: 'string',
           description: '要打开的网页 URL（例如 https://github.com）'
+        },
+        newTab: {
+          type: 'boolean',
+          description: '可选：是否在新标签页中打开（默认 false，优先复用当前空白或已有标签页导航，避免内存累积；需要多标签并存对比时传 true）。'
+        },
+        tabId: {
+          type: 'string',
+          description: '可选：指定要复用或导航的已有标签页 ID。留空且 newTab=false 时默认复用当前工作标签页。'
         },
         resolution: {
           type: 'string',
@@ -258,6 +370,8 @@ export function apply(ctx, config = {}) {
         type: 'object',
         properties: {
           url: { type: 'string' },
+          tabId: { type: 'string' },
+          reused: { type: 'boolean' },
           resolution: { type: 'string' },
           vncUrl: { type: 'string' },
           status: { type: 'string' }
@@ -267,27 +381,34 @@ export function apply(ctx, config = {}) {
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `已在容器浏览器中打开 ${value.url} (分辨率: ${value.resolution || '默认'})，可通过桌面 VNC 查看实时画面。`
+        text: `已在容器浏览器中打开 ${value.url} (标签页ID: ${value.tabId || '未知'}, ${value.reused ? '复用已有标签页' : '新建标签页'}, 分辨率: ${value.resolution || '默认'})，可通过桌面 VNC 查看实时画面。`
       }]
     },
     async execute(args, exec) {
       if (!args || typeof args.url !== 'string') {
         throw new Error('url 参数必须是非空字符串');
       }
-      return openInChromium(args.url.trim(), args.durationMinutes, exec.signal, args.resolution);
+      return openInChromium(args.url.trim(), args.durationMinutes, exec.signal, args.resolution, {
+        newTab: args.newTab === true,
+        tabId: args.tabId
+      });
     }
   });
 
-  // 2. 注册 browser_screenshot 工具 (支持 AI 决定截图画质: high/medium/low)
+  // 2. 注册 browser_screenshot 工具 (支持 AI 自主指定路径、画质及目标标签页)
   ctx.tools.register({
     name: 'browser_screenshot',
-    description: '对容器内的 Chromium 浏览器或当前桌面进行实时截屏。支持 AI 选择画质（high 高画质原图 / medium 中画质 / low 低画质小体积），未指定时默认采用插件设置所配置的默认参数 (默认 high)。',
+    description: '对容器内的 Chromium 浏览器或当前桌面进行实时截屏。支持 AI 传入自定义保存路径 savePath（相对工作区或绝对路径），未传时自动在当前工作区生成带时间戳的唯一文件名（避免覆盖历史截图）。支持选择画质（high 高画质无损原图 / medium 中画质 / low 低画质），以及指定截取特定 tabId。',
     parameters: {
       type: 'object',
       properties: {
         savePath: {
           type: 'string',
-          description: '可选：截图保存的绝对路径，默认保存为 /workspace/screenshot.png'
+          description: '可选：截图保存的文件路径（强烈推荐由 AI 传入有业务含义的路径，支持绝对路径或相对当前工作区的相对路径，如 "screenshot.png", "doc/preview-login.png"）。若留空，则自动在当前工作区生成带时间戳的唯一文件名（如 screenshot-20260906120000.png），绝不覆盖历史截图。'
+        },
+        tabId: {
+          type: 'string',
+          description: '可选：指定要截屏的标签页 ID。未传时默认截取当前激活的前台标签页或桌面。'
         },
         quality: {
           type: 'string',
@@ -312,26 +433,30 @@ export function apply(ctx, config = {}) {
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `已完成页面截图 (画质: ${value.quality || '默认'}, 引擎: ${value.engine || '默认'})，保存至: ${value.path} (大小: ${value.bytes} 字节)`
+        text: `已完成页面截图 (保存至: \`${value.path}\`, 大小: ${value.bytes} 字节, 画质: ${value.quality || '默认'}, 引擎: ${value.engine || '默认'})`
       }]
     },
     async execute(args) {
-      const target = (args?.savePath || '/workspace/screenshot.png').trim();
-      return captureScreenshotDual(target, args?.quality);
+      const rawPath = typeof args?.savePath === 'string' ? args.savePath.trim() : null;
+      return captureScreenshotDual(rawPath, args?.quality, args?.tabId);
     }
   });
 
-  // 3. 注册 browser_control 工具 (供 AI 显式启停、调整分辨率与查询)
+  // 3. 注册 browser_control 工具 (供 AI 显式启停、调整分辨率、查询、关闭标签页)
   ctx.tools.register({
     name: 'browser_control',
-    description: '控制容器图形浏览器的运行状态（启动、停止休眠、重启、查询状态、调整分辨率），或设置保持运行工作的时间。',
+    description: '控制容器图形浏览器的运行状态及标签页生命周期：包括关闭指定标签页(close_tab)、关闭所有页面重置为空白页(close_all_tabs)、查询标签页列表(tabs)、启动唤醒(start)、停止休眠(stop)、重启(restart)与状态查询(status)。',
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['start', 'stop', 'restart', 'status'],
-          description: '要执行的操作：start(启动/唤醒), stop(停止/休眠), restart(重启), status(查询运行状态)'
+          enum: ['close_tab', 'close_all_tabs', 'tabs', 'start', 'stop', 'restart', 'status'],
+          description: '要执行的操作：close_tab(关闭指定或当前标签页), close_all_tabs(关闭所有标签页并重置为空白页), tabs(查询当前所有标签页列表), start(启动/唤醒), stop(停止休眠整个桌面), restart(重启桌面), status(查询桌面运行状态)'
+        },
+        tabId: {
+          type: 'string',
+          description: '当 action 为 close_tab 时可选传入要关闭的标签页 ID。若未提供则默认关闭当前最新或活跃的标签页。'
         },
         resolution: {
           type: 'string',
@@ -356,6 +481,99 @@ export function apply(ctx, config = {}) {
       }]
     },
     async execute(args) {
+      // 标签页查询与管理动作
+      if (args.action === 'tabs') {
+        try {
+          const listRes = await fetch(`${cdpBase()}/json`, { signal: AbortSignal.timeout(2000) });
+          if (listRes.ok) {
+            const allTargets = await listRes.json();
+            const pages = allTargets.filter(t => t.type === 'page').map(p => ({
+              id: p.id,
+              title: p.title,
+              url: p.url
+            }));
+            return { ok: true, tabs: pages, count: pages.length };
+          }
+        } catch (err) {
+          return { ok: false, error: '获取标签页列表失败或 CDP 暂不可达: ' + err.message };
+        }
+        return { ok: false, error: 'CDP 服务未返回正常响应' };
+      }
+
+      if (args.action === 'close_tab') {
+        try {
+          const listRes = await fetch(`${cdpBase()}/json`, { signal: AbortSignal.timeout(2000) });
+          if (!listRes.ok) return { ok: false, error: 'CDP 服务不可达' };
+          const allTargets = await listRes.json();
+          const pages = allTargets.filter(t => t.type === 'page');
+          if (pages.length === 0) return { ok: true, message: '当前没有打开的网页标签页' };
+
+          let targetToClose = null;
+          if (args.tabId) {
+            targetToClose = pages.find(p => p.id === args.tabId);
+            if (!targetToClose) return { ok: false, error: `未找到 ID 为 ${args.tabId} 的标签页` };
+          } else {
+            // 优先关闭非 about:blank 标签页，若都是空白页则关闭最后一个
+            targetToClose = pages.find(p => p.url !== 'about:blank' && p.url !== 'chrome://newtab/') || pages[pages.length - 1];
+          }
+
+          // 安全兜底：如果只剩这一个标签页，先预创一个空白页，防止 Chromium 进程因所有 Tab 关闭而退出
+          if (pages.length <= 1) {
+            try {
+              await fetch(`${cdpBase()}/json/new?about:blank`, { method: 'PUT' });
+            } catch {}
+          }
+
+          const closeRes = await fetch(`${cdpBase()}/json/close/${encodeURIComponent(targetToClose.id)}`);
+          return {
+            ok: closeRes.ok,
+            closedTabId: targetToClose.id,
+            closedUrl: targetToClose.url,
+            status: closeRes.ok ? 'closed' : 'failed'
+          };
+        } catch (err) {
+          return { ok: false, error: '关闭标签页异常: ' + err.message };
+        }
+      }
+
+      if (args.action === 'close_all_tabs') {
+        try {
+          const listRes = await fetch(`${cdpBase()}/json`, { signal: AbortSignal.timeout(2000) });
+          if (!listRes.ok) return { ok: false, error: 'CDP 服务不可达' };
+          const allTargets = await listRes.json();
+          const pages = allTargets.filter(t => t.type === 'page');
+
+          // 先新建一个干净的 about:blank
+          let blankId = null;
+          try {
+            const blankRes = await fetch(`${cdpBase()}/json/new?about:blank`, { method: 'PUT' });
+            if (blankRes.ok) {
+              const blankPage = await blankRes.json();
+              blankId = blankPage.id;
+              await fetch(`${cdpBase()}/json/activate/${encodeURIComponent(blankId)}`);
+            }
+          } catch {}
+
+          let closedCount = 0;
+          for (const p of pages) {
+            if (p.id !== blankId) {
+              try {
+                await fetch(`${cdpBase()}/json/close/${encodeURIComponent(p.id)}`);
+                closedCount++;
+              } catch {}
+            }
+          }
+          return {
+            ok: true,
+            closedCount,
+            resetTo: 'about:blank'
+          };
+        } catch (err) {
+          return { ok: false, error: '关闭全部标签页异常: ' + err.message };
+        }
+      }
+
+      // 桌面管理动作
       const targetRes = (args.resolution || activeConfig.resolution || '1920x1080').toLowerCase();
       const parts = targetRes.split('x');
       const width = parseInt(parts[0]) || 1920;
@@ -377,6 +595,6 @@ export function apply(ctx, config = {}) {
   ctx.systemPrompt.section({
     name: 'tool:browser_tools',
     order: 110,
-    text: 'When you need to view or interact with a webpage, call browser_open (you can specify resolution like "1920x1080" or "1280x720", defaults to 1920x1080). You can call browser_screenshot to capture a screenshot (you can specify quality as "high", "medium", or "low", defaults to high). If resolution or quality are omitted, they automatically use the user\'s plugin configuration settings. You can call browser_control to stop the browser when tasks are complete.'
+    text: 'When you need to view or interact with a webpage, call browser_open (by default it reuses or navigates the active tab to save container memory; pass newTab: true only when you explicitly need multiple tabs open side-by-side; returns tabId). You can call browser_screenshot to capture a screenshot: you can pass your own savePath (supports relative or absolute path, e.g. "screenshot.png" or "doc/preview.png"; if omitted, a unique timestamped file is auto-generated in the workspace so previous captures are never overwritten), tabId (optional, targets a specific tab), and quality (high, medium, low). When done with a specific webpage task, call browser_control with action: "close_tab" (optionally specifying tabId) to close that tab, or action: "close_all_tabs" to reset to blank. Call browser_control with action: "stop" only when all browser tasks are completely finished and the entire desktop should be shut down.'
   });
 }

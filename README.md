@@ -1,9 +1,9 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：内置官方 DeepSeek Harness 核心 `0.1.2-rc.1` ｜ 本项目工程版本 `0.0.4`  
+> 📌 **版本信息**：内置官方 DeepSeek Harness 核心 `0.1.2-rc.1` ｜ 本项目工程版本 `0.0.5`  
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
 > 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.2-rc.1`、`:0.1.2-rc.1-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.0.4`、`:0.0.4-market`），精确锁定本容器套件自身的版本。
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.0.5`、`:0.0.5-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**生产就绪型容器化套件与可视化 Web Admin 控制台**。一键解决回环网络限制、集成访问认证、内置 Chromium 桌面 (noVNC)，并通过**强大的后台管理面板**实现版本在线热切换、插件市场、配置快照与备份。
 
@@ -43,8 +43,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.2-rc.1`<br>(`...:dsh-0.1.2-rc.1`) | `...:0.0.4`<br>(`...:v0.0.4`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.2-rc.1-market`<br>(`...:dsh-0.1.2-rc.1-market`) | `...:0.0.4-market`<br>(`...:v0.0.4-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.2-rc.1`<br>(`...:dsh-0.1.2-rc.1`) | `...:0.0.5`<br>(`...:v0.0.5`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.2-rc.1-market`<br>(`...:dsh-0.1.2-rc.1-market`) | `...:0.0.5-market`<br>(`...:v0.0.5-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
 
 ---
 
@@ -65,7 +65,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.2-rc.1` 或项目版本 `:0.0.4`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.2-rc.1` 或项目版本 `:0.0.5`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -80,7 +80,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.2-rc.1-market` 或项目版本 `:0.0.4-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.2-rc.1-market` 或项目版本 `:0.0.5-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -154,6 +154,29 @@ docker compose -f docker-compose.market.yml up -d
 | `DSH_DESKTOP_ENABLED` | `1` | 是否启用内置 Chromium 图形桌面 (1: 开启, 0: 关闭) |
 | `DSH_DESKTOP_WIDTH` | `1920` | 桌面宽度分辨率 (支持后台动态调整) |
 | `DSH_DESKTOP_HEIGHT` | `1080` | 桌面高度分辨率 (支持后台动态调整) |
+
+---
+
+## 📝 版本更新历史 (Changelog)
+
+### v0.0.5
+- 🚀 **新增 AI 浏览器标签页全生命周期管理 (`browser_control`)**：
+  - 新增 `close_tab` 动作：支持根据 `tabId` 靶向关闭特定标签页；未传时默认关闭当前工作页；
+  - 新增 `close_all_tabs` 动作：一键关闭所有业务标签页，并安全重置为纯净的 `about:blank` 兜底页；
+  - 新增 `tabs` 动作：支持 AI 随时查询当前所有打开标签页的 ID、标题、URL 与计数；
+  - **内建 Linux 防退出安全兜底机制**：关闭最后一个标签页时自动预置空白页，杜绝 Linux X11 下 Chromium 进程因所有 Tab 关闭而异常退出或白屏。
+- ⚡ **底层默认智能复用导航 (`browser_open`)**：
+  - `browser_open` 默认采用智能复用（`newTab: false`），优先在现有空白页或工作页中通过 CDP `Page.navigate` 导航新 URL，从底层根除 AI 遗忘漏关导致的 Tab 堆积与容器内存暴涨；
+  - 显式支持多标签对比：传入 `newTab: true` 可独立开启新 Tab，返回值包含 `tabId` 与 `reused` 标识。
+- 📸 **截图保存路径与格式全面重构 (`browser_screenshot`)**：
+  - 彻底解决固定死锁路径（`/workspace/screenshot.png`）导致多次截图互相覆盖、历史丢失的问题；
+  - 赋予 AI 充分自主权：支持传入自定义 `savePath`（无论是相对当前工作区路径还是绝对路径）；
+  - 缺省时间戳唯一命名：未指定路径时，自动在工作区生成带纯数字时间戳的唯一图片文件（如 `screenshot-20260907120000.png`），确保多步截图全部持久保留；
+  - 修复画质压缩时强行将 `.png` 改名为 `.jpg` 引发的后续工具找不到文件的缺陷，严格按指定文件扩展名选择编码引擎；
+  - 系统提示词（`systemPrompt`）全面优化，明确引导 AI 传入业务路径与适时释放资源。
+- 🧪 **自动化测试与工程规范升级**：
+  - 完善本地构建脚本 `build.sh` 对 GitHub Container Registry (`ghcr.io`) 镜像标签的自动映射；
+  - 全链路测试闭环与自动化交付门禁固化。
 
 ---
 

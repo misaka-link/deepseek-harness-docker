@@ -33,4 +33,13 @@ PROJECT_PLAN.md
 REMOTE_DEBUG.md
 *DEBUG.md
 *PLAN.md
+PROJECT_RULES.md
+RULES.md
+*RULES.md
+
+# Remote debug & test scripts (local execution only)
+scripts/mcp-remote-*.mjs
+scripts/remote-*.mjs
+
+
 
