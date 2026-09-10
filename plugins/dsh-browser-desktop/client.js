@@ -20,7 +20,10 @@ window.__ModuleLoader__.load({
       cdpPortHint: zh ? '远程调试监听端口，默认 9222' : 'Remote debugging port, default 9222.',
       vncPath: zh ? 'VNC 访问相对路径' : 'VNC Access Path',
       vncPathHint: zh ? 'noVNC 桌面相对访问路径，默认 /vnc' : 'Relative access path for noVNC desktop, default /vnc.',
+      enableSidebarTab: zh ? '在右侧边栏嵌入桌面 Tab (实验性)' : 'Embed Desktop in Right Sidebar (Experimental)',
+      enableSidebarTabHint: zh ? '在 Web 界面右侧边栏 (Right Sidebar) 中直接内嵌容器 Chromium 桌面 Tab，可在对话同时并排操作浏览器（默认关闭）' : 'Embed the container Chromium desktop directly in the right sidebar (disabled by default).',
       openDesktop: zh ? '在新标签页打开桌面 (VNC)' : 'Open VNC in New Window',
+      openInSidebar: zh ? '在右侧边栏展开桌面' : 'Open in Sidebar',
       discard: zh ? '放弃修改' : 'Discard',
       save: zh ? '保存' : 'Save',
       saving: zh ? '保存中…' : 'Saving…',
@@ -39,11 +42,13 @@ window.__ModuleLoader__.load({
         idleTimeoutMinutes: 30,
         enableCdp: true,
         cdpPort: 9222,
-        vncPath: '/vnc'
+        vncPath: '/vnc',
+        enableSidebarTab: false
       });
       const [initialForm, setInitialForm] = React.useState(null);
 
       React.useEffect(() => {
+        const storedSidebarTab = typeof localStorage !== 'undefined' && localStorage.getItem('dsh_desktop_enable_sidebar_tab') === 'true';
         fetch('/admin/api/status')
           .then(r => r.json())
           .then(data => {
@@ -54,7 +59,8 @@ window.__ModuleLoader__.load({
                 idleTimeoutMinutes: data.desktop.idleTimeoutMinutes !== undefined ? data.desktop.idleTimeoutMinutes : 30,
                 enableCdp: data.desktop.enableCdp !== undefined ? data.desktop.enableCdp : true,
                 cdpPort: data.desktop.cdpPort || 9222,
-                vncPath: data.paths?.vnc || '/vnc'
+                vncPath: data.paths?.vnc || '/vnc',
+                enableSidebarTab: data.desktop.enableSidebarTab !== undefined ? !!data.desktop.enableSidebarTab : storedSidebarTab
               };
               setForm(loaded);
               setInitialForm(loaded);
@@ -96,9 +102,14 @@ window.__ModuleLoader__.load({
               durationMinutes: form.idleTimeoutMinutes,
               idleTimeoutMinutes: form.idleTimeoutMinutes,
               enableCdp: form.enableCdp,
-              cdpPort: form.cdpPort
+              cdpPort: form.cdpPort,
+              enableSidebarTab: form.enableSidebarTab
             })
           });
+
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('dsh_desktop_enable_sidebar_tab', String(form.enableSidebarTab));
+          }
 
           setInitialForm(form);
           setDirty(false);
@@ -246,6 +257,24 @@ window.__ModuleLoader__.load({
             React.createElement('p', { className: 'At1oFq_hint' }, labels.cdpPortHint)
           ),
 
+          // 字段 5: 是否在 Web 右侧边栏嵌入桌面 Tab (实验性，默认关闭)
+          React.createElement(
+            'div',
+            { className: 'At1oFq_field' },
+            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.enableSidebarTab)),
+            React.createElement(
+              'select',
+              {
+                className: 'At1oFq_input',
+                value: form.enableSidebarTab ? 'true' : 'false',
+                onChange: e => updateField('enableSidebarTab', e.target.value === 'true')
+              },
+              React.createElement('option', { value: 'false' }, zh ? '关闭 (默认，点击在新窗口全屏打开)' : 'Disabled (Default, opens in new window)'),
+              React.createElement('option', { value: 'true' }, zh ? '开启 (在 Web 右侧边栏中内嵌桌面 Tab)' : 'Enabled (Embed desktop tab in right sidebar)')
+            ),
+            React.createElement('p', { className: 'At1oFq_hint' }, labels.enableSidebarTabHint)
+          ),
+
           // 底部操作栏 (与官方 PluginCard footer 100% 对齐)
           React.createElement(
             'div',
@@ -266,6 +295,23 @@ window.__ModuleLoader__.load({
               },
               labels.openDesktop + ' ↗'
             ),
+            (form.enableSidebarTab && typeof window !== 'undefined') ? React.createElement(
+              'button',
+              {
+                type: 'button',
+                className: 'YyYd_a_discard',
+                style: { marginRight: '8px', cursor: 'pointer' },
+                onClick: (e) => {
+                  e.stopPropagation();
+                  if (typeof window.__DSH_OPEN_SIDEBAR_TAB__ === 'function') {
+                    window.__DSH_OPEN_SIDEBAR_TAB__('vnc-desktop');
+                  } else {
+                    alert(zh ? '右侧边栏未就绪，请先保存并刷新页面' : 'Sidebar not ready, please save and refresh');
+                  }
+                }
+              },
+              labels.openInSidebar
+            ) : null,
             React.createElement(
               'button',
               {
@@ -291,8 +337,86 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // 右侧边栏专用内嵌 VNC 容器组件 (当开关开启且上游环境支持 SidebarRight 时渲染)
+    function VncDesktopSidebarPane() {
+      const vncUrl = '/vnc/?autoconnect=1&resize=scale';
+      const [reloadKey, setReloadKey] = React.useState(1);
+
+      return React.createElement(
+        'div',
+        {
+          style: {
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            background: '#181818',
+            position: 'relative',
+            overflow: 'hidden'
+          }
+        },
+        React.createElement(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 12px',
+              background: 'var(--dsw-alias-bg-subtle, #252526)',
+              borderBottom: '1px solid var(--dsw-alias-border, #333)',
+              fontSize: '12px',
+              color: 'var(--dsw-alias-fg-muted, #aaa)',
+              flexShrink: 0
+            }
+          },
+          React.createElement(
+            'span',
+            { style: { fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '6px' } },
+            '🖥️',
+            zh ? 'Chromium 容器桌面' : 'Chromium Container Desktop'
+          ),
+          React.createElement(
+            'div',
+            { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '12px', padding: 0 },
+                onClick: () => setReloadKey(k => k + 1)
+              },
+              zh ? '刷新画面' : 'Refresh'
+            ),
+            React.createElement(
+              'a',
+              {
+                href: '/vnc/',
+                target: '_blank',
+                rel: 'noreferrer',
+                style: { color: 'var(--dsw-alias-brand-primary, #1677ff)', textDecoration: 'none' }
+              },
+              (zh ? '新窗口全屏' : 'Open in Tab') + ' ↗'
+            )
+          )
+        ),
+        React.createElement('iframe', {
+          key: reloadKey,
+          src: vncUrl,
+          style: {
+            flex: 1,
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            background: '#000'
+          }
+        })
+      );
+    }
+
     function apply(ctx) {
       if (ctx.slots && typeof ctx.slots.inject === 'function') {
+        // 1. 注册设置中心插件配置卡片 (始终加载)
         ctx.slots.inject('settings.plugin.item', () => {
           return ctx.slots.register({
             name: 'settings.plugin.item',
@@ -300,6 +424,66 @@ window.__ModuleLoader__.load({
             order: 80
           }, BrowserDesktopCard);
         });
+
+        // 2. 检查右侧边栏 Tab 开关状态 (默认关闭，用户在设置中开启后生效)
+        const isSidebarTabEnabled = typeof localStorage !== 'undefined' && localStorage.getItem('dsh_desktop_enable_sidebar_tab') === 'true';
+
+        if (isSidebarTabEnabled && typeof ctx.inject === 'function') {
+          try {
+            ctx.inject(['sidebarRightTabs', 'sidebarRight'], (scopedCtx) => {
+              window.__DSH_SIDEBAR_RIGHT__ = scopedCtx.sidebarRight;
+              window.__DSH_OPEN_SIDEBAR_TAB__ = (kind) => {
+                try {
+                  if (typeof scopedCtx.sidebarRight?.openTab === 'function') {
+                    scopedCtx.sidebarRight.openTab({ kind });
+                  }
+                } catch (err) {
+                  console.warn('[dsh-browser-desktop] 呼出右侧边栏 Tab 失败:', err);
+                }
+              };
+
+              const DESKTOP_ID = '@dsh-custom/dsh-browser-desktop';
+              const DESKTOP_KIND = 'vnc-desktop';
+
+              try {
+                scopedCtx.sidebarRightTabs?.register?.({
+                  id: DESKTOP_ID,
+                  kind: DESKTOP_KIND,
+                  priority: 'extension',
+                  title: () => (zh ? '容器桌面' : 'Container Desktop'),
+                  guide: [{
+                    order: 20,
+                    title: () => (zh ? '容器浏览器桌面' : 'Container Desktop'),
+                    description: () => (zh ? '打开容器内置 Chromium 浏览器与 noVNC 实时桌面 (支持 CDP 调试)' : 'Open Chromium browser & noVNC desktop')
+                  }]
+                });
+              } catch (e) {
+                console.warn('[dsh-browser-desktop] 注册 sidebar tab 警告:', e.message);
+              }
+
+              for (const key of [DESKTOP_ID, DESKTOP_KIND]) {
+                scopedCtx.slots.inject('sidebar.right.pane.tab.title', () => {
+                  return scopedCtx.slots.register({
+                    name: 'sidebar.right.pane.tab.title',
+                    key: key
+                  }, () => React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px' } },
+                    React.createElement('span', null, '🖥️'),
+                    React.createElement('span', null, zh ? '容器桌面' : 'Desktop')
+                  ));
+                });
+
+                scopedCtx.slots.inject('sidebar.right.pane.tab', () => {
+                  return scopedCtx.slots.register({
+                    name: 'sidebar.right.pane.tab',
+                    key: key
+                  }, VncDesktopSidebarPane);
+                });
+              }
+            });
+          } catch (err) {
+            console.warn('[dsh-browser-desktop] 条件注入右侧边栏依赖失败 (优雅降级):', err.message);
+          }
+        }
       }
     }
 

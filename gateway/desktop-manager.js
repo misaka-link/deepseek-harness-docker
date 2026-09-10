@@ -24,6 +24,7 @@ class DesktopManager {
       idleTimeoutMinutes: Number(process.env.DSH_IDLE_TIMEOUT_MINUTES) || 30, // 0 = disabled
       enableCdp: process.env.DSH_ENABLE_CDP !== '0',
       cdpPort: Number(process.env.DSH_CDP_PORT) || 9222,
+      enableSidebarTab: process.env.DSH_ENABLE_SIDEBAR_TAB === '1' || false,
       userDataDir: process.env.CHROME_USER_DATA_DIR || '/root/.config/chromium',
       logsDir: '/tmp/dsh-desktop'
     };
@@ -218,6 +219,7 @@ class DesktopManager {
       enableCdp: this.config.enableCdp,
       cdpPort: this.config.cdpPort,
       idleTimeoutMinutes: this.config.idleTimeoutMinutes,
+      enableSidebarTab: !!this.config.enableSidebarTab,
       idleSeconds: this.running ? Math.floor((now - this.lastActivity) / 1000) : 0
     };
   }
@@ -228,6 +230,7 @@ class DesktopManager {
     if (typeof patch.idleTimeoutMinutes === 'number') this.config.idleTimeoutMinutes = patch.idleTimeoutMinutes;
     if (typeof patch.enableCdp === 'boolean') this.config.enableCdp = patch.enableCdp;
     if (typeof patch.cdpPort === 'number') this.config.cdpPort = patch.cdpPort;
+    if (typeof patch.enableSidebarTab === 'boolean') this.config.enableSidebarTab = patch.enableSidebarTab;
     return this.config;
   }
 }

@@ -13,7 +13,8 @@ export const Config = z.object({
   idleTimeoutMinutes: z.number().default(30).description('浏览器空闲休眠时间 (分钟，0为不休眠始终保持运行)'),
   enableCdp: z.boolean().default(true).description('是否启用 Chromium CDP 远程调试能力'),
   cdpPort: z.number().default(9222).description('Chromium CDP 远程调试端口 (默认 9222)'),
-  vncPath: z.string().default('/vnc').description('VNC 桌面访问相对路径')
+  vncPath: z.string().default('/vnc').description('VNC 桌面访问相对路径'),
+  enableSidebarTab: z.boolean().default(false).description('是否在 Web 右侧边栏中嵌入容器浏览器桌面 Tab (实验性，默认关闭)')
 });
 
 export function apply(ctx, config = {}) {
@@ -25,6 +26,7 @@ export function apply(ctx, config = {}) {
     enableCdp: true,
     cdpPort: 9222,
     vncPath: '/vnc',
+    enableSidebarTab: false,
     ...config
   };
 

@@ -43,7 +43,9 @@ if (dshCoreModules && globalScopeDir) {
 
 // 1. 建立插件依赖软链接 (schemastery)
 const possibleSchemasterySources = [
+  '/usr/local/lib/node_modules/@deepseek-ai/schemastery',
   '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery',
+  '/opt/dsh/lib/node_modules/@deepseek-ai/schemastery',
   '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery'
 ];
 for (const src of possibleSchemasterySources) {

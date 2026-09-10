@@ -1,9 +1,9 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：内置官方 DeepSeek Harness 核心 `0.1.2-rc.1` ｜ 本项目工程版本 `0.0.5`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.0.6`  
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.2-rc.1`、`:0.1.2-rc.1-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.0.5`、`:0.0.5-market`），精确锁定本容器套件自身的版本。
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.5-rc.1`、`:0.1.5-rc.1-market`），精确锁定底层 DSH 官方引擎；  
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.0.6`、`:0.0.6-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**生产就绪型容器化套件与可视化 Web Admin 控制台**。一键解决回环网络限制、集成访问认证、内置 Chromium 桌面 (noVNC)，并通过**强大的后台管理面板**实现版本在线热切换、插件市场、配置快照与备份。
 
@@ -154,10 +154,24 @@ docker compose -f docker-compose.market.yml up -d
 | `DSH_DESKTOP_ENABLED` | `1` | 是否启用内置 Chromium 图形桌面 (1: 开启, 0: 关闭) |
 | `DSH_DESKTOP_WIDTH` | `1920` | 桌面宽度分辨率 (支持后台动态调整) |
 | `DSH_DESKTOP_HEIGHT` | `1080` | 桌面高度分辨率 (支持后台动态调整) |
+| `HTTP_PROXY` / `HTTPS_PROXY` | 无 | 出站网络代理（DSH 0.1.5-rc.1 起全面原生遵循） |
+| `NO_PROXY` | `localhost,127.0.0.1` | 免代理地址列表 |
 
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.0.6
+- 🌟 **全面适配官方最新 RC 版本 (`@deepseek-ai/dsh@0.1.5-rc.1`)**：
+  - 支持官方新增模型 `DeepSeek-V41-Flash` (`deepseek-flash`) 与动态系统提示词；
+  - 原生支持出站代理继承：透传 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`，解决内网/私有化部署下模型 API 访问代理需求；
+  - 适配官方 V3 会话格式：在管理后台与网关生命周期管理（`dsh-manager.js`）中加入版本升降级安全警告，强化升级前秒级快照备份，避免不可逆降级导致历史会话无法读取；
+  - 增强 `install-plugin.mjs` 插件安装与软链接机制，兼容 npm 11 扁平化与嵌套依赖树。
+- 🖥️ **右侧边栏（Right Sidebar）内嵌桌面 Tab 支持与设置开关**：
+  - 深度融合官方 0.1.5-rc.1 全新推出的右侧 Sidebar 架构；
+  - 在 `dsh-browser-desktop` 插件设置中心增加开关：**“在右侧边栏嵌入桌面 Tab (实验性)”**，**默认关闭**；
+  - 开启后，可在 Web 界面右侧直接内嵌 noVNC 浏览器桌面，实现左侧对话/右侧操作浏览器的分栏并排工作流；
+  - 运行时特性检测与向后兼容：在旧版本 DSH（无右侧边栏）下自动优雅降级，确保零错误。
 
 ### v0.0.5
 - 🚀 **新增 AI 浏览器标签页全生命周期管理 (`browser_control`)**：

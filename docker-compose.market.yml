@@ -12,6 +12,12 @@ services:
       # 统一对外访问端口
       - PROXY_PORT=3080
 
+      # 出站网络代理（可选：DSH 0.1.5-rc.1 原生遵循环境变量代理）
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1}
+
       # --- 以下参数均已在容器和网关内置默认值，默认注释保持简洁，按需启用：---
       # - ADMIN_PATH=/admin                  # 自定义管理面板访问路径 (默认 /admin)
       # - VNC_PATH=/vnc                      # 自定义桌面 VNC 访问路径 (默认 /vnc)

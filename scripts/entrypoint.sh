@@ -16,6 +16,12 @@ export DSH_WEB_LOG="/tmp/dsh-web.log"
 export NODE_OPTIONS="${NODE_OPTIONS} --no-deprecation"
 export NODE_PATH="/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules:/usr/local/lib/node_modules:${NODE_PATH}"
 
+# 出站代理环境变量归一化 (兼容官方 0.1.5-rc.1 原生出站代理行为)
+[ -n "$HTTP_PROXY" ] && export HTTP_PROXY="$HTTP_PROXY" http_proxy="${http_proxy:-$HTTP_PROXY}"
+[ -n "$HTTPS_PROXY" ] && export HTTPS_PROXY="$HTTPS_PROXY" https_proxy="${https_proxy:-$HTTPS_PROXY}"
+[ -n "$ALL_PROXY" ] && export ALL_PROXY="$ALL_PROXY" all_proxy="${all_proxy:-$ALL_PROXY}"
+[ -n "$NO_PROXY" ] && export NO_PROXY="$NO_PROXY" no_proxy="${no_proxy:-$NO_PROXY}"
+
 child_pid=""
 
 stop_all() {

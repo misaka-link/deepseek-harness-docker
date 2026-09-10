@@ -34,6 +34,24 @@ function killPortProcess(port) {
   } catch {}
 }
 
+function parseSemver(v = '') {
+  const clean = String(v).replace(/^v/, '').trim();
+  const [main, pre] = clean.split('-');
+  const [major = 0, minor = 0, patch = 0] = (main || '').split('.').map(n => Number(n) || 0);
+  return { major, minor, patch, pre: pre || '' };
+}
+
+function compareSemver(v1, v2) {
+  const p1 = parseSemver(v1);
+  const p2 = parseSemver(v2);
+  if (p1.major !== p2.major) return p1.major - p2.major;
+  if (p1.minor !== p2.minor) return p1.minor - p2.minor;
+  if (p1.patch !== p2.patch) return p1.patch - p2.patch;
+  if (!p1.pre && p2.pre) return 1;
+  if (p1.pre && !p2.pre) return -1;
+  return p1.pre.localeCompare(p2.pre);
+}
+
 class DshManager {
   constructor() {
     this.proc = null;
@@ -348,6 +366,15 @@ class DshManager {
 
     try {
       log(`当前运行版本: ${previousVersion}，准备切换至目标版本: ${version}`);
+
+      // 版本特性与数据兼容性检查
+      if (compareSemver(version, '0.1.5-rc.1') < 0 && compareSemver(previousVersion, '0.1.5-rc.1') >= 0) {
+        log('⚠️ [版本安全警告] 您正在从 0.1.5+ 系列降级至旧版本！');
+        log('⚠️ 官方说明：0.1.5 起会话数据格式已升级为 V3 且单向不可逆，降级后旧版本 DSH 无法加载 V3 会话记录。');
+        log('⚠️ 建议在降级前通过管理后台【快照管理】生成完整配置备份。');
+      } else if (compareSemver(version, '0.1.5-rc.1') >= 0 && compareSemver(previousVersion, '0.1.5-rc.1') < 0) {
+        log('ℹ️ [版本升级提示] 准备升级至 0.1.5+ 系列：将启用 DeepSeek-V41-Flash、右侧新版 Sidebar 预览、出站代理继承及 V3 会话格式。');
+      }
 
       // 1. 自动对当前正常运行的稳定版本进行本地高速快照存档
       const prevBackup = path.join(this.versionsCacheDir, previousVersion);
