@@ -7,9 +7,11 @@ set -e
 #   ./build.sh --market -> 构建带预装插件清单的镜像 (deepseek-harness-docker:latest-market 及额外标签)
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.0.6"
-DSH_VERSION=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "0.1.5-rc.1")
-[ -z "$DSH_VERSION" ] && DSH_VERSION="0.1.5-rc.1"
+PROJ_VER="0.0.7"
+DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
+DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
+DSH_VERSION="${DSH_NEXT:-$DSH_LATEST}"
+[ -z "$DSH_VERSION" ] && DSH_VERSION="0.1.5-rc.2"
 
 if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; then
   echo "========================================================="
@@ -20,6 +22,7 @@ if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; 
   echo "========================================================="
   docker build \
     --build-arg PREINSTALL_PLUGINS=1 \
+    --build-arg DSH_VERSION="${DSH_VERSION}" \
     -t "${IMAGE_NAME}:latest-market" \
     -t "ghcr.io/misaka-link/${IMAGE_NAME}:latest-market" \
     -t "${IMAGE_NAME}:market" \
@@ -39,6 +42,7 @@ else
   echo "========================================================="
   docker build \
     --build-arg PREINSTALL_PLUGINS=0 \
+    --build-arg DSH_VERSION="${DSH_VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     -t "ghcr.io/misaka-link/${IMAGE_NAME}:latest" \
     -t "${IMAGE_NAME}:${DSH_VERSION}" \

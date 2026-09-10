@@ -132,7 +132,14 @@ RUN set -eux; \
     go version
 
 # 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm，并补齐全局依赖链接
-RUN npm install -g pnpm @deepseek-ai/dsh \
+ARG DSH_VERSION=""
+RUN if [ -n "$DSH_VERSION" ]; then \
+      TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
+    else \
+      TARGET_PKG="@deepseek-ai/dsh"; \
+    fi; \
+    echo "===> 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG}..." \
+    && npm install -g pnpm "${TARGET_PKG}" \
     && for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \
          pkg_name=$(basename "$d"); \
          if [ "$pkg_name" != "dsh" ] && [ ! -e "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name" ]; then \

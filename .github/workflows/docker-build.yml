@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.0.6)'
+        description: 'Project version tag (e.g. 0.0.7)'
         required: false
-        default: '0.0.6'
+        default: '0.0.7'
   push:
     tags:
       - 'v*'
@@ -46,7 +46,7 @@ jobs:
           elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+.[0-9]+.[0-9]+.*)$ ]]; then
             PROJ_VER="${BASH_REMATCH[1]}"
           else
-            PROJ_VER="0.0.6"
+            PROJ_VER="0.0.7"
           fi
           PROJ_VER="${PROJ_VER#v}"
           echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
@@ -70,11 +70,14 @@ jobs:
           LATEST_TAG="${{ matrix.latest_tag }}"
           PROJ_VER="${{ steps.meta-version.outputs.project_version }}"
 
-          # 1. 探测镜像内置的官方 DeepSeek Harness 核心版本号
-          DSH_VERSION=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "0.1.2-rc.1")
+          # 1. 探测镜像内置的官方 DeepSeek Harness 核心版本号 (优先检查 next 候选标签)
+          DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
+          DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
+          DSH_VERSION="${DSH_NEXT:-$DSH_LATEST}"
           if [ -z "$DSH_VERSION" ]; then
-            DSH_VERSION="0.1.2-rc.1"
+            DSH_VERSION="0.1.5-rc.2"
           fi
+          echo "dsh_version=${DSH_VERSION}" >> $GITHUB_OUTPUT
           echo "Detected built-in DSH Version: ${DSH_VERSION}"
           echo "Current Project Version: ${PROJ_VER}"
 
@@ -109,6 +112,7 @@ jobs:
           sbom: false
           build-args: |
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
+            DSH_VERSION=${{ steps.docker_meta.outputs.dsh_version }}
             USE_CHINA_MIRROR=0
           tags: ${{ steps.docker_meta.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.variant }}
