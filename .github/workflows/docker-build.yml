@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.0.7)'
+        description: 'Project version tag (e.g. 0.0.8)'
         required: false
-        default: '0.0.7'
+        default: '0.0.8'
   push:
     tags:
       - 'v*'
@@ -46,7 +46,8 @@ jobs:
           elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+.[0-9]+.[0-9]+.*)$ ]]; then
             PROJ_VER="${BASH_REMATCH[1]}"
           else
-            PROJ_VER="0.0.7"
+            PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.0.8"
           fi
           PROJ_VER="${PROJ_VER#v}"
           echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
