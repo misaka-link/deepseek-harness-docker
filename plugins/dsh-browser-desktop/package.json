@@ -1,6 +1,6 @@
 {
   "name": "@dsh-custom/dsh-browser-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Clean, customizable container Chromium browser and VNC desktop integration plugin for DeepSeek Harness",
   "type": "module",
   "main": "./index.js",

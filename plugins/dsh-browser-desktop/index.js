@@ -10,6 +10,7 @@ export const Config = z.object({
   enabled: z.boolean().default(true).description('是否启用容器图形浏览器桌面'),
   resolution: z.string().default('1920x1080').description('虚拟桌面默认分辨率 (格式如 1920x1080, 1440x900, 1280x720)'),
   screenshotQuality: z.union([z.const('high'), z.const('medium'), z.const('low')]).default('high').description('截图工具默认画质：high (高画质/无损原图，默认), medium (中画质/体积平衡), low (低画质/极致压缩)'),
+  screenshotDir: z.string().default('').description('截图文件默认保存的子目录（相对于当前会话/项目工作区，留空则默认保存在项目工作区根目录，如 "screenshots"）'),
   idleTimeoutMinutes: z.number().default(30).description('浏览器空闲休眠时间 (分钟，0为不休眠始终保持运行)'),
   enableCdp: z.boolean().default(true).description('是否启用 Chromium CDP 远程调试能力'),
   cdpPort: z.number().default(9222).description('Chromium CDP 远程调试端口 (默认 9222)'),
@@ -22,6 +23,7 @@ export function apply(ctx, config = {}) {
   let activeConfig = {
     resolution: '1920x1080',
     screenshotQuality: 'high',
+    screenshotDir: '',
     idleTimeoutMinutes: 30,
     enableCdp: true,
     cdpPort: 9222,
@@ -205,25 +207,32 @@ export function apply(ctx, config = {}) {
   }
 
   // 双引擎截图实现：支持画质选择 (high 高/原图, medium 中, low 低)、指定 tabId 与自定义保存路径
-  async function captureScreenshotDual(savePath, customQuality, targetTabId) {
+  async function captureScreenshotDual(savePath, customQuality, targetTabId, sessionCwd = process.cwd()) {
     const qualityLevel = (customQuality || activeConfig.screenshotQuality || 'high').toLowerCase();
     const isHigh = qualityLevel === 'high';
     const isLow = qualityLevel === 'low';
 
     // 智能路径处理：
-    // 1. 若 AI 传入路径，基于当前工作区 process.cwd() 解析（支持相对路径如 'screenshot.png'、'doc/test.png'，或绝对路径）；
-    // 2. 若 AI 未提供 savePath，在当前工作区自动生成唯一文件名（如 screenshot-20260906-120000.png），彻底避免多次截图互相覆盖；
-    // 3. 严格尊重 AI 指定的文件扩展名与路径，不再强制将 .png 改名为 .jpg（避免 AI 随后按指定路径查找时报 ENOENT 文件不存在）。
+    // 优先基于当前会话/项目自身的工作区 sessionCwd 进行解析，坚决避免污染容器外部 /workspace 根目录；
+    // 1. 若 AI 传入路径：绝对路径直接使用，相对路径基于当前项目工作区 sessionCwd 解析；
+    // 2. 若 AI 未提供 savePath：在当前项目工作区（或配置的子目录）自动生成时间戳唯一文件名，绝不覆盖历史截图；
+    // 3. 严格尊重 AI 指定的文件扩展名与路径，不再强制将 .png 改名为 .jpg。
+    const projectDir = sessionCwd || process.cwd();
+    const baseDir = (activeConfig.screenshotDir && activeConfig.screenshotDir.trim())
+      ? path.resolve(projectDir, activeConfig.screenshotDir.trim())
+      : projectDir;
+
     let targetFile;
     if (typeof savePath === 'string' && savePath.trim()) {
-      targetFile = path.resolve(process.cwd(), savePath.trim());
+      const trimmed = savePath.trim();
+      targetFile = path.isAbsolute(trimmed) ? trimmed : path.resolve(projectDir, trimmed);
       // 如果没有扩展名，根据画质自动补齐合适后缀
       if (!path.extname(targetFile)) {
         targetFile += (isHigh ? '.png' : '.jpg');
       }
     } else {
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
-      targetFile = path.resolve(process.cwd(), `screenshot-${timestamp}.${isHigh ? 'png' : 'jpg'}`);
+      targetFile = path.resolve(baseDir, `screenshot-${timestamp}.${isHigh ? 'png' : 'jpg'}`);
     }
 
     const ext = path.extname(targetFile).toLowerCase();
@@ -406,7 +415,7 @@ export function apply(ctx, config = {}) {
       properties: {
         savePath: {
           type: 'string',
-          description: '可选：截图保存的文件路径（强烈推荐由 AI 传入有业务含义的路径，支持绝对路径或相对当前工作区的相对路径，如 "screenshot.png", "doc/preview-login.png"）。若留空，则自动在当前工作区生成带时间戳的唯一文件名（如 screenshot-20260906120000.png），绝不覆盖历史截图。'
+          description: '可选：截图保存的文件路径（强烈推荐由 AI 传入有业务含义的路径，支持绝对路径或相对当前会话/项目工作区的相对路径，如 "screenshot.png", "doc/preview-login.png"）。若留空，则自动在当前会话/项目自己的文件夹中生成带时间戳的唯一文件名（如 screenshot-20260906120000.png），绝不覆盖历史截图。'
         },
         tabId: {
           type: 'string',
@@ -438,9 +447,10 @@ export function apply(ctx, config = {}) {
         text: `已完成页面截图 (保存至: \`${value.path}\`, 大小: ${value.bytes} 字节, 画质: ${value.quality || '默认'}, 引擎: ${value.engine || '默认'})`
       }]
     },
-    async execute(args) {
+    async execute(args, exec) {
       const rawPath = typeof args?.savePath === 'string' ? args.savePath.trim() : null;
-      return captureScreenshotDual(rawPath, args?.quality, args?.tabId);
+      const sessionCwd = exec?.agent?.session?.header?.cwd || process.cwd();
+      return captureScreenshotDual(rawPath, args?.quality, args?.tabId, sessionCwd);
     }
   });
 
@@ -597,6 +607,6 @@ export function apply(ctx, config = {}) {
   ctx.systemPrompt.section({
     name: 'tool:browser_tools',
     order: 110,
-    text: 'When you need to view or interact with a webpage, call browser_open (by default it reuses or navigates the active tab to save container memory; pass newTab: true only when you explicitly need multiple tabs open side-by-side; returns tabId). You can call browser_screenshot to capture a screenshot: you can pass your own savePath (supports relative or absolute path, e.g. "screenshot.png" or "doc/preview.png"; if omitted, a unique timestamped file is auto-generated in the workspace so previous captures are never overwritten), tabId (optional, targets a specific tab), and quality (high, medium, low). When done with a specific webpage task, call browser_control with action: "close_tab" (optionally specifying tabId) to close that tab, or action: "close_all_tabs" to reset to blank. Call browser_control with action: "stop" only when all browser tasks are completely finished and the entire desktop should be shut down.'
+    text: 'When you need to view or interact with a webpage, call browser_open (by default it reuses or navigates the active tab to save container memory; pass newTab: true only when you explicitly need multiple tabs open side-by-side; returns tabId). You can call browser_screenshot to capture a screenshot: you can pass your own savePath (supports relative or absolute path, e.g. "screenshot.png" or "doc/preview.png"; if omitted, a unique timestamped file is auto-generated in the current project workspace so previous captures are never overwritten), tabId (optional, targets a specific tab), and quality (high, medium, low). When done with a specific webpage task, call browser_control with action: "close_tab" (optionally specifying tabId) to close that tab, or action: "close_all_tabs" to reset to blank. Call browser_control with action: "stop" only when all browser tasks are completely finished and the entire desktop should be shut down.'
   });
 }

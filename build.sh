@@ -7,7 +7,7 @@ set -e
 #   ./build.sh --market -> 构建带预装插件清单的镜像 (deepseek-harness-docker:latest-market 及额外标签)
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.0.7"
+PROJ_VER="0.0.8"
 DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
 DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
 DSH_VERSION="${DSH_NEXT:-$DSH_LATEST}"
