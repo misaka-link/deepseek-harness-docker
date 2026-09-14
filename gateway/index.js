@@ -291,9 +291,15 @@ async function handleAdminApi(req, res, pathname, query) {
         try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
       };
 
-      const r = await dshManager.installVersion(version, (line) => {
-        sendEvt({ type: 'log', message: line });
-      });
+      const r = await dshManager.installVersion(
+        version,
+        (prog) => {
+          sendEvt({ type: 'progress', ...prog });
+        },
+        (line) => {
+          sendEvt({ type: 'log', message: line });
+        }
+      );
 
       sendEvt({ type: 'done', ...r });
       res.end();

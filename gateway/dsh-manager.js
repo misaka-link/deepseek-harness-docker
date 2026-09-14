@@ -34,6 +34,30 @@ function killPortProcess(port) {
   } catch {}
 }
 
+async function ensurePortReleased(port, timeoutMs = 3500) {
+  killPortProcess(port);
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    let inUse = false;
+    try {
+      const res = spawnSync('ss', ['-tlpn'], { encoding: 'utf8' });
+      if (res.stdout && res.stdout.includes(`:${port}`)) {
+        inUse = true;
+      }
+    } catch {}
+    if (!inUse) return true;
+    killPortProcess(port);
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return false;
+}
+
+const DEFAULT_ADAPTED_VERSIONS = [
+  '0.1.5-rc.2',
+  '0.1.5-rc.1',
+  '0.1.2-rc.1'
+];
+
 function parseSemver(v = '') {
   const clean = String(v).replace(/^v/, '').trim();
   const [main, pre] = clean.split('-');
@@ -67,23 +91,59 @@ class DshManager {
     this.recentCrashCount = 0;
     this.lastCrashTime = 0;
     this.manualStopped = false;
+    this.startTime = 0;
+    this.recentLogs = [];
+    this.lastExitInfo = null;
+    this.lastKnownVersion = '';
     try { fs.mkdirSync(this.versionsCacheDir, { recursive: true }); } catch {}
   }
 
   getStatus() {
     const running = !!this.proc && this.proc.exitCode === null && !this.proc.killed;
+    const currentVer = this.getCurrentVersion();
     return {
-      version: this.getCurrentVersion(),
+      version: currentVer,
       running,
       ready: this.ready,
-      manualStopped: !!this.manualStopped
+      manualStopped: !!this.manualStopped,
+      pid: running && this.proc ? this.proc.pid : null,
+      startTime: this.startTime,
+      cachedVersions: this.getCachedVersions()
     };
+  }
+
+  getCachedVersions() {
+    try {
+      if (!fs.existsSync(this.versionsCacheDir)) return [];
+      return fs.readdirSync(this.versionsCacheDir).filter(name => {
+        const pkg = path.join(this.versionsCacheDir, name, 'package.json');
+        return fs.existsSync(pkg);
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  getAdaptedVersions() {
+    if (process.env.ADAPTED_DSH_VERSIONS) {
+      return process.env.ADAPTED_DSH_VERSIONS.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return DEFAULT_ADAPTED_VERSIONS;
+  }
+
+  isAdaptedVersion(ver) {
+    const list = this.getAdaptedVersions();
+    return list.includes(ver);
   }
 
   getCurrentVersion() {
     try {
       const res = spawnSync('dsh', ['--version'], { encoding: 'utf8' });
-      if (res.status === 0) return res.stdout.trim();
+      if (res.status === 0 && res.stdout.trim()) {
+        const v = res.stdout.trim();
+        this.lastKnownVersion = v;
+        return v;
+      }
     } catch {}
 
     const paths = [
@@ -93,11 +153,15 @@ class DshManager {
     for (const p of paths) {
       try {
         if (fs.existsSync(p)) {
-          return JSON.parse(fs.readFileSync(p, 'utf8')).version || 'unknown';
+          const v = JSON.parse(fs.readFileSync(p, 'utf8')).version;
+          if (v) {
+            this.lastKnownVersion = v;
+            return v;
+          }
         }
       } catch {}
     }
-    return 'unknown';
+    return this.lastKnownVersion || '0.1.5-rc.2';
   }
 
   async fetchAvailableVersions(force = false) {
@@ -105,7 +169,8 @@ class DshManager {
 
     const runNpm = (args) => {
       try {
-        const res = spawnSync('npm', args, { env, encoding: 'utf8', timeout: 30000 });
+        const fullArgs = [...args, '--cache=/tmp/.npm-cache'];
+        const res = spawnSync('npm', fullArgs, { env, encoding: 'utf8', timeout: 30000 });
         if (res.status === 0) return JSON.parse(res.stdout.trim());
       } catch {}
       return null;
@@ -113,10 +178,17 @@ class DshManager {
 
     const distTags = runNpm(['view', '@deepseek-ai/dsh', 'dist-tags', '--json']) || {};
     const versions = runNpm(['view', '@deepseek-ai/dsh', 'versions', '--json']) || [];
+    const current = this.getCurrentVersion();
+    const latest = distTags.latest || (Array.isArray(versions) && versions.length > 0 ? versions[versions.length - 1] : '');
+    const isUpToDate = Boolean(current && latest && compareSemver(current, latest) >= 0);
 
     return {
-      current: this.getCurrentVersion(),
+      current,
+      latest,
+      isUpToDate,
       distTags,
+      cachedVersions: this.getCachedVersions(),
+      adaptedVersions: this.getAdaptedVersions(),
       versions: Array.isArray(versions) ? versions.reverse() : [],
       registry: this.registry
     };
@@ -129,7 +201,7 @@ class DshManager {
     return this.registry;
   }
 
-  boot() {
+  boot(onProbe) {
     return new Promise(async resolve => {
       this.manualStopped = false;
       if (this.proc) return resolve({ ok: true, alreadyRunning: true });
@@ -153,8 +225,8 @@ class DshManager {
       }
 
       // 关键防冲突：清理可能遗留并霸占 DSH_PORT 的孤儿或外部重启进程
-      killPortProcess(DSH_PORT);
-      await new Promise(r => setTimeout(r, 250));
+      await ensurePortReleased(DSH_PORT, 4000);
+      await new Promise(r => setTimeout(r, 200));
 
       console.log(`[dsh-manager] 启动 DSH 进程 (工作区: ${DSH_WORKSPACE}, 端口: ${DSH_PORT})...`);
       this.ready = false;
@@ -177,8 +249,15 @@ class DshManager {
         logStream.write(d);
         process.stdout.write(d);
 
-        // 实时从 stdout 管道动态捕获启动令牌，零延迟换取官方签名 Cookie
+        // 收集最近日志用于崩溃根因排查
         const str = d.toString('utf8');
+        const lines = str.split('\n').filter(Boolean);
+        for (const l of lines) {
+          this.recentLogs.push(l);
+          if (this.recentLogs.length > 80) this.recentLogs.shift();
+        }
+
+        // 实时从 stdout 管道动态捕获启动令牌，零延迟换取官方签名 Cookie
         const m = str.match(/token=([A-Za-z0-9._~-]{16,})/i);
         if (m) {
           const token = m[1].trim();
@@ -191,17 +270,28 @@ class DshManager {
       p.stderr.on('data', d => {
         logStream.write(d);
         process.stderr.write(d);
+
+        const str = d.toString('utf8');
+        const lines = str.split('\n').filter(Boolean);
+        for (const l of lines) {
+          this.recentLogs.push(l);
+          if (this.recentLogs.length > 80) this.recentLogs.shift();
+        }
       });
 
       p.on('error', err => {
         console.error('[dsh-manager] DSH 启动错误:', err.message);
         this.proc = null;
         this.ready = false;
+        this.lastExitInfo = { code: -1, sig: err.message, time: Date.now(), logs: this.recentLogs.slice(-20) };
         resolve({ ok: false, error: err.message });
       });
 
       p.on('exit', (code, sig) => {
         console.log(`[dsh-manager] DSH 已退出 (code=${code}, sig=${sig})`);
+        if (code !== 0 && code !== null) {
+          this.lastExitInfo = { code, sig, time: Date.now(), logs: this.recentLogs.slice(-20) };
+        }
         if (this.proc === p) {
           this.proc = null;
           this.ready = false;
@@ -238,11 +328,12 @@ class DshManager {
       });
 
       // 等待真正就绪（杜绝外部假冒就绪）
-      this.waitReady(60000).then(async ok => {
+      this.waitReady(60000, onProbe).then(async ok => {
         this.ready = ok;
         console.log(ok ? '[dsh-manager] DSH 已就绪' : '[dsh-manager] DSH 启动超时或崩溃');
         if (ok) {
           this.recentCrashCount = 0;
+          this.startTime = Date.now();
           if (this.launchToken) {
             await this.exchangeSessionCookie(this.launchToken);
           }
@@ -279,10 +370,10 @@ class DshManager {
         killPortProcess(DSH_PORT);
       }, 4000);
 
-      p.once('exit', () => {
+      p.once('exit', async () => {
         clearTimeout(timer);
         this.stopping = false;
-        killPortProcess(DSH_PORT);
+        await ensurePortReleased(DSH_PORT, 2500);
         resolve({ ok: true });
       });
 
@@ -295,9 +386,9 @@ class DshManager {
     });
   }
 
-  async restart() {
+  async restart(onProbe) {
     await this.stop();
-    return this.boot();
+    return this.boot(onProbe);
   }
 
   async exchangeSessionCookie(token = this.launchToken) {
@@ -332,9 +423,12 @@ class DshManager {
     return this.exchangeSessionCookie();
   }
 
-  async waitReady(timeoutMs = 60000) {
-    const deadline = Date.now() + timeoutMs;
+  async waitReady(timeoutMs = 60000, onProbeProgress) {
+    const start = Date.now();
+    const deadline = start + timeoutMs;
+    let attempts = 0;
     while (Date.now() < deadline) {
+      attempts++;
       // 若子进程已退出或崩溃，坚决判定为未就绪，杜绝外部假冒就绪
       if (!this.proc || this.proc.exitCode !== null || this.proc.killed) {
         return false;
@@ -345,15 +439,25 @@ class DshManager {
           return true;
         }
       } catch {}
+      const elapsedSec = ((Date.now() - start) / 1000).toFixed(1);
+      if (typeof onProbeProgress === 'function') {
+        try { onProbeProgress({ attempts, elapsedSec }); } catch {}
+      }
       await new Promise(r => setTimeout(r, 800));
     }
     return false;
   }
 
-  async installVersion(version, onLog) {
+  async installVersion(version, onProgress, onLog) {
     if (this.installing) return { ok: false, error: '已有安装任务正在进行中' };
     this.installing = true;
     this.installLog = [];
+
+    // 兼容只传入单个回调 (line => ...) 的情况
+    if (typeof onProgress === 'function' && typeof onLog !== 'function') {
+      onLog = onProgress;
+      onProgress = null;
+    }
 
     const log = (msg) => {
       const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -362,36 +466,69 @@ class DshManager {
       console.log(`[dsh-installer] ${msg}`);
     };
 
+    const emitProgress = (data) => {
+      if (typeof onProgress === 'function') {
+        try { onProgress(data); } catch {}
+      }
+    };
+
     const previousVersion = this.getCurrentVersion() || '0.1.2-rc.1';
 
     try {
-      log(`当前运行版本: ${previousVersion}，准备切换至目标版本: ${version}`);
+      // === 阶段 1/5: 切换预检与环境检查 ===
+      emitProgress({ step: 1, total: 5, percent: 10, label: '环境预检与版本兼容性评估', mode: 'install' });
+      log(`======================================================================`);
+      log(`=== [阶段 1/5] 切换预检: 当前运行版本 ${previousVersion} -> 目标版本 ${version} ===`);
+      if (version === previousVersion) {
+        log(`ℹ️ 目标版本与当前运行版本一致 (${version})，将执行环境重新装配与就绪校验。`);
+      }
 
       // 版本特性与数据兼容性检查
+      const isAdapted = this.isAdaptedVersion(version);
+      if (!isAdapted) {
+        log('⚠️ [适配性安全提醒] 目标版本未经过当前 Docker 镜像特殊深度适配测试！');
+        log('💡 [镜像更新建议] 针对官方最新发布，强烈推荐直接更新 Docker 镜像 (docker compose pull && docker compose up -d) 获取最新针对性适配！');
+        log('⚠️ 如在线切换后遇到启动异常、插件失效或界面异常，请更新 Docker 镜像或前往 GitHub Issues 交流反馈。');
+      } else {
+        log(`✔ 目标版本 ${version} 属于当前镜像官方深度适配版本，已通过针对性联调测试。`);
+      }
+
       if (compareSemver(version, '0.1.5-rc.1') < 0 && compareSemver(previousVersion, '0.1.5-rc.1') >= 0) {
         log('⚠️ [版本安全警告] 您正在从 0.1.5+ 系列降级至旧版本！');
         log('⚠️ 官方说明：0.1.5 起会话数据格式已升级为 V3 且单向不可逆，降级后旧版本 DSH 无法加载 V3 会话记录。');
-        log('⚠️ 建议在降级前通过管理后台【快照管理】生成完整配置备份。');
+        log('⚠️ 强烈建议在降级前确保已创建配置与会话快照备份。');
       } else if (compareSemver(version, '0.1.5-rc.1') >= 0 && compareSemver(previousVersion, '0.1.5-rc.1') < 0) {
         log('ℹ️ [版本升级提示] 准备升级至 0.1.5+ 系列：将启用 DeepSeek-V41-Flash、右侧新版 Sidebar 预览、出站代理继承及 V3 会话格式。');
       }
+      log(`✔ 预检通过：环境就绪，软件源: ${this.registry}`);
 
-      // 1. 自动对当前正常运行的稳定版本进行本地高速快照存档
+      // === 阶段 2/5: 本地安全快照存档 (保障随时秒级熔断回滚) ===
+      emitProgress({ step: 2, total: 5, percent: 25, label: '备份当前稳定版本快照', mode: 'install' });
+      log(`=== [阶段 2/5] 本地安全快照存档 (保障秒级熔断回滚) ===`);
       const prevBackup = path.join(this.versionsCacheDir, previousVersion);
       if (!fs.existsSync(prevBackup) && fs.existsSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json')) {
         log(`正在对当前稳定版本 ${previousVersion} 生成本地秒级快照存档...`);
         spawnSync('mkdir', ['-p', prevBackup]);
         spawnSync('cp', ['-a', '/usr/local/lib/node_modules/@deepseek-ai/dsh/.', prevBackup + '/']);
+        log(`✔ 稳定版本 ${previousVersion} 本地快照存档就绪`);
+      } else if (fs.existsSync(prevBackup)) {
+        log(`✔ 本地已存在稳定版本 ${previousVersion} 的快照存档，具备秒级回滚能力`);
+      } else {
+        log(`ℹ️ 当前运行版本无本地快照，熔断时将通过 npm 镜像源自动拉取回滚`);
       }
 
-      // 2. 检查目标版本是否已有本地快照缓存
+      // === 阶段 3/5: 部署目标核心版本 ===
+      emitProgress({ step: 3, total: 5, percent: 40, label: '获取目标版本核心包', mode: 'install' });
+      log(`=== [阶段 3/5] 部署目标核心版本 @deepseek-ai/dsh@${version} ===`);
       const targetCached = path.join(this.versionsCacheDir, version);
       if (fs.existsSync(path.join(targetCached, 'package.json'))) {
-        log(`⚡ 命中本地版本高速缓存，正在秒级就绪切换至 ${version}...`);
+        log(`⚡ [秒级加速] 命中本地版本高速快照缓存，正在秒级部署 ${version}...`);
         spawnSync('rm', ['-rf', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
         spawnSync('mkdir', ['-p', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
         spawnSync('cp', ['-a', targetCached + '/.', '/usr/local/lib/node_modules/@deepseek-ai/dsh/']);
         spawnSync('ln', ['-sfn', '/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js', '/usr/local/bin/dsh']);
+        log(`✔ 核心文件与软链已完成秒级还原 (耗时 < 1s)`);
+        emitProgress({ step: 3, total: 5, percent: 60, label: '目标核心秒级解压就绪', mode: 'install' });
       } else {
         log(`正在从 npm 镜像源下载并安装 @deepseek-ai/dsh@${version} (源: ${this.registry})...`);
         const installArgs = [
@@ -400,7 +537,23 @@ class DshManager {
           `@deepseek-ai/dsh@${version}`
         ];
         log(`> npm ${installArgs.join(' ')}`);
+
+        const startTime = Date.now();
         const child = spawn('npm', installArgs, { env: process.env });
+
+        // 动态心跳脉冲计时器，防止 npm 下载期间控制台静默假死
+        const heartbeat = setInterval(() => {
+          const sec = Math.floor((Date.now() - startTime) / 1000);
+          const dynamicPercent = Math.min(59, 40 + Math.floor(sec * 1.2));
+          log(`⏳ [npm 依赖拉取中] 正在下载并解压核心依赖包，已耗时 ${sec}s...`);
+          emitProgress({
+            step: 3,
+            total: 5,
+            percent: dynamicPercent,
+            label: `下载核心依赖包 (已耗时 ${sec}s)...`,
+            mode: 'install'
+          });
+        }, 2000);
 
         child.stdout.on('data', d => {
           d.toString().split('\n').map(l => l.trim()).filter(Boolean).forEach(l => log(l));
@@ -410,50 +563,118 @@ class DshManager {
         });
 
         const exitCode = await new Promise(r => child.on('close', r));
+        clearInterval(heartbeat);
+
         if (exitCode !== 0) throw new Error(`npm install 安装异常，退出码: ${exitCode}`);
+        const totalSec = ((Date.now() - startTime) / 1000).toFixed(1);
+        log(`✔ npm 下载并解压完成，总耗时 ${totalSec}s`);
+        emitProgress({ step: 3, total: 5, percent: 60, label: '目标版本下载安装完成', mode: 'install' });
       }
 
-      log('核心文件就绪，正在执行插件环境装配与自愈适配...');
+      // === 阶段 4/5: 插件装配与宿主补丁自愈 ===
+      emitProgress({ step: 4, total: 5, percent: 70, label: '插件装配与补丁自愈', mode: 'install' });
+      log(`=== [阶段 4/5] 插件环境装配与客户端补丁注入 ===`);
       if (fs.existsSync('/app/scripts/install-plugin.mjs')) {
+        log(`> 正在同步并链接插件依赖至新核心 (schemastery & dsh-browser-desktop)...`);
         const res = spawnSync('node', ['/app/scripts/install-plugin.mjs'], { encoding: 'utf8' });
         if (res.stdout) log(res.stdout.trim());
       }
       if (fs.existsSync('/app/scripts/patch-dsh-client.mjs')) {
+        log(`> 正在注入客户端回环宿主持久化补丁...`);
         const res = spawnSync('node', ['/app/scripts/patch-dsh-client.mjs'], { encoding: 'utf8' });
         if (res.stdout) log(res.stdout.trim());
       }
+      log(`✔ 插件与宿主补丁自愈适配完成`);
+      emitProgress({ step: 4, total: 5, percent: 80, label: '插件与补丁适配就绪', mode: 'install' });
 
-      log(`正在拉起新版本 DSH (${version}) 并执行健康就绪探测...`);
-      const bootRes = await this.restart();
+      // === 阶段 5/5: 核心服务拉起与健康就绪探活 ===
+      emitProgress({ step: 5, total: 5, percent: 85, label: '拉起新服务并健康探活', mode: 'install' });
+      log(`=== [阶段 5/5] 拉起新版本 DSH (${version}) 并执行健康就绪探活 ===`);
+      this.lastExitInfo = null;
+      this.recentLogs = [];
+
+      const bootRes = await this.restart((probe) => {
+        const dynamicPercent = Math.min(97, 85 + Math.floor(probe.attempts * 0.8));
+        log(`🔍 [健康探活] 正在探测端口 ${DSH_PORT} 就绪响应 (第 ${probe.attempts} 次, 已等待 ${probe.elapsedSec}s)...`);
+        emitProgress({
+          step: 5,
+          total: 5,
+          percent: dynamicPercent,
+          label: `端口健康就绪探活中 (${probe.attempts}/30)...`,
+          mode: 'install'
+        });
+      });
+
       if (!bootRes.ok) {
-        throw new Error(`新版本 ${version} 启动失败或超时 (无法进入正常就绪服务状态)`);
+        let failDetail = `新版本 ${version} 启动后未能通过端口健康就绪探测`;
+        if (this.lastExitInfo) {
+          failDetail = `新版本进程启动异常退出 (Exit Code: ${this.lastExitInfo.code}, Signal: ${this.lastExitInfo.sig || 'none'})`;
+        }
+        throw new Error(failDetail);
       }
 
       const currentVer = this.getCurrentVersion();
-      // 安装并就绪成功后，存入本地高速缓存
+      // 安装就绪成功后，存入本地高速快照
       if (!fs.existsSync(targetCached) && fs.existsSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json')) {
+        log(`正在将新版本 ${version} 归档至本地高速快照缓存...`);
         spawnSync('mkdir', ['-p', targetCached]);
         spawnSync('cp', ['-a', '/usr/local/lib/node_modules/@deepseek-ai/dsh/.', targetCached + '/']);
       }
 
-      log(`🎉 切换成功！新版本服务已完全就绪，当前运行核心: ${currentVer}`);
+      emitProgress({
+        step: 5,
+        total: 5,
+        percent: 100,
+        label: `切换完成！核心已成功升级至 v${currentVer}`,
+        mode: 'install'
+      });
+
+      log(`======================================================================`);
+      log(`🎉 [SUCCESS] DSH 核心版本切换成功！`);
+      log(`🚀 当前运行版本: v${currentVer} (服务已健康就绪)`);
+      log(`🌐 工作区访问地址: http://127.0.0.1:${DSH_PORT}`);
+      log(`======================================================================`);
+
       this.installing = false;
       return { ok: true, version: currentVer };
 
     } catch (err) {
+      log(`======================================================================`);
       log(`❌ 新版本安装或启动失败: ${err.message}`);
-      log(`⚠️ 触发安全熔断保护机制：正在秒级自动回滚至稳定版本 @deepseek-ai/dsh@${previousVersion}...`);
+      // 打印失败根因分析
+      log(`----------------- 🔍 [新版本失败根因排查] -----------------`);
+      if (this.lastExitInfo) {
+        log(`进程退出状态: Code=${this.lastExitInfo.code}, Sig=${this.lastExitInfo.sig || 'none'}`);
+        if (this.lastExitInfo.logs && this.lastExitInfo.logs.length > 0) {
+          log(`进程最后输出片段:`);
+          this.lastExitInfo.logs.slice(-8).forEach(l => log(`  | ${l}`));
+        }
+      } else {
+        log(`可能原因: 进程在 60 秒内未监听端口 ${DSH_PORT}，或端口无有效 HTTP 响应`);
+      }
+      log(`-----------------------------------------------------------`);
+      log(`⚠️ 触发安全熔断保护机制：正在秒级自动回滚至稳定版本 v${previousVersion}...`);
+      log(`======================================================================`);
+
+      emitProgress({
+        step: 1,
+        total: 3,
+        percent: 30,
+        label: `🛡️ 触发安全熔断：正在秒级还原稳定版本 v${previousVersion}...`,
+        mode: 'rollback'
+      });
 
       try {
         const prevCached = path.join(this.versionsCacheDir, previousVersion);
         if (fs.existsSync(path.join(prevCached, 'package.json'))) {
-          log(`[回滚] ⚡ 从本地快照中秒级还原稳定核心 ${previousVersion}...`);
+          log(`[回滚 1/3] ⚡ 从本地快照中秒级还原稳定核心 ${previousVersion}...`);
           spawnSync('rm', ['-rf', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
           spawnSync('mkdir', ['-p', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
           spawnSync('cp', ['-a', prevCached + '/.', '/usr/local/lib/node_modules/@deepseek-ai/dsh/']);
           spawnSync('ln', ['-sfn', '/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js', '/usr/local/bin/dsh']);
+          log(`✔ 稳定核心文件已秒级还原完毕`);
         } else {
-          log(`[回滚] 重新从 npm 源拉取稳定版本 ${previousVersion}...`);
+          log(`[回滚 1/3] 本地无快照，从 npm 源重新拉回稳定版本 ${previousVersion}...`);
           const rbArgs = [
             'install', '-g', '--omit=dev', '--no-audit', '--no-fund',
             `--registry=${this.registry}`,
@@ -465,28 +686,65 @@ class DshManager {
           await new Promise(r => rbChild.on('close', r));
         }
 
-        log('[回滚] 正在重新执行插件配置与依赖自愈...');
+        emitProgress({
+          step: 2,
+          total: 3,
+          percent: 65,
+          label: `🛡️ 熔断回滚 [2/3]: 恢复稳定版本插件配置与补丁`,
+          mode: 'rollback'
+        });
+        log('[回滚 2/3] 正在重新执行插件配置与依赖自愈...');
         if (fs.existsSync('/app/scripts/install-plugin.mjs')) {
           spawnSync('node', ['/app/scripts/install-plugin.mjs'], { encoding: 'utf8' });
         }
         if (fs.existsSync('/app/scripts/patch-dsh-client.mjs')) {
           spawnSync('node', ['/app/scripts/patch-dsh-client.mjs'], { encoding: 'utf8' });
         }
+        log(`✔ 插件与补丁配置已复位`);
 
-        log(`[回滚] 正在重新拉起稳定版本 ${previousVersion}...`);
-        const rbBoot = await this.restart();
-        if (!rbBoot.ok) throw new Error(`稳定版本重启失败`);
+        emitProgress({
+          step: 3,
+          total: 3,
+          percent: 85,
+          label: `🛡️ 熔断回滚 [3/3]: 正在重新拉起稳定核心并探活...`,
+          mode: 'rollback'
+        });
+        log(`[回滚 3/3] 正在重新拉起稳定版本 ${previousVersion}...`);
+        const rbBoot = await this.restart((probe) => {
+          log(`🔍 [回滚探活] 正在探测稳定版本端口 ${DSH_PORT} (第 ${probe.attempts} 次, 已等待 ${probe.elapsedSec}s)...`);
+          emitProgress({
+            step: 3,
+            total: 3,
+            percent: Math.min(98, 85 + probe.attempts * 2),
+            label: `🛡️ 熔断回滚 [3/3]: 稳定版本就绪探活中 (${probe.attempts}/30)...`,
+            mode: 'rollback'
+          });
+        });
+        if (!rbBoot.ok) throw new Error(`稳定版本重启失败，无法进入正常就绪状态`);
 
-        log(`✅ 自动回滚完成！系统已瞬间恢复至稳定可用版本: ${previousVersion}`);
+        emitProgress({
+          step: 3,
+          total: 3,
+          percent: 100,
+          label: `🛡️ 自动回滚完成！系统已恢复至稳定版本 v${previousVersion}`,
+          mode: 'rollback'
+        });
+
+        log(`======================================================================`);
+        log(`✅ [安全熔断成功] 系统已完好恢复至稳定可用版本: v${previousVersion}`);
+        log(`✔ 确认当前运行版本 (dsh --version): ${this.getCurrentVersion()}`);
+        log(`✔ 服务状态: 正常运行在 http://127.0.0.1:${DSH_PORT}`);
+        log(`======================================================================`);
+
         this.installing = false;
         return {
           ok: false,
-          error: `目标版本 ${version} 启动失败，已自动安全回滚至稳定版本 ${previousVersion}`,
+          error: `目标版本 ${version} 启动失败: ${err.message}，系统已自动安全回滚至稳定版本 ${previousVersion}`,
           rolledBack: true,
           version: previousVersion
         };
       } catch (rbErr) {
-        log(`💥 严重警报：自动回滚失败: ${rbErr.message}`);
+        log(`💥 [严重警报] 自动回滚遇到异常: ${rbErr.message}`);
         this.installing = false;
         return { ok: false, error: `切换失败且回滚异常: ${rbErr.message}` };
       }

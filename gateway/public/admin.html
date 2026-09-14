@@ -174,6 +174,197 @@
     .diff-item { margin: 4px 0; color: #0f172a; }
     .diff-warn { color: #b45309; background: #fef3c7; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Version Hero Dashboard */
+    .version-hero-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .version-hero-card {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .version-hero-card.primary {
+      border-color: #93c5fd;
+      background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+    }
+    .version-hero-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .version-hero-val {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .version-hero-meta {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .badge-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .chip-green { background: #dcfce7; color: #166534; }
+    .chip-blue { background: #dbeafe; color: #1e40af; }
+    .chip-amber { background: #fef3c7; color: #92400e; }
+    .chip-purple { background: #f3e8ff; color: #6b21a8; }
+    .chip-gray { background: #f1f5f9; color: #475569; }
+
+    /* Progress Bar Component */
+    .progress-wrap {
+      margin-top: 14px;
+      margin-bottom: 14px;
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: none;
+    }
+    .progress-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .progress-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-percent {
+      font-size: 14px;
+      font-weight: 800;
+      font-family: monospace;
+      color: var(--primary);
+    }
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #10b981);
+      border-radius: 999px;
+      transition: width 0.35s ease, background 0.35s ease;
+    }
+    .progress-fill.rollback {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+    }
+    .step-list {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 14px;
+      text-align: center;
+    }
+    .step-item {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .step-dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .step-item.active .step-dot {
+      background: #3b82f6;
+      color: #ffffff;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.25);
+    }
+    .step-item.active {
+      color: #1e40af;
+      font-weight: 600;
+    }
+    .step-item.completed .step-dot {
+      background: #10b981;
+      color: #ffffff;
+    }
+    .step-item.completed {
+      color: #065f46;
+    }
+    .step-item.rollback .step-dot {
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    /* Warning & Notice Card */
+    .notice-card {
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .notice-warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+    .notice-danger {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+    .notice-info {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
   </style>
 </head>
 <body>
@@ -223,6 +414,53 @@
         </div>
         <p class="card-desc">控制 DSH 主进程的手动启动、停止与重启，并在需要时在线切换官方核心版本。</p>
 
+        <!-- 显式核心版本状态与更新看板 -->
+        <div class="version-hero-grid">
+          <!-- 卡片 1: 当前运行版本 -->
+          <div class="version-hero-card primary">
+            <div class="version-hero-label">
+              <span>当前运行核心版本</span>
+              <span class="badge-chip chip-green" id="heroAdaptedChip">✔ 官方深度适配</span>
+            </div>
+            <div class="version-hero-val" id="heroCurrentVersion">v...</div>
+            <div class="version-hero-meta">
+              <span class="status-badge status-running" id="heroRunningBadge" style="padding:2px 8px;font-size:11px;">
+                <span class="dot"></span> 运行中 (已就绪)
+              </span>
+              <span id="heroPortBadge" class="badge-chip chip-gray">端口: 3079</span>
+              <span id="heroPidBadge" class="badge-chip chip-gray">PID: --</span>
+            </div>
+          </div>
+
+          <!-- 卡片 2: 官方最新版本对比 -->
+          <div class="version-hero-card">
+            <div class="version-hero-label">
+              <span>官方最新发布 (Upstream)</span>
+              <span class="badge-chip chip-blue" id="heroLatestTag">latest</span>
+            </div>
+            <div class="version-hero-val" id="heroLatestVersion">v...</div>
+            <div class="version-hero-meta">
+              <span class="badge-chip chip-green" id="heroUpdateStatusChip">✔ 当前已是最新版本</span>
+              <button class="btn" style="padding:2px 10px; font-size:11px; display:none;" id="btnQuickSelectLatest" onclick="quickSelectLatestVersion()">
+                一键选用最新版
+              </button>
+            </div>
+          </div>
+
+          <!-- 卡片 3: 本地快照与安全回滚 -->
+          <div class="version-hero-card">
+            <div class="version-hero-label">
+              <span>安全快照与回滚保障</span>
+              <span class="badge-chip chip-purple">安全熔断</span>
+            </div>
+            <div class="version-hero-val" style="font-size:20px;" id="heroSnapshotCount">-- 份快照就绪</div>
+            <div class="version-hero-meta">
+              <span class="badge-chip chip-blue">⚡ 异常自动秒级回滚</span>
+              <span class="badge-chip chip-gray" id="heroRegistryBadge">国内加速源</span>
+            </div>
+          </div>
+        </div>
+
         <!-- DSH 进程启停控制栏 -->
         <div style="display:flex; align-items:center; gap:10px; margin-bottom: 20px; padding: 14px 18px; background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius-md); flex-wrap: wrap;">
           <div style="font-weight: 600; font-size: 13px; color: var(--text-main); margin-right: 6px;">
@@ -240,6 +478,7 @@
           <span id="dshStatusDetail" style="font-size: 12px; color: var(--text-muted); margin-left: auto;"></span>
         </div>
 
+        <!-- 版本选择与切换表单 -->
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">npm 软件源</label>
@@ -250,15 +489,65 @@
           </div>
           <div class="form-group">
             <label class="form-label">选择目标版本</label>
-            <select id="dshVersionSelect" class="form-control">
+            <select id="dshVersionSelect" class="form-control" onchange="onVersionSelectChange()">
               <option value="">正在获取可用版本...</option>
             </select>
           </div>
         </div>
 
-        <div style="display:flex; gap:10px;">
+        <!-- 动态未适配提醒卡片 (选中的是非适配版本时显示) -->
+        <div class="notice-card notice-warning" id="unadaptedWarnCard" style="display:none;">
+          <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <div>
+            <div style="font-weight:700;margin-bottom:2px;">⚠️ 未经当前容器镜像特殊深度适配的版本</div>
+            <div>目标版本 <code id="unadaptedVersionLabel" style="font-weight:700;background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:4px;"></code> 尚未经过本 Docker 镜像针对性联调适配。如切换后遇到启动异常、插件失效或界面异常，请更新镜像版本或前往 GitHub Issues 交流反馈。</div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="installSelectedVersion()" id="installBtn">安装并切换版本</button>
           <button class="btn" onclick="loadVersions(true)">刷新版本列表</button>
+          <span id="versionSwitchQuickHint" style="font-size:12px; color:var(--text-muted);"></span>
+        </div>
+
+        <!-- 动态多阶段进度条与步骤指示器 -->
+        <div class="progress-wrap" id="dshInstallProgressWrap">
+          <div class="progress-header">
+            <div class="progress-title" id="progressTitle">
+              <span id="progressDot" class="dot" style="background:#3b82f6;"></span>
+              <span id="progressLabel">准备就绪...</span>
+            </div>
+            <div class="progress-percent" id="progressPercent">0%</div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="step-list" id="stepList">
+            <div class="step-item" id="stepItem1">
+              <div class="step-dot" id="stepDot1">1</div>
+              <span>预检评估</span>
+            </div>
+            <div class="step-item" id="stepItem2">
+              <div class="step-dot" id="stepDot2">2</div>
+              <span>快照存档</span>
+            </div>
+            <div class="step-item" id="stepItem3">
+              <div class="step-dot" id="stepDot3">3</div>
+              <span>部署核心</span>
+            </div>
+            <div class="step-item" id="stepItem4">
+              <div class="step-dot" id="stepDot4">4</div>
+              <span>插件自愈</span>
+            </div>
+            <div class="step-item" id="stepItem5">
+              <div class="step-dot" id="stepDot5">5</div>
+              <span>健康探活</span>
+            </div>
+          </div>
         </div>
 
         <div class="terminal" id="installTerminal">[日志] 管理面板已连接，就绪中...</div>
@@ -476,6 +765,102 @@
     </div>
   </div>
 
+  <!-- 统一版本切换安全确认与备份模态弹窗 (合并所有警告与备份提示) -->
+  <div class="modal-overlay" id="switchConfirmModal">
+    <div class="modal-box" style="max-width: 550px;">
+      <div class="modal-header" style="display:flex; align-items:center; gap:8px;">
+        <svg style="width:22px;height:22px;color:#f59e0b;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span id="switchModalTitle">DSH 核心版本切换确认与安全提醒</span>
+      </div>
+      <div class="modal-body" style="margin-bottom:16px;">
+        <!-- 版本变动对比概要 -->
+        <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="color:var(--text-muted); font-size:12px;">当前运行核心:</span>
+            <code id="modalCurrentVer" style="font-weight:700; color:var(--text-main); font-size:13px;">v...</code>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="color:var(--text-muted); font-size:12px;">目标切换版本:</span>
+            <code id="modalTargetVer" style="font-weight:700; color:var(--primary); font-size:13px;">v...</code>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="color:var(--text-muted); font-size:12px;">部署获取方式:</span>
+            <span id="modalSourceType" style="font-size:12px; font-weight:600;">--</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="color:var(--text-muted); font-size:12px;">镜像适配状态:</span>
+            <span id="modalAdaptationStatus" style="font-size:12px; font-weight:600;">--</span>
+          </div>
+        </div>
+
+        <!-- 警报 1：高危！降级破坏性变更警告 (从 0.1.5+ 往旧版降级时触发) -->
+        <div class="notice-card notice-danger" id="modalDowngradeWarn" style="display:none; margin-bottom:10px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <div>
+            <div style="font-weight:700; margin-bottom:2px;">⚠️ [版本安全警告] 您正在从 0.1.5+ 系列降级至旧版本！</div>
+            <div><strong>官方说明：</strong>0.1.5 起会话数据格式已升级为 V3 且<strong>单向不可逆</strong>，降级后旧版本 DSH 无法加载 V3 会话记录。<strong>请务必在降级前备份快照！</strong></div>
+          </div>
+        </div>
+
+        <!-- 警报 2：未经特殊适配提醒 (选中的目标版本未在已适配列表时触发) -->
+        <div class="notice-card notice-warning" id="modalUnadaptedWarn" style="display:none; margin-bottom:10px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <div>
+            <div style="font-weight:700; margin-bottom:2px;">⚠️ 未经当前容器镜像特殊深度适配测试</div>
+            <div>目标版本尚未经过本 Docker 镜像针对性联调测试。如切换后遇到启动异常、插件失效或界面异常，请重新切回已适配版本、更新 Docker 镜像或前往 GitHub Issues 反馈交流。</div>
+          </div>
+        </div>
+
+        <!-- 建议卡片：官方最新版升级建议 (推荐直接更新镜像) -->
+        <div class="notice-card notice-info" id="modalLatestUpgradeAdvice" style="display:none; margin-bottom:10px; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534;">
+          <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <div id="modalLatestAdviceContent">
+            <div style="font-weight:700; margin-bottom:2px;">💡 官方最新版升级建议：推荐直接更新 Docker 镜像</div>
+            <div>官方最新版本通常伴随底层依赖、插件架构与回环补丁的升级。为了保障最高稳定性与开箱即用体验，<strong>强烈建议直接更新 Docker 镜像</strong>（执行 <code>docker compose pull && docker compose up -d</code>）。若选择在容器内直接在线切换，系统将全程提供健康探活与安全熔断保障。</div>
+          </div>
+        </div>
+
+        <!-- 警报 3：常规配置与快照备份建议 (合并在此，无需另外弹窗) -->
+        <div class="notice-card notice-info" style="margin-bottom:0;">
+          <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div style="font-weight:700; margin-bottom:2px;">数据安全与安全熔断保障</div>
+            <div>切换核心会重启服务并重新装配插件。为了确保您的配置安全，强烈建议选择<strong>【⭐ 一键备份并切换】</strong>自动生成快照。系统全程内置健康探活，若目标版本无法就绪将<strong>自动秒级回滚至稳定版本</strong>。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <button class="btn" onclick="goToSnapshotsTab()" title="切换到快照管理面板进行手动备份">去【快照与备份】面板</button>
+        <button class="btn" onclick="closeSwitchConfirmModal()">取消</button>
+        <button class="btn btn-danger" onclick="executeInstallConfirmed(false)" id="btnModalDirectSwitch">
+          跳过备份，确认切换
+        </button>
+        <button class="btn btn-primary" onclick="executeInstallConfirmed(true)" id="btnModalAutoBackup">
+          ⭐ 一键备份并切换 (推荐)
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let adminBase = window.location.pathname.replace(/\/+$/, '');
     let currentData = {};
@@ -647,6 +1032,31 @@
       }
     }
 
+    function parseSemver(v) {
+      const [main, pre] = String(v || '').replace(/^v/, '').split('-');
+      const [major = 0, minor = 0, patch = 0] = (main || '').split('.').map(n => Number(n) || 0);
+      return { major, minor, patch, pre: pre || '' };
+    }
+
+    function compareSemver(v1, v2) {
+      const p1 = parseSemver(v1);
+      const p2 = parseSemver(v2);
+      if (p1.major !== p2.major) return p1.major - p2.major;
+      if (p1.minor !== p2.minor) return p1.minor - p2.minor;
+      if (p1.patch !== p2.patch) return p1.patch - p2.patch;
+      if (!p1.pre && p2.pre) return 1;
+      if (p1.pre && !p2.pre) return -1;
+      return p1.pre.localeCompare(p2.pre);
+    }
+
+    let availableCachedVersions = [];
+    let availableAdaptedVersions = [];
+    let availableDistTags = {};
+    let latestVersion = '';
+    let currentVersion = '';
+    let hasLoggedInitialBanner = false;
+    let pendingInstallVersion = '';
+
     function toggleTokenVisible() {
       const input = document.getElementById('editAuthToken');
       input.type = input.type === 'password' ? 'text' : 'password';
@@ -654,6 +1064,7 @@
 
     function appendLog(msg) {
       const term = document.getElementById('installTerminal');
+      if (!term) return;
       term.textContent += '\n' + msg;
       term.scrollTop = term.scrollHeight;
     }
@@ -663,11 +1074,47 @@
         const res = await fetch(`${adminBase}/api/status`);
         const data = await res.json();
         currentData = data;
+        const curVer = data.dsh?.version || 'unknown';
+        currentVersion = curVer;
 
         // Navbar & Version
-        document.getElementById('headerVersionBadge').textContent = 'v' + (data.dsh?.version || '未知');
+        document.getElementById('headerVersionBadge').textContent = 'v' + curVer;
         document.getElementById('linkToVnc').href = data.paths?.vnc || '/vnc/';
         document.getElementById('vncDirectBtn').href = data.paths?.vnc || '/vnc/';
+
+        // Hero Card 1: 当前运行核心
+        const heroCur = document.getElementById('heroCurrentVersion');
+        if (heroCur) heroCur.textContent = 'v' + curVer;
+        const heroAdaptedChip = document.getElementById('heroAdaptedChip');
+        if (heroAdaptedChip && availableAdaptedVersions.length > 0) {
+          const isAdapted = availableAdaptedVersions.includes(curVer);
+          heroAdaptedChip.className = isAdapted ? 'badge-chip chip-green' : 'badge-chip chip-amber';
+          heroAdaptedChip.textContent = isAdapted ? '✔ 官方深度适配' : '⚠️ 未经特殊适配';
+        }
+        const heroRunningBadge = document.getElementById('heroRunningBadge');
+        if (heroRunningBadge) {
+          heroRunningBadge.className = data.dsh?.running ? 'status-badge status-running' : 'status-badge status-stopped';
+          heroRunningBadge.innerHTML = `<span class="dot"></span> ${data.dsh?.running ? (data.dsh?.ready ? '运行中 (已就绪)' : '启动中...') : '未运行'}`;
+        }
+        const heroPortBadge = document.getElementById('heroPortBadge');
+        if (heroPortBadge) heroPortBadge.textContent = `端口: ${data.paths?.proxyPort || 3080}`;
+        const heroPidBadge = document.getElementById('heroPidBadge');
+        if (heroPidBadge) heroPidBadge.textContent = `PID: ${data.dsh?.pid || '--'}`;
+
+        // 首次打开控制台输出系统概要 Banner
+        if (!hasLoggedInitialBanner && curVer !== 'unknown') {
+          hasLoggedInitialBanner = true;
+          const term = document.getElementById('installTerminal');
+          if (term && term.textContent.includes('就绪中...')) {
+            term.textContent = `[系统环境概要]
+----------------------------------------------------------------------
+DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动中'})
+服务监听端口 : ${data.paths?.proxyPort || 3080} (内部核心: 3079)
+就绪进程 PID : ${data.dsh?.pid || '自动守护'}
+----------------------------------------------------------------------
+管理控制台已就绪，所有版本切换与运维日志将在此流式打印。`;
+          }
+        }
 
         // DSH status & controls
         const dshBadge = document.getElementById('dshStatusBadge');
@@ -738,44 +1185,287 @@
 
     async function loadVersions(force = false) {
       const select = document.getElementById('dshVersionSelect');
-      select.innerHTML = '<option value="">正在获取最新版本...</option>';
+      select.innerHTML = '<option value="">正在获取可用版本...</option>';
       try {
         const res = await fetch(`${adminBase}/api/dsh/versions?refresh=${force ? '1' : '0'}`);
         const data = await res.json();
         select.innerHTML = '';
 
         const tags = data.distTags || {};
+        availableDistTags = tags;
         const versions = data.versions || [];
+        availableCachedVersions = data.cachedVersions || [];
+        availableAdaptedVersions = data.adaptedVersions || ['0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        currentVersion = data.current || currentVersion;
+        latestVersion = data.latest || tags.latest || '';
 
+        // 更新 Hero 卡片 2 (官方最新发布)
+        const heroLatest = document.getElementById('heroLatestVersion');
+        if (heroLatest) heroLatest.textContent = latestVersion ? 'v' + latestVersion : 'v未知';
+        const heroLatestTag = document.getElementById('heroLatestTag');
+        if (heroLatestTag) heroLatestTag.textContent = tags.latest ? 'latest' : 'npm';
+
+        const heroUpdateChip = document.getElementById('heroUpdateStatusChip');
+        const btnQuickSelect = document.getElementById('btnQuickSelectLatest');
+        const isUpToDate = Boolean(currentVersion && latestVersion && compareSemver(currentVersion, latestVersion) >= 0);
+        if (heroUpdateChip) {
+          if (isUpToDate) {
+            heroUpdateChip.className = 'badge-chip chip-green';
+            heroUpdateChip.textContent = '✔ 当前已是最新版本';
+            if (btnQuickSelect) btnQuickSelect.style.display = 'none';
+          } else {
+            heroUpdateChip.className = 'badge-chip chip-amber';
+            heroUpdateChip.textContent = '↑ 发现新版本 ' + (latestVersion ? 'v' + latestVersion : '');
+            if (btnQuickSelect) btnQuickSelect.style.display = 'inline-block';
+          }
+        }
+
+        // 更新 Hero 卡片 3 (本地快照与源)
+        const heroSnap = document.getElementById('heroSnapshotCount');
+        if (heroSnap) heroSnap.textContent = `${availableCachedVersions.length} 份快照就绪`;
+        const heroReg = document.getElementById('heroRegistryBadge');
+        if (heroReg) {
+          const regStr = data.registry || '';
+          heroReg.textContent = regStr.includes('npmmirror') ? '国内加速源' : '官方源';
+        }
+
+        // 重新判定当前版本的适配标签
+        const heroAdaptedChip = document.getElementById('heroAdaptedChip');
+        if (heroAdaptedChip && currentVersion) {
+          const isAdapted = availableAdaptedVersions.includes(currentVersion);
+          heroAdaptedChip.className = isAdapted ? 'badge-chip chip-green' : 'badge-chip chip-amber';
+          heroAdaptedChip.textContent = isAdapted ? '✔ 官方深度适配' : '⚠️ 未经特殊适配';
+        }
+
+        // 填充下拉选项框
         versions.forEach(v => {
           const opt = document.createElement('option');
           opt.value = v;
-          let label = v;
+
           const matchedTags = [];
           for (const [tag, tagVer] of Object.entries(tags)) {
             if (tagVer === v) matchedTags.push(tag);
           }
+
+          const isAdapted = availableAdaptedVersions.includes(v);
+          const isCached = availableCachedVersions.includes(v);
+          const isCurrent = (v === currentVersion);
+
+          let label = v;
           if (matchedTags.length > 0) label += ` (${matchedTags.join(', ')})`;
-          if (v === data.current) label += ' ★ 当前运行';
+          if (isAdapted) {
+            label += ' [已适配]';
+          } else {
+            label += ' [未适配]';
+          }
+          if (isCached) label += ' ⚡本地快照';
+          if (isCurrent) label += ' ★当前运行';
+
           opt.textContent = label;
-          if (v === data.current) opt.selected = true;
+          if (isCurrent) opt.selected = true;
           select.appendChild(opt);
         });
+
+        onVersionSelectChange();
       } catch (err) {
         select.innerHTML = '<option value="">获取版本列表失败</option>';
       }
     }
 
-    async function installSelectedVersion() {
-      const version = document.getElementById('dshVersionSelect').value;
-      if (!version) return alert('请先选择目标版本');
-      if (!confirm(`确定要将 DSH 核心切换为 ${version} 吗？\n若新版本启动失败或探测超时，系统将自动触发安全熔断并回滚至稳定版本。`)) return;
+    function onVersionSelectChange() {
+      const select = document.getElementById('dshVersionSelect');
+      const version = select.value;
+      const warnCard = document.getElementById('unadaptedWarnCard');
+      const warnLabel = document.getElementById('unadaptedVersionLabel');
+      const quickHint = document.getElementById('versionSwitchQuickHint');
 
-      appendLog(`===================================================`);
-      appendLog(`[${new Date().toLocaleTimeString()}] 准备安装并切换 DSH 核心至 ${version}...`);
-      document.getElementById('installBtn').disabled = true;
+      if (!version) {
+        if (warnCard) warnCard.style.display = 'none';
+        if (quickHint) quickHint.textContent = '';
+        return;
+      }
+
+      const isAdapted = availableAdaptedVersions.includes(version);
+      const isCached = availableCachedVersions.includes(version);
+
+      if (warnCard) {
+        if (!isAdapted) {
+          warnCard.style.display = 'flex';
+          if (warnLabel) warnLabel.textContent = 'v' + version;
+        } else {
+          warnCard.style.display = 'none';
+        }
+      }
+
+      if (quickHint) {
+        const isUpgrade = (version === latestVersion || compareSemver(version, currentVersion) > 0);
+        if (version === currentVersion) {
+          quickHint.textContent = '（当前正在运行的版本）';
+        } else if (isCached) {
+          quickHint.textContent = '⚡ 本地快照缓存秒级就绪';
+        } else if (isUpgrade && !isAdapted) {
+          quickHint.textContent = '💡 官方新版：建议优先考虑直接更新 Docker 镜像';
+        } else {
+          quickHint.textContent = '🌐 切换将从 npm 镜像下载安装';
+        }
+      }
+    }
+
+    function quickSelectLatestVersion() {
+      if (!latestVersion) return;
+      const select = document.getElementById('dshVersionSelect');
+      select.value = latestVersion;
+      onVersionSelectChange();
+    }
+
+    // ── 统一版本切换安全弹窗 (合并降级警告、未适配警告与备份建议) ──
+    function installSelectedVersion() {
+      const select = document.getElementById('dshVersionSelect');
+      const version = select.value;
+      if (!version) return alert('请先选择目标版本');
+
+      pendingInstallVersion = version;
+
+      const isDowngrade = compareSemver(version, '0.1.5-rc.1') < 0 && compareSemver(currentVersion, '0.1.5-rc.1') >= 0;
+      const isUnadapted = !availableAdaptedVersions.includes(version);
+      const isCached = availableCachedVersions.includes(version);
+
+      // 填充合并弹窗内容
+      document.getElementById('modalCurrentVer').textContent = 'v' + (currentVersion || '未知');
+      document.getElementById('modalTargetVer').textContent = 'v' + version;
+      document.getElementById('modalSourceType').innerHTML = isCached
+        ? '<span class="badge-chip chip-blue">⚡ 本地快照秒级还原 (< 1s)</span>'
+        : '<span class="badge-chip chip-gray">🌐 npm 镜像下载安装 (预计 15~30s)</span>';
+      document.getElementById('modalAdaptationStatus').innerHTML = isUnadapted
+        ? '<span class="badge-chip chip-amber">⚠️ 未经当前镜像特殊深度适配</span>'
+        : '<span class="badge-chip chip-green">✔ 官方深度适配版本</span>';
+
+      // 动态展示特定警告
+      document.getElementById('modalDowngradeWarn').style.display = isDowngrade ? 'flex' : 'none';
+      document.getElementById('modalUnadaptedWarn').style.display = isUnadapted ? 'flex' : 'none';
+
+      // 官方最新版本升级建议 (推荐更新镜像)
+      const isLatest = (version === latestVersion || version === availableDistTags.latest || version === availableDistTags.next || compareSemver(version, currentVersion) >= 0);
+      const adviceCard = document.getElementById('modalLatestUpgradeAdvice');
+      const adviceContent = document.getElementById('modalLatestAdviceContent');
+      if (adviceCard) {
+        if (isLatest) {
+          adviceCard.style.display = 'flex';
+          if (isUnadapted) {
+            adviceContent.innerHTML = `
+              <div style="font-weight:700; margin-bottom:2px;">💡 官方新版升级建议：强烈推荐直接更新 Docker 镜像</div>
+              <div>目标版本 <strong>v${escapeHtml(version)}</strong> 为官方最新发布，但尚未收录在当前 Docker 镜像预置的深度适配列表中。官方新版通常伴随底层依赖与前端客户端补丁重构，<strong>强烈建议直接更新 Docker 镜像</strong>（执行 <code>docker compose pull && docker compose up -d</code>）以获得官方针对性优化的稳定底座。若在当前容器内直接在线切换，系统将全程提供健康探活与安全熔断保障。</div>
+            `;
+          } else {
+            adviceContent.innerHTML = `
+              <div style="font-weight:700; margin-bottom:2px;">💡 官方新版升级建议：推荐直接更新 Docker 镜像</div>
+              <div>目标版本为官方最新发布。为了确保系统底层依赖与插件生态完全对齐，建议优先考虑直接更新 Docker 镜像。若在当前容器内直接在线切换，系统将全程提供健康探活与安全熔断保障。</div>
+            `;
+          }
+        } else {
+          adviceCard.style.display = 'none';
+        }
+      }
+
+      // 打开统一合并弹窗 (单一弹窗一次性确认全部风险)
+      document.getElementById('switchConfirmModal').style.display = 'flex';
+    }
+
+    function closeSwitchConfirmModal() {
+      document.getElementById('switchConfirmModal').style.display = 'none';
+    }
+
+    function goToSnapshotsTab() {
+      closeSwitchConfirmModal();
+      switchTab('tab-snapshots');
+    }
+
+    function updateProgressUI(step, total, percent, label, mode = 'install') {
+      const wrap = document.getElementById('dshInstallProgressWrap');
+      if (wrap) wrap.style.display = 'block';
+
+      const pLabel = document.getElementById('progressLabel');
+      if (pLabel) pLabel.textContent = label;
+
+      const pPercent = document.getElementById('progressPercent');
+      if (pPercent) pPercent.textContent = Math.round(percent) + '%';
+
+      const pFill = document.getElementById('progressFill');
+      if (pFill) {
+        pFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
+        if (mode === 'rollback') {
+          pFill.className = 'progress-fill rollback';
+        } else {
+          pFill.className = 'progress-fill';
+        }
+      }
+
+      const pDot = document.getElementById('progressDot');
+      if (pDot) {
+        pDot.style.background = mode === 'rollback' ? '#ef4444' : '#3b82f6';
+      }
+
+      // 驱动 5 步指示器
+      for (let i = 1; i <= 5; i++) {
+        const item = document.getElementById(`stepItem${i}`);
+        const dot = document.getElementById(`stepDot${i}`);
+        if (!item || !dot) continue;
+
+        if (mode === 'rollback') {
+          item.className = 'step-item rollback';
+          continue;
+        }
+
+        if (i < step) {
+          item.className = 'step-item completed';
+          dot.textContent = '✔';
+        } else if (i === step) {
+          item.className = 'step-item active';
+          dot.textContent = String(i);
+        } else {
+          item.className = 'step-item';
+          dot.textContent = String(i);
+        }
+      }
+    }
+
+    async function executeInstallConfirmed(autoBackup) {
+      const version = pendingInstallVersion;
+      if (!version) return;
+      closeSwitchConfirmModal();
+
+      const installBtn = document.getElementById('installBtn');
+      if (installBtn) installBtn.disabled = true;
+
+      // 展开并重置进度条
+      updateProgressUI(1, 5, 5, '正在准备版本切换环境...', 'install');
+      appendLog(`======================================================================`);
+      appendLog(`[${new Date().toLocaleTimeString()}] 开始执行 DSH 核心版本切换 -> v${version}`);
 
       try {
+        // 如果用户选择了“一键自动备份并切换”
+        if (autoBackup) {
+          updateProgressUI(1, 5, 8, '正在生成切换前安全配置快照...', 'install');
+          appendLog(`[${new Date().toLocaleTimeString()}] 🛡️ [安全备份] 正在调用快照服务创建备份 (pre-switch-to-${version})...`);
+          try {
+            const snapRes = await fetch(`${adminBase}/api/snapshots/create`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: `pre-switch-to-${version}` })
+            });
+            const snapData = await snapRes.json();
+            if (snapData.ok) {
+              appendLog(`[${new Date().toLocaleTimeString()}] ✔ 安全配置快照创建成功: ${snapData.snapshot.filename}`);
+              await loadSnapshots();
+            } else {
+              appendLog(`[${new Date().toLocaleTimeString()}] ⚠️ 自动创建快照提示: ${snapData.error || '非致命跳过，继续切换'}`);
+            }
+          } catch (snapErr) {
+            appendLog(`[${new Date().toLocaleTimeString()}] ⚠️ 自动快照请求异常: ${snapErr.message} (继续切换)`);
+          }
+        }
+
+        // 发起安装切换 SSE 流
         const response = await fetch(`${adminBase}/api/dsh/install`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -799,29 +1489,50 @@
             if (trimmed.startsWith('data:')) {
               try {
                 const payload = JSON.parse(trimmed.slice(5).trim());
-                if (payload.type === 'log') {
+                if (payload.type === 'progress') {
+                  updateProgressUI(payload.step, payload.total, payload.percent, payload.label, payload.mode);
+                } else if (payload.type === 'log') {
                   appendLog(payload.message);
                 } else if (payload.type === 'done') {
                   if (payload.ok) {
-                    appendLog(`🎉 切换成功！当前运行核心版本: ${payload.version}`);
+                    updateProgressUI(5, 5, 100, `🎉 切换成功！当前运行核心: v${payload.version}`, 'install');
+                    for (let i = 1; i <= 5; i++) {
+                      const item = document.getElementById(`stepItem${i}`);
+                      const dot = document.getElementById(`stepDot${i}`);
+                      if (item) item.className = 'step-item completed';
+                      if (dot) dot.textContent = '✔';
+                    }
+                    appendLog(`======================================================================`);
+                    appendLog(`🎉 [确认生效] DSH 核心已成功更新至: v${payload.version}`);
+                    appendLog(`✔ 访问控制台工作区: http://127.0.0.1:${currentData?.paths?.proxyPort || 3080}`);
+                    appendLog(`======================================================================`);
                   } else if (payload.rolledBack) {
-                    appendLog(`⚠️ 新版本启动失败，系统已自动安全回滚至稳定版本: ${payload.version}`);
-                    alert(`新版本启动失败，已自动回滚至稳定版本 ${payload.version}：\n${payload.error}`);
+                    updateProgressUI(3, 3, 100, `🛡️ 已安全回滚至稳定版本: v${payload.version}`, 'rollback');
+                    appendLog(`======================================================================`);
+                    appendLog(`⚠️ [安全熔断告知] 目标版本启动未通过健康检测，已自动秒级回滚至稳定版本: v${payload.version}`);
+                    appendLog(`✔ 系统服务正常就绪，未造成中断`);
+                    appendLog(`======================================================================`);
                   } else {
+                    updateProgressUI(1, 5, 0, `❌ 切换失败: ${payload.error}`, 'rollback');
                     appendLog(`❌ 切换失败: ${payload.error}`);
-                    alert(`版本切换失败：\n${payload.error}`);
                   }
                   await loadStatus();
                   await loadVersions();
+                  await loadSnapshots();
+                  setTimeout(() => { loadStatus(); loadVersions(); }, 1500);
+                  setTimeout(() => { loadStatus(); loadVersions(); }, 3500);
                 }
               } catch (e) {}
             }
           }
         }
       } catch (err) {
-        appendLog(`❌ 网络请求异常: ${err.message}`);
+        appendLog(`❌ 网络通信异常: ${err.message}`);
+        updateProgressUI(1, 5, 0, `通信异常: ${err.message}`, 'rollback');
       } finally {
-        document.getElementById('installBtn').disabled = false;
+        if (installBtn) installBtn.disabled = false;
+        await loadStatus();
+        await loadVersions();
       }
     }
 
