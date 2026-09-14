@@ -7,20 +7,11 @@
 ## [v0.0.9] - 2026-09-14
 
 ### 新增与优化
-- 🌟 **彻底移除全局 `NODE_ENV=production`，还原本纯开发环境**：
-  - **参考借鉴**：参考 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) 社区讨论（Issue #20），反思并解决了全局环境变量过度侵入开发环境的痛点；
-  - **落地实现**：移除 `Dockerfile` 中全局注入的 `ENV NODE_ENV=production`，杜绝用户在 `/workspace` 执行 `npm install` 自动忽略 `devDependencies`，恢复用户项目正常的开发、测试与热重载；
-  - **边界收敛**：改为在 `scripts/entrypoint.sh` 启动网关守护服务时局部注入 `NODE_ENV=production`，既保障网关自身的高效稳定运行，又彻底避免污染 Coding Agent 与宿主工作区。
-- ⚡ **noVNC 静态资产版本化隔离与缓存击穿**：
-  - **参考借鉴**：吸收 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) commit `ead7ce5` 的资源版本化与隔离理念；
-  - **落地实现**：构建期自动将 `/usr/share/novnc` 目录资产克隆并组织为带版本特征的路径（如 `/usr/share/novnc/novnc-1.6.0`）；网关 `gateway/index.js` 在访问 `/vnc/` 时自动 302 重定向至最新版本化隔离路径，并向响应头注入 `no-cache, no-store, must-revalidate`；
-  - **问题修复**：网关 WebSocket 升级处理器增强对版本化路径的鲁棒匹配；彻底消除容器镜像升级后浏览器仍使用本地强缓存旧版 JS（如 `rfb.js` 或 `util/browser.js`）导致的新旧混用 WebCodecs 未定义报错或桌面白屏。
-- 🛠️ **全面升级基座底座为 Debian Trixie (glibc 2.41) & Node 24**：
-  - **参考借鉴**：借鉴 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) commit `bb497b2`（Issue #18）的运行时底座升级演进；
-  - **底座跨越**：默认底层镜像由 `node:22-bookworm-slim` 全面升级为 **`node:24-trixie`**；
-  - **glibc 2.41 兼容**：将系统底层的 glibc 升级至 **2.41**，彻底根除 Coding Agent 运行最新外部预编译 CLI 工具或二进制依赖时的 `GLIBC_2.38 not found` 动态链接兼容瓶颈；
-  - **开箱即用研发工具**：预置完整的 buildpack-deps 原生编译链与实用研发调试 CLI（`file`、`jq`、`less`、`ripgrep`、`rsync`、`zip`、`unzip`、`tk`），无需进入容器反复手动安装常用工具；
-  - **WSL2 / Docker Desktop 兼容 Shim**：吸收其 commit `2414144`（Issue #13）的跨平台路径兼容方案，在容器内植入 `wslpath` 与 `powershell.exe` + `wish`（Tk）微型编辑器，彻底解决 Windows/macOS Docker Desktop 下点击 Web UI “打开配置文件”报 `spawn wslpath ENOENT` 的崩溃缺陷。
+> 💡 本次更新参考借鉴了 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) 项目的优秀实践。
+
+- 🌟 **彻底移除全局 `NODE_ENV=production`**：改为在网关服务启动时局部注入，彻底解决工作区安装 `devDependencies` 被跳过的问题，恢复纯净开发环境；
+- ⚡ **noVNC 静态资产版本化隔离与缓存击穿**：静态资源路径版本化并注入防强缓存响应头，彻底根治镜像升级后浏览器强缓存导致的白屏与报错；
+- 🛠️ **升级基座底座为 Debian Trixie (glibc 2.41) & Node 24**：底层升级为 glibc 2.41 解决预编译二进制依赖兼容，补齐实用开发 CLI 工具链，并内置 Docker Desktop WSL2 路径兼容 Shim。
 
 ---
 
