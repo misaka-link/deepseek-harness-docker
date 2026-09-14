@@ -150,6 +150,8 @@ jobs:
           provenance: false
           sbom: false
           build-args: |
+            NODE_IMAGE=node:24-trixie
+            NOVNC_ASSET_REVISION=1.6.0
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
             DSH_VERSION=${{ steps.docker_meta.outputs.dsh_version }}
             USE_CHINA_MIRROR=0

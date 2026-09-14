@@ -115,6 +115,16 @@ vncProxy.on('error', (err, req, res) => {
   }
 });
 
+vncProxy.on('proxyRes', (proxyRes, req, res) => {
+  const ct = String(proxyRes.headers['content-type'] || '').toLowerCase();
+  // 针对 noVNC 的 html 页面严禁客户端持久强缓存，保证镜像或版本更新后即刻拉取最新版本化入口
+  if (ct.includes('text/html')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+});
+
 // Polyfill 与回环补丁
 const LOOPBACK_NEEDLE_1 = 'isLoopbackHostname(pageLocation.hostname)';
 const LOOPBACK_NEEDLE_2 = 'connection.isLoopback ? "host" : "memory"';
@@ -649,10 +659,29 @@ const server = http.createServer(async (req, res) => {
       desktopManager.touchActivity();
     }
 
+    const vncPrefix = VNC_PATH.replace(/^\//, '');
+    const novncRevision = process.env.NOVNC_ASSET_REVISION || '1.6.0';
+    const versionedVncPath = `/novnc-${novncRevision}/vnc.html`;
+
+    // 5.1 访问桌面根入口 (如 /vnc 或 /vnc/) -> 302 自动重定向至带版本隔离的 vnc.html (附带防缓存头)
     if (pathname === VNC_PATH || pathname === VNC_PATH + '/') {
-      const vncPrefix = VNC_PATH.replace(/^\//, '');
       res.writeHead(302, {
-        Location: VNC_PATH + '/vnc.html?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=' + vncPrefix + '/websockify'
+        Location: `${VNC_PATH}${versionedVncPath}?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=${vncPrefix}/websockify`,
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0'
+      });
+      return res.end();
+    }
+
+    // 5.2 兼容直接访问旧版未版本化路径 /vnc/vnc.html -> 自动无感重定向至最新版本化路径
+    if (pathname === `${VNC_PATH}/vnc.html`) {
+      const search = parsedUrl.search || `?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=${vncPrefix}/websockify`;
+      res.writeHead(302, {
+        Location: `${VNC_PATH}${versionedVncPath}${search}`,
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0'
       });
       return res.end();
     }
@@ -687,11 +716,11 @@ server.on('upgrade', async (req, socket, head) => {
     return;
   }
 
-  // 3. VNC WebSocket 握手
+  // 3. VNC WebSocket 握手 (兼容版本化路径、相对路径与自定义前缀)
   const vncWsPath = VNC_PATH + '/websockify';
-  if (pathname === vncWsPath || pathname.startsWith(vncWsPath) || pathname === '/websockify') {
+  if (pathname === vncWsPath || pathname.startsWith(vncWsPath) || pathname === '/websockify' || pathname.endsWith('/websockify')) {
     desktopManager.touchActivity();
-    req.url = req.url.slice(VNC_PATH.length) || '/';
+    req.url = '/websockify' + (parsedUrl.search || '');
     return vncProxy.ws(req, socket, head);
   }
 

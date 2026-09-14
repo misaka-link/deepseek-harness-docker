@@ -40,6 +40,8 @@ RULES.md
 # Remote debug & test scripts (local execution only)
 scripts/mcp-remote-*.mjs
 scripts/remote-*.mjs
+remote-test-*.png
+screenshot*.png
 
 
 

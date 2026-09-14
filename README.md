@@ -1,9 +1,9 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.0.8`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.0.9`  
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
 > 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.5-rc.2`、`:0.1.5-rc.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.0.8`、`:0.0.8-market`），精确锁定本容器套件自身的版本。
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.0.9`、`:0.0.9-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化部署套件与可视化 Web Admin 控制台**。一键解决回环网络限制、集成访问认证、内置 Chromium 桌面 (noVNC)，并通过**强大的后台管理面板**实现版本在线热切换、插件市场、配置快照与备份。
 
@@ -160,6 +160,20 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.0.9 (当前开发分支: feat/trixie-runtime-enhancements)
+- 🌟 **彻底移除全局 `NODE_ENV=production`，还原本纯开发环境**：
+  - 移除 `Dockerfile` 中全局注入的 `ENV NODE_ENV=production`，杜绝用户在 `/workspace` 执行 `npm install` 自动忽略 `devDependencies`，并恢复用户项目的正常开发与测试模式；
+  - 改为在 `scripts/entrypoint.sh` 启动网关服务时局部注入 `NODE_ENV=production`，既保证网关自身生产级运行效能，又完全不污染 coding agent 与用户开发容器。
+- ⚡ **noVNC 静态资产版本化隔离与缓存击穿**：
+  - 构建期将 `/usr/share/novnc` 目录资产自动克隆并命名为带版本特征的路径（如 `/usr/share/novnc/novnc-1.6.0`）；
+  - 网关 `gateway/index.js` 在访问 `/vnc/` 时自动 302 重定向至最新版本化隔离路径，并向响应头注入 `no-cache, no-store, must-revalidate`；
+  - 彻底终结了容器镜像升级后浏览器仍使用旧版强缓存 js 脚本导致的 WebCodecs 未定义或白屏故障。
+- 🛠️ **全面升级基座底座为 Debian Trixie (glibc 2.41) & Node 24**：
+  - 默认底层镜像由 `node:22-bookworm-slim` 升级为 `node:24-trixie`；
+  - 提供最新的 **glibc 2.41**，彻底消除运行新版本外部预编译 CLI 工具或 Agent 二进制依赖时的 `GLIBC_2.38 not found` 限制；
+  - 预置完整的 buildpack-deps 原生编译链与常用调试研发 CLI（`file`、`jq`、`less`、`ripgrep`、`rsync`、`zip`、`unzip`、`tk`）；
+  - 内置跨平台 WSL2 / Docker Desktop 路径调用兼容 Shim（`wslpath` 与 `powershell.exe`），彻底解决 Windows/macOS Docker Desktop 下点击打开配置文件报 `spawn wslpath ENOENT` 的历史缺陷。
 
 ### v0.0.8
 - 📸 **修复浏览器截图工具默认保存路径，彻底杜绝污染根目录 (`browser_screenshot`)**：
