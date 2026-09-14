@@ -1,0 +1,122 @@
+# 📝 更新日志 (Changelog)
+
+所有关键版本演进、重要修复与架构变更均记录于此。
+
+---
+
+## [v0.0.9] - 2026-09-14
+
+### 新增与优化
+- 🌟 **彻底移除全局 `NODE_ENV=production`，还原本纯开发环境**：
+  - **参考借鉴**：参考 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) 社区讨论（Issue #20），反思并解决了全局环境变量过度侵入开发环境的痛点；
+  - **落地实现**：移除 `Dockerfile` 中全局注入的 `ENV NODE_ENV=production`，杜绝用户在 `/workspace` 执行 `npm install` 自动忽略 `devDependencies`，恢复用户项目正常的开发、测试与热重载；
+  - **边界收敛**：改为在 `scripts/entrypoint.sh` 启动网关守护服务时局部注入 `NODE_ENV=production`，既保障网关自身的高效稳定运行，又彻底避免污染 Coding Agent 与宿主工作区。
+- ⚡ **noVNC 静态资产版本化隔离与缓存击穿**：
+  - **参考借鉴**：吸收 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) commit `ead7ce5` 的资源版本化与隔离理念；
+  - **落地实现**：构建期自动将 `/usr/share/novnc` 目录资产克隆并组织为带版本特征的路径（如 `/usr/share/novnc/novnc-1.6.0`）；网关 `gateway/index.js` 在访问 `/vnc/` 时自动 302 重定向至最新版本化隔离路径，并向响应头注入 `no-cache, no-store, must-revalidate`；
+  - **问题修复**：网关 WebSocket 升级处理器增强对版本化路径的鲁棒匹配；彻底消除容器镜像升级后浏览器仍使用本地强缓存旧版 JS（如 `rfb.js` 或 `util/browser.js`）导致的新旧混用 WebCodecs 未定义报错或桌面白屏。
+- 🛠️ **全面升级基座底座为 Debian Trixie (glibc 2.41) & Node 24**：
+  - **参考借鉴**：借鉴 [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker) commit `bb497b2`（Issue #18）的运行时底座升级演进；
+  - **底座跨越**：默认底层镜像由 `node:22-bookworm-slim` 全面升级为 **`node:24-trixie`**；
+  - **glibc 2.41 兼容**：将系统底层的 glibc 升级至 **2.41**，彻底根除 Coding Agent 运行最新外部预编译 CLI 工具或二进制依赖时的 `GLIBC_2.38 not found` 动态链接兼容瓶颈；
+  - **开箱即用研发工具**：预置完整的 buildpack-deps 原生编译链与实用研发调试 CLI（`file`、`jq`、`less`、`ripgrep`、`rsync`、`zip`、`unzip`、`tk`），无需进入容器反复手动安装常用工具；
+  - **WSL2 / Docker Desktop 兼容 Shim**：吸收其 commit `2414144`（Issue #13）的跨平台路径兼容方案，在容器内植入 `wslpath` 与 `powershell.exe` + `wish`（Tk）微型编辑器，彻底解决 Windows/macOS Docker Desktop 下点击 Web UI “打开配置文件”报 `spawn wslpath ENOENT` 的崩溃缺陷。
+
+---
+
+## [v0.0.8] - 2026-09-08
+
+### 修复与改进
+- 📸 **修复浏览器截图工具默认保存路径，彻底杜绝污染根目录 (`browser_screenshot`)**：
+  - 修复 `dsh-browser-desktop` 插件中硬编码 `process.cwd()` 导致截图直接保存至容器 `/workspace` 根目录的缺陷；
+  - 接入工具执行上下文 `exec`，将截图保存基准路径严格绑定到当前会话/项目自身的工作区目录（`exec.agent.session.header.cwd`）；
+  - 相对路径及自动生成的唯一时间戳截图统一保存到项目自身目录（或配置的子目录下），不再平铺污染最外层宿主根目录；
+  - 插件配置新增 `screenshotDir` 选项，支持用户在设置中心自由定义截图默认归档子文件夹（如 `screenshots`）。
+
+---
+
+## [v0.0.7] - 2026-09-07
+
+### 适配与构建
+- 🌟 **适配官方最新微调候选版 (`@deepseek-ai/dsh@0.1.5-rc.2`)**：
+  - 自动检测并优先支持官方最新发布的 `0.1.5-rc.2`（包含反馈弹窗体验优化、交付文件卡片紧凑排版与代码文件新图标）；
+  - `build.sh` 与 GitHub Actions CI 升级为 `next`/`latest` 双重动态探测，支持 `--build-arg DSH_VERSION` 自由定制；
+  - 保持对 `0.1.5-rc.1` 与 `0.1.2-rc.1` 的平滑兼容。
+
+---
+
+## [v0.0.6] - 2026-09-06
+
+### 新增特性与架构适配
+- 🌟 **全面适配官方最新 RC 版本 (`@deepseek-ai/dsh@0.1.5-rc.1`)**：
+  - 支持官方新增模型 `DeepSeek-V41-Flash` (`deepseek-flash`) 与动态系统提示词；
+  - 原生支持出站代理继承：透传 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`，解决内网/私有化部署下模型 API 访问代理需求；
+  - 适配官方 V3 会话格式：在管理后台与网关生命周期管理（`dsh-manager.js`）中加入版本升降级安全警告，强化升级前秒级快照备份，避免不可逆降级导致历史会话无法读取；
+  - 增强 `install-plugin.mjs` 插件安装与软链接机制，兼容 npm 11 扁平化与嵌套依赖树。
+- 🖥️ **右侧边栏（Right Sidebar）内嵌桌面 Tab 支持与设置开关**：
+  - 深度融合官方 0.1.5-rc.1 全新推出的右侧 Sidebar 架构；
+  - 在 `dsh-browser-desktop` 插件设置中心增加开关：**“在右侧边栏嵌入桌面 Tab (实验性)”**，**默认关闭**；
+  - 开启后，可在 Web 界面右侧直接内嵌 noVNC 浏览器桌面，实现左侧对话/右侧操作浏览器的分栏并排工作流；
+  - 运行时特性检测与向后兼容：在旧版本 DSH（无右侧边栏）下自动优雅降级，确保零错误。
+
+---
+
+## [v0.0.5] - 2026-09-05
+
+### 核心重构与工具升级
+- 🚀 **新增 AI 浏览器标签页全生命周期管理 (`browser_control`)**：
+  - 新增 `close_tab` 动作：支持根据 `tabId` 靶向关闭特定标签页；未传时默认关闭当前工作页；
+  - 新增 `close_all_tabs` 动作：一键关闭所有业务标签页，并安全重置为纯净的 `about:blank` 兜底页；
+  - 新增 `tabs` 动作：支持 AI 随时查询当前所有打开标签页的 ID、标题、URL 与计数；
+  - **内建 Linux 防退出安全兜底机制**：关闭最后一个标签页时自动预置空白页，杜绝 Linux X11 下 Chromium 进程因所有 Tab 关闭而异常退出或白屏。
+- ⚡ **底层默认智能复用导航 (`browser_open`)**：
+  - `browser_open` 默认采用智能复用（`newTab: false`），优先在现有空白页或工作页中通过 CDP `Page.navigate` 导航新 URL，从底层根除 AI 遗忘漏关导致的 Tab 堆积与容器内存暴涨；
+  - 显式支持多标签对比：传入 `newTab: true` 可独立开启新 Tab，返回值包含 `tabId` 与 `reused` 标识。
+- 📸 **截图保存路径与格式全面重构 (`browser_screenshot`)**：
+  - 彻底解决固定死锁路径（`/workspace/screenshot.png`）导致多次截图互相覆盖、历史丢失的问题；
+  - 赋予 AI 充分自主权：支持传入自定义 `savePath`（无论是相对当前工作区路径还是绝对路径）；
+  - 缺省时间戳唯一命名：未指定路径时，自动在工作区生成带纯数字时间戳的唯一图片文件（如 `screenshot-20260907120000.png`），确保多步截图全部持久保留；
+  - 修复画质压缩时强行将 `.png` 改名为 `.jpg` 引发的后续工具找不到文件的缺陷，严格按指定文件扩展名选择编码引擎；
+  - 系统提示词（`systemPrompt`）全面优化，明确引导 AI 传入业务路径与适时释放资源。
+- 🧪 **自动化测试与工程规范升级**：
+  - 完善本地构建脚本 `build.sh` 对 GitHub Container Registry (`ghcr.io`) 镜像标签的自动映射；
+  - 全链路测试闭环与自动化交付门禁固化。
+
+---
+
+## [v0.0.4] - 2026-09-05
+
+### 工具集成与文档
+- 集成官方 GitHub CLI (`gh`) 与 `openssh-client`；
+- 支持动态桌面分辨率（默认 1080p）与动态截图质量选择（high/medium/low）；
+- 统一镜像与文档默认认证码为 `admin`；
+- 增加管理后台控制面板展示文档与架构细节。
+
+---
+
+## [v0.0.3] - 2026-09-04
+
+### 后台管理与异步备份
+- 在 Web Admin 控制台增加 DSH 主进程手动启动/停止/重启控制；
+- 增加 DSH 插件/扩展识别与可视化管理面板；
+- 将备份与导入服务从 Admin Web 服务解耦为异步非阻塞服务；
+- 集成 `p7zip-full` 与 `pigz` 多线程压缩工具，提升备份导出速度。
+
+---
+
+## [v0.0.2] - 2026-09-04
+
+### 基础环境与网络修复
+- 预装最新官方 Golang 开发环境、完整中文字体与 Emoji 字体，解决中文与符号乱码；
+- 修复权限模式，凭据文件严格遵循 600 权限；
+- 增加 `patch-dsh-client.mjs` 客户端回环持久化补丁，彻底绕过原生 DSH 的 `isLoopback` 限制，解锁远程 IP/域名下的模型配置能力；
+- 预置已确认声明配置，避免弹窗阻塞启动。
+
+---
+
+## [v0.0.1] - 2026-09-04
+
+### 初始发布
+- 初始容器化交付版本；
+- 集成 DeepSeek Harness 核心、Xvfb、Openbox、x11vnc、noVNC 与 Chromium；
+- 提供 Node.js 自研统一安全网关（统一端口 3080、Cookie/Token 认证、反暴力破解频率限制、CSWSH 防御）。
