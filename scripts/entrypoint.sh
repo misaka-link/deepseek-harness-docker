@@ -7,6 +7,7 @@ export DSH_PORT="${DSH_PORT:-3079}"
 export VNC_PORT="${VNC_PORT:-6080}"
 export ADMIN_PATH="${ADMIN_PATH:-/admin}"
 export VNC_PATH="${VNC_PATH:-/vnc}"
+export NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 export DSH_DESKTOP_ENABLED="${DSH_DESKTOP_ENABLED:-1}"
 export DSH_DESKTOP_WIDTH="${DSH_DESKTOP_WIDTH:-1920}"
 export DSH_DESKTOP_HEIGHT="${DSH_DESKTOP_HEIGHT:-1080}"
@@ -86,10 +87,10 @@ if [ -f "/app/scripts/patch-dsh-client.mjs" ]; then
   node /app/scripts/patch-dsh-client.mjs || true
 fi
 
-# 4. 启动统一网关守护循环 (支持管理面板在线热重启网关)
+# 4. 启动统一网关守护循环 (支持管理面板在线热重启网关，局部注入 NODE_ENV=production 防止全局环境污染用户工作区)
 while true; do
   echo "[entrypoint] 启动网关..."
-  node /app/gateway/index.js &
+  NODE_ENV=production node /app/gateway/index.js &
   child_pid=$!
   wait "$child_pid" || true
   child_pid=""

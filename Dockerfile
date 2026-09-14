@@ -1,20 +1,22 @@
 # ========================================================
 # Dockerfile: deepseek-harness-docker
 # Integrated DeepSeek Harness with Chromium Desktop & Unified Gateway
+# Runtime base: Debian Trixie (glibc 2.41) & Node 24
 # ========================================================
 
-FROM node:22-bookworm-slim
+ARG NODE_IMAGE=node:24-trixie
+FROM ${NODE_IMAGE}
 
 LABEL maintainer="DeepSeek Harness Community"
 LABEL description="Production Docker image for DeepSeek Harness with Container Browser, VNC, and Aesthetic Auth Gateway"
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    NODE_ENV=production \
     DSH_INSTALL_DIR=/usr/local \
     DSH_WORKSPACE=/workspace \
     PROXY_PORT=3080 \
     DSH_PORT=3079 \
     VNC_PORT=6080 \
+    NOVNC_ASSET_REVISION=1.6.0 \
     DISPLAY=:99 \
     LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
@@ -45,6 +47,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python-is-python3 \
     build-essential \
+    # 常用实用 CLI 研发工具 (Agent 任务开箱即用)
+    file \
+    jq \
+    less \
+    ripgrep \
+    rsync \
+    zip \
+    unzip \
+    # Tcl/Tk 图形工具 (支持桌面配置编辑器与跨平台 Shim)
+    tk \
     # X11 虚拟显示与桌面
     xvfb \
     x11-utils \
@@ -85,6 +97,114 @@ RUN (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | 
         && rm -rf /tmp/gh*) \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && gh --version
+
+# 1.2 noVNC 静态资源版本化隔离与缓存击穿 (杜绝升级后浏览器混用旧缓存导致 WebCodecs 崩溃或白屏)
+ARG NOVNC_ASSET_REVISION=1.6.0
+RUN novnc_copy="$(mktemp -d)" \
+    && cp -a /usr/share/novnc/. "${novnc_copy}/" \
+    && mkdir -p "/usr/share/novnc/novnc-${NOVNC_ASSET_REVISION}" \
+    && cp -a "${novnc_copy}/." "/usr/share/novnc/novnc-${NOVNC_ASSET_REVISION}/" \
+    && rm -rf "${novnc_copy}" \
+    && if [ ! -e /usr/share/novnc/index.html ]; then ln -s vnc.html /usr/share/novnc/index.html; fi
+
+# 1.3 跨平台 WSL2 / Docker Desktop 路径调用兼容 Shim (修复 Web UI 点击打开配置/目录报 spawn wslpath ENOENT)
+RUN cat > /usr/local/bin/wslpath <<'SHIM'
+#!/bin/sh
+out=""
+for arg in "$@"; do
+  case "$arg" in
+    -w|-u|-m|--*) ;;
+    *) out="$arg" ;;
+  esac
+done
+printf '%s\n' "${out:-/}"
+exit 0
+SHIM
+RUN cat > /usr/local/bin/powershell.exe <<'SHIM'
+#!/bin/sh
+command_text=""
+for arg in "$@"; do
+  case "$arg" in
+    -NoProfile|-Command) ;;
+    *) command_text="$arg" ;;
+  esac
+done
+path=""
+if [ -n "$command_text" ]; then
+  path=$(printf '%s' "$command_text" \
+    | sed -n "s/.*-LiteralPath[[:space:]]*'\([^']*\)'[[:space:]]*$/\1/p" \
+    | sed "s/''/'/g")
+fi
+if [ -z "$path" ] || [ ! -e "$path" ]; then exit 0; fi
+DISPLAY="${DISPLAY:-:99}" /usr/bin/wish /usr/local/bin/dsh-editor.tcl "$path" >/dev/null 2>&1 &
+exit 0
+SHIM
+RUN cat > /usr/local/bin/dsh-editor.tcl <<'SHIM'
+#!/usr/bin/wish
+set target [lindex $argv 0]
+if {$target eq ""} { exit }
+
+if {[file isdirectory $target]} {
+  wm title . "DSH Workspace: $target"
+  wm geometry . 680x520
+  listbox .lb -width 90 -height 30 -yscrollcommand {.vs set}
+  scrollbar .vs -command {.lb yview}
+  pack .lb -side left -fill both -expand true
+  pack .vs -side right -fill y
+  foreach f [lsort [glob -nocomplain -directory $target *]] {
+    .lb insert end [file tail $f]
+  }
+  bind .lb <Double-Button-1> {
+    set sel [lindex [.lb curselection] 0]
+    if {$sel ne ""} {
+      exec wish [info script] [file join $target [.lb get $sel]] &
+    }
+  }
+  return
+}
+
+wm title . "DSH Config Editor: $target"
+wm geometry . 900x640
+frame .bar
+button .bar.save -text "Save (Ctrl+S)" -command saveFile
+button .bar.close -text "Close (Ctrl+W)" -command exit
+label .bar.path -text $target -anchor w
+pack .bar.save .bar.close -side left -padx 3 -pady 3
+pack .bar.path -side left -fill x -expand true -padx 6
+pack .bar -side top -fill x
+
+text .txt -wrap word -undo true -yscrollcommand {.vs set} -font {TkFixedFont 11}
+scrollbar .vs -command {.txt yview}
+pack .txt -side left -fill both -expand true
+pack .vs -side right -fill y
+
+if {[catch {set fd [open $target r]; fconfigure $fd -encoding utf-8; set content [read $fd]; close $fd} err]} {
+  tk_messageBox -message "Open failed: $err" -type ok -icon warning
+  exit
+}
+.txt insert 1.0 $content
+focus .txt
+
+proc saveFile {} {
+  global target
+  if {[catch {
+    set fd [open $target w]
+    fconfigure $fd -encoding utf-8
+    puts -nonewline $fd [.txt get 1.0 end-1c]
+    close $fd
+  } err]} {
+    tk_messageBox -message "Save failed: $err" -type ok -icon error
+    return
+  }
+  .bar.save configure -text "Saved ✓"
+  after 1200 { .bar.save configure -text "Save (Ctrl+S)" }
+}
+bind .txt <Control-s> saveFile
+bind .txt <Control-w> exit
+bind . <Control-s> saveFile
+bind . <Control-w> exit
+SHIM
+RUN chmod 0755 /usr/local/bin/wslpath /usr/local/bin/powershell.exe /usr/local/bin/dsh-editor.tcl
 
 # 2. 安装最新官方 Golang 开发环境 (内置国内与海外加速源切换)
 ARG GO_VERSION=""
@@ -175,7 +295,7 @@ COPY gateway/ /app/gateway/
 COPY plugins/ /app/plugins/
 
 # 6. 安装网关依赖并赋予脚本执行权限
-RUN cd /app/gateway && npm install --production \
+RUN cd /app/gateway && npm install --omit=dev \
     && chmod +x /app/scripts/entrypoint.sh /app/scripts/chromium-docker \
     && ln -s /app/scripts/chromium-docker /usr/local/bin/chromium-docker
 

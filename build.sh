@@ -7,7 +7,9 @@ set -e
 #   ./build.sh --market -> 构建带预装插件清单的镜像 (deepseek-harness-docker:latest-market 及额外标签)
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.0.8"
+PROJ_VER="0.0.9"
+NODE_IMAGE="${NODE_IMAGE:-node:24-trixie}"
+NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
 DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
 DSH_VERSION="${DSH_NEXT:-$DSH_LATEST}"
@@ -16,11 +18,14 @@ DSH_VERSION="${DSH_NEXT:-$DSH_LATEST}"
 if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; then
   echo "========================================================="
   echo " 构建包含预装插件清单的 Market 镜像: ${IMAGE_NAME}:latest-market"
+  echo " 底座镜像 (Node/OS): ${NODE_IMAGE}"
   echo " 关联额外标签一(DSH版本): ${IMAGE_NAME}:${DSH_VERSION}-market"
   echo " 关联额外标签二(项目版本): ${IMAGE_NAME}:${PROJ_VER}-market"
   echo " 预装清单参考: plugins.market.list"
   echo "========================================================="
   docker build \
+    --build-arg NODE_IMAGE="${NODE_IMAGE}" \
+    --build-arg NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION}" \
     --build-arg PREINSTALL_PLUGINS=1 \
     --build-arg DSH_VERSION="${DSH_VERSION}" \
     -t "${IMAGE_NAME}:latest-market" \
@@ -36,11 +41,14 @@ if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; 
 else
   echo "========================================================="
   echo " 构建默认基础镜像: ${IMAGE_NAME}:latest (默认不预装插件)"
+  echo " 底座镜像 (Node/OS): ${NODE_IMAGE}"
   echo " 关联额外标签一(DSH版本): ${IMAGE_NAME}:${DSH_VERSION}"
   echo " 关联额外标签二(项目版本): ${IMAGE_NAME}:${PROJ_VER}"
   echo " 若需预装市场插件，请执行: ./build.sh --market"
   echo "========================================================="
   docker build \
+    --build-arg NODE_IMAGE="${NODE_IMAGE}" \
+    --build-arg NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION}" \
     --build-arg PREINSTALL_PLUGINS=0 \
     --build-arg DSH_VERSION="${DSH_VERSION}" \
     -t "${IMAGE_NAME}:latest" \
