@@ -716,11 +716,11 @@ server.on('upgrade', async (req, socket, head) => {
     return;
   }
 
-  // 3. VNC WebSocket 握手
+  // 3. VNC WebSocket 握手 (兼容版本化路径、相对路径与自定义前缀)
   const vncWsPath = VNC_PATH + '/websockify';
-  if (pathname === vncWsPath || pathname.startsWith(vncWsPath) || pathname === '/websockify') {
+  if (pathname === vncWsPath || pathname.startsWith(vncWsPath) || pathname === '/websockify' || pathname.endsWith('/websockify')) {
     desktopManager.touchActivity();
-    req.url = req.url.slice(VNC_PATH.length) || '/';
+    req.url = '/websockify' + (parsedUrl.search || '');
     return vncProxy.ws(req, socket, head);
   }
 
