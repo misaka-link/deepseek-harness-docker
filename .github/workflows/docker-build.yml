@@ -12,14 +12,66 @@ on:
       - 'v*'
     branches:
       - main
+    paths:
+      - 'build.sh'
+      - 'gateway/package.json'
 
 permissions:
   contents: read
   packages: write
 
 jobs:
+  check-version:
+    name: Check Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.version_detector.outputs.should_build }}
+      project_version: ${{ steps.version_detector.outputs.project_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect Version Change
+        id: version_detector
+        run: |
+          SHOULD_BUILD="true"
+
+          # 1. 手动 workflow_dispatch 触发
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            PROJ_VER="${{ github.event.inputs.version }}"
+            echo "✔ 手动触发 (workflow_dispatch)，指定版本: ${PROJ_VER}"
+
+          # 2. Git Tag 触发 (如 v0.0.9)
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            PROJ_VER="${BASH_REMATCH[1]}"
+            echo "✔ Git Tag 触发发布，版本: ${PROJ_VER}"
+
+          # 3. main 分支 push 触发：严格比对版本号是否变动
+          else
+            PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.0.8"
+
+            PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
+            echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
+
+            if [ -n "$PREV_VER" ] && [ "$PROJ_VER" = "$PREV_VER" ]; then
+              echo "⚠ 项目版本号未发生变动 (${PROJ_VER} == ${PREV_VER})，跳过镜像自动构建与发布！"
+              SHOULD_BUILD="false"
+            else
+              echo "✔ 检测到项目版本号变更 (${PREV_VER:-init} -> ${PROJ_VER})，触发镜像构建！"
+            fi
+          fi
+
+          PROJ_VER="${PROJ_VER#v}"
+          echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
+          echo "should_build=${SHOULD_BUILD}" >> $GITHUB_OUTPUT
+
   build-and-push:
     name: Build and Push (${{ matrix.variant }})
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -38,20 +90,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Determine Project Version
-        id: meta-version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            PROJ_VER="${{ github.event.inputs.version }}"
-          elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+.[0-9]+.[0-9]+.*)$ ]]; then
-            PROJ_VER="${BASH_REMATCH[1]}"
-          else
-            PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.0.8"
-          fi
-          PROJ_VER="${PROJ_VER#v}"
-          echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -69,9 +107,9 @@ jobs:
           IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
           SUFFIX="${{ matrix.suffix }}"
           LATEST_TAG="${{ matrix.latest_tag }}"
-          PROJ_VER="${{ steps.meta-version.outputs.project_version }}"
+          PROJ_VER="${{ needs.check-version.outputs.project_version }}"
 
-          # 1. 探测镜像内置的官方 DeepSeek Harness 核心版本号 (优先检查 next 候选标签)
+          # 探测内置的官方 DeepSeek Harness 核心版本号
           DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
           DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
           DSH_VERSION="${DSH_NEXT:-$DSH_LATEST}"
