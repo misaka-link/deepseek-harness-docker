@@ -155,10 +155,10 @@ for (const searchDir of SEARCH_DIRS) {
   if (fs.existsSync(generalClientTarget)) {
     try {
       let gContent = fs.readFileSync(generalClientTarget, 'utf8');
-      if (gContent.includes('function SettingsDocumentAction(') && !gContent.includes('function SettingsDocumentAction() { return null; }')) {
+      if (gContent.includes('function SettingsDocumentAction(') && !gContent.includes('function SettingsDocumentAction(props) { return null; }')) {
         gContent = gContent.replace(
-          /function SettingsDocumentAction\s*\([^)]*\)\s*\{[\s\S]*?\n(\t*\}|\s*\})/,
-          'function SettingsDocumentAction() { return null; }'
+          'function SettingsDocumentAction(',
+          'function SettingsDocumentAction(props) { return null; }\n\t\tfunction __ignored_SettingsDocumentAction('
         );
         fs.writeFileSync(generalClientTarget, gContent, 'utf8');
         console.log(`[patch-dsh-client] 成功消除“配置文件”按钮: ${generalClientTarget}`);
