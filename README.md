@@ -1,9 +1,9 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.0`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.1`  
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
 > 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.1`、`:0.1.6-alpha.1-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.0`、`:0.1.0-market`），精确锁定本容器套件自身的版本。
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.1`、`:0.1.1-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -48,8 +48,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.1`<br>(`...:dsh-0.1.6-alpha.1`) | `...:0.1.0`<br>(`...:v0.1.0`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.1-market`<br>(`...:dsh-0.1.6-alpha.1-market`) | `...:0.1.0-market`<br>(`...:v0.1.0-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.1`<br>(`...:dsh-0.1.6-alpha.1`) | `...:0.1.1`<br>(`...:v0.1.1`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.1-market`<br>(`...:dsh-0.1.6-alpha.1-market`) | `...:0.1.1-market`<br>(`...:v0.1.1-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
 
 ---
 
@@ -70,7 +70,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.1` 或项目版本 `:0.1.0`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.1` 或项目版本 `:0.1.1`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -85,7 +85,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.1-market` 或项目版本 `:0.1.0-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.1-market` 或项目版本 `:0.1.1-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -165,6 +165,26 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.1.1
+- 🛡️ **全方位安全加固与漏洞防御**：
+  - 修复登录跳转开放重定向漏洞，基于 WHATWG URL 规范严格白名单校验；
+  - 根治管理后台 DOM/存储型 XSS 隐患与内联属性执行问题；
+  - 拦截插件卸载路径穿越删除风险，增加包名白名单与目录沙箱作用域校验；
+  - 截图工具增加工作区路径约束，严禁 Agent 越界写入宿主敏感文件；
+  - 认证 Token 全流程脱敏防护，杜绝在 `/api/status`、导出快照及日志中明文落地。
+- ⚡ **单线程架构非阻塞重构与事件循环优化**：
+  - 后台版本探测采用原生异步 `fetch`，消除 `spawnSync` 阻塞主事件循环与网络会话流；
+  - 重构核心版本获取逻辑为轻量内存缓存，杜绝 8 秒轮询周期性卡死网关；
+  - 修复 `readJsonBody` 超限时的 Promise 悬挂与请求悬挂泄漏。
+- 🖥️ **虚拟桌面并发互斥与 FD 文件描述符回收**：
+  - 引入启动互斥锁并完善 `stop` 流程，避免并发请求重复启动与孤儿进程；
+  - 派生子进程后在父进程立即回收文件描述符，根治反复切换分辨率引发的 FD 持续累积泄漏；
+  - 修复 Chromium 启动脚本对 9222 端口的硬编码，恢复 CDP 真实受控启停。
+- 🔄 **网络自愈与环境纯净度闭环**：
+  - 底座补齐 `iproute2` 工具链，端口自愈增加原生端口探活双重兜底；
+  - 彻底剥离 `NODE_ENV=production` 向工作区渗透，避免 `npm install` 跳过 `devDependencies`；
+  - 修复 GitHub Actions 触发器（补齐 Git Tag 与 Main 分支自动触发），对齐 DSH 版本构建探测策略。
 
 ### v0.1.0
 - 🌟 **全面适配官方最新引擎 (`@deepseek-ai/dsh@0.1.6-alpha.1`)**：

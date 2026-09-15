@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.1.0)'
+        description: 'Project version tag (e.g. 0.1.1)'
         required: false
-        default: '0.1.0'
+        default: '0.1.1'
   push:
     branches:
       - main
@@ -50,7 +50,7 @@ jobs:
           # 3. main 分支 push 触发：严格比对版本号是否变动
           else
             PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.1.0"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.1.1"
 
             PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
             echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
