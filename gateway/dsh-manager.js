@@ -1,6 +1,7 @@
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 
 const DSH_PORT = Number(process.env.DSH_PORT) || 3079;
 const DSH_WORKSPACE = process.env.DSH_WORKSPACE || '/workspace';
@@ -34,6 +35,20 @@ function killPortProcess(port) {
   } catch {}
 }
 
+function isPortInUse(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') resolve(true);
+      else resolve(false);
+    });
+    server.once('listening', () => {
+      server.close(() => resolve(false));
+    });
+    server.listen(port, '127.0.0.1');
+  });
+}
+
 async function ensurePortReleased(port, timeoutMs = 3500) {
   killPortProcess(port);
   const start = Date.now();
@@ -45,6 +60,12 @@ async function ensurePortReleased(port, timeoutMs = 3500) {
         inUse = true;
       }
     } catch {}
+
+    // 若未查到，使用 Node net 模块作双重确认 (防 ss 缺失误判)
+    if (!inUse) {
+      inUse = await isPortInUse(port);
+    }
+
     if (!inUse) return true;
     killPortProcess(port);
     await new Promise(r => setTimeout(r, 150));
@@ -138,14 +159,9 @@ class DshManager {
   }
 
   getCurrentVersion() {
-    try {
-      const res = spawnSync('dsh', ['--version'], { encoding: 'utf8' });
-      if (res.status === 0 && res.stdout.trim()) {
-        const v = res.stdout.trim();
-        this.lastKnownVersion = v;
-        return v;
-      }
-    } catch {}
+    if (this.lastKnownVersion) {
+      return this.lastKnownVersion;
+    }
 
     const paths = [
       '/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json',
@@ -162,23 +178,53 @@ class DshManager {
         }
       } catch {}
     }
+
+    try {
+      const res = spawnSync('dsh', ['--version'], { encoding: 'utf8', timeout: 3000 });
+      if (res.status === 0 && res.stdout.trim()) {
+        const v = res.stdout.trim();
+        this.lastKnownVersion = v;
+        return v;
+      }
+    } catch {}
+
     return this.lastKnownVersion || '0.1.6-alpha.1';
   }
 
   async fetchAvailableVersions(force = false) {
-    const env = { ...process.env, NPM_CONFIG_REGISTRY: this.registry };
+    let distTags = {};
+    let versions = [];
 
-    const runNpm = (args) => {
-      try {
-        const fullArgs = [...args, '--cache=/tmp/.npm-cache'];
-        const res = spawnSync('npm', fullArgs, { env, encoding: 'utf8', timeout: 30000 });
-        if (res.status === 0) return JSON.parse(res.stdout.trim());
-      } catch {}
-      return null;
-    };
+    // 优先使用原生异步 fetch 请求 registry，绝不阻塞主事件循环
+    try {
+      const regUrl = this.registry.replace(/\/+$/, '') + '/@deepseek-ai/dsh';
+      const resp = await fetch(regUrl, { signal: AbortSignal.timeout(6000) });
+      if (resp.ok) {
+        const pkgData = await resp.json();
+        distTags = pkgData['dist-tags'] || {};
+        versions = Object.keys(pkgData.versions || {});
+      }
+    } catch (fetchErr) {
+      // 网络或镜像源异常时，回退至非阻塞异步 npm view
+      const runNpmAsync = (args) => new Promise((resolve) => {
+        const child = spawn('npm', [...args, '--cache=/tmp/.npm-cache'], {
+          env: { ...process.env, NPM_CONFIG_REGISTRY: this.registry }
+        });
+        let out = '';
+        child.stdout.on('data', d => out += d);
+        child.on('close', (code) => {
+          if (code === 0 && out.trim()) {
+            try { resolve(JSON.parse(out.trim())); } catch { resolve(null); }
+          } else {
+            resolve(null);
+          }
+        });
+        child.on('error', () => resolve(null));
+      });
+      distTags = (await runNpmAsync(['view', '@deepseek-ai/dsh', 'dist-tags', '--json'])) || {};
+      versions = (await runNpmAsync(['view', '@deepseek-ai/dsh', 'versions', '--json'])) || [];
+    }
 
-    const distTags = runNpm(['view', '@deepseek-ai/dsh', 'dist-tags', '--json']) || {};
-    const versions = runNpm(['view', '@deepseek-ai/dsh', 'versions', '--json']) || [];
     const current = this.getCurrentVersion();
     const latest = distTags.latest || (Array.isArray(versions) && versions.length > 0 ? versions[versions.length - 1] : '');
     const isUpToDate = Boolean(current && latest && compareSemver(current, latest) >= 0);
@@ -235,8 +281,11 @@ class DshManager {
       const logStream = fs.createWriteStream(DSH_WEB_LOG, { flags: 'a' });
       const env = {
         ...process.env,
-        DSH_PORT: String(DSH_PORT)
+        DSH_PORT: String(DSH_PORT),
+        PROXY_PORT: String(process.env.PROXY_PORT || 3080)
       };
+      // 彻底剥离 NODE_ENV=production，恢复纯净开发环境，避免工作区 install 跳过 devDependencies
+      delete env.NODE_ENV;
 
       const p = spawn('dsh', ['web', '--port', String(DSH_PORT), '--no-open'], {
         cwd: DSH_WORKSPACE,

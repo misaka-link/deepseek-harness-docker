@@ -35,6 +35,7 @@ class DesktopManager {
     // Start background idle watchdog
     this.watchdogTimer = setInterval(() => this.checkIdleWatchdog(), 15000);
     this.watchdogTimer.unref();
+    this.startPromise = null;
   }
 
   touchActivity(durationMinutes) {
@@ -67,6 +68,16 @@ class DesktopManager {
   }
 
   async start(options = {}) {
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+    this.startPromise = this._startInternal(options).finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
+  }
+
+  async _startInternal(options = {}) {
     if (this.running) {
       const reqWidth = options.width ? Number(options.width) : null;
       const reqHeight = options.height ? Number(options.height) : null;
@@ -74,6 +85,9 @@ class DesktopManager {
           (reqHeight && reqHeight !== this.config.height)) {
         console.log(`[desktop-manager] 收到分辨率变更请求 (${this.config.width}x${this.config.height} -> ${reqWidth}x${reqHeight})，重新应用分辨率...`);
         return this.restart(options);
+      }
+      if (typeof options.idleTimeoutMinutes === 'number') {
+        this.config.idleTimeoutMinutes = options.idleTimeoutMinutes;
       }
       this.touchActivity(options.durationMinutes);
       return { ok: true, alreadyRunning: true, status: this.getStatus() };
@@ -83,6 +97,9 @@ class DesktopManager {
     const height = Number(options.height) || this.config.height;
     this.config.width = width;
     this.config.height = height;
+    if (typeof options.idleTimeoutMinutes === 'number') {
+      this.config.idleTimeoutMinutes = options.idleTimeoutMinutes;
+    }
     const durationMinutes = options.durationMinutes;
 
     console.log(`[desktop-manager] 启动虚拟桌面 (分辨率: ${width}x${height}, CDP: ${this.config.enableCdp ? this.config.cdpPort : '关闭'})...`);
@@ -94,13 +111,14 @@ class DesktopManager {
       fs.rmSync(path.join(this.config.userDataDir, 'SingletonSocket'), { force: true });
     } catch {}
 
-    // 1. Start Xvfb (using synchronous fd for reliable stdio)
+    // 1. Start Xvfb (派生后立即在父进程中 closeSync，防 FD 持续累积泄漏)
     const xvfbFd = fs.openSync(path.join(this.config.logsDir, 'xvfb.log'), 'a');
     this.processes.xvfb = spawn('Xvfb', [
       this.config.display,
       '-screen', '0', `${width}x${height}x${this.config.depth}`,
       '-ac', '-nolisten', 'tcp'
     ], { stdio: ['ignore', xvfbFd, xvfbFd] });
+    try { fs.closeSync(xvfbFd); } catch {}
 
     // Wait for X display to become ready
     let displayReady = false;
@@ -116,7 +134,7 @@ class DesktopManager {
 
     if (!displayReady) {
       console.error('[desktop-manager] Xvfb 显示服务启动失败或超时');
-      this.stop();
+      await this.stop();
       return { ok: false, error: 'Xvfb 虚拟显示服务启动失败' };
     }
 
@@ -125,6 +143,7 @@ class DesktopManager {
     // 2. Start Openbox
     const obFd = fs.openSync(path.join(this.config.logsDir, 'openbox.log'), 'a');
     this.processes.openbox = spawn('openbox', [], { env, stdio: ['ignore', obFd, obFd] });
+    try { fs.closeSync(obFd); } catch {}
 
     // 3. Start x11vnc
     const vncFd = fs.openSync(path.join(this.config.logsDir, 'x11vnc.log'), 'a');
@@ -133,14 +152,17 @@ class DesktopManager {
       '-forever', '-shared', '-repeat', '-noxdamage',
       '-rfbport', '5900', '-localhost', '-nopw'
     ], { env, stdio: ['ignore', vncFd, vncFd] });
+    try { fs.closeSync(vncFd); } catch {}
 
     // 4. Start websockify (noVNC web at /usr/share/novnc)
+    const vncPort = Number(process.env.VNC_PORT) || 6080;
     const wsFd = fs.openSync(path.join(this.config.logsDir, 'novnc.log'), 'a');
     this.processes.websockify = spawn('websockify', [
       '--web=/usr/share/novnc',
-      '127.0.0.1:6080',
+      `127.0.0.1:${vncPort}`,
       '127.0.0.1:5900'
     ], { stdio: ['ignore', wsFd, wsFd] });
+    try { fs.closeSync(wsFd); } catch {}
 
     // 5. Start Chromium
     const chromeArgs = [
@@ -161,6 +183,7 @@ class DesktopManager {
       env,
       stdio: ['ignore', chromeFd, chromeFd]
     });
+    try { fs.closeSync(chromeFd); } catch {}
 
     this.running = true;
     this.startedAt = Date.now();
@@ -170,7 +193,10 @@ class DesktopManager {
     return { ok: true, status: this.getStatus() };
   }
 
-  stop() {
+  async stop() {
+    if (this.startPromise) {
+      try { await this.startPromise; } catch {}
+    }
     if (!this.running) return { ok: true, alreadyStopped: true };
 
     console.log('[desktop-manager] 正在停止浏览器与桌面所有进程...');
@@ -196,7 +222,7 @@ class DesktopManager {
   }
 
   async restart(options = {}) {
-    this.stop();
+    await this.stop();
     await new Promise(r => setTimeout(r, 1000));
     return this.start(options);
   }

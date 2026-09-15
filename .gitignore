@@ -42,7 +42,9 @@ scripts/mcp-remote-*.mjs
 scripts/remote-*.mjs
 scripts/test-runner-*.sh
 remote-test-*.png
+doc/remote-test-*.png
 screenshot*.png
+.cache/
 
 
 

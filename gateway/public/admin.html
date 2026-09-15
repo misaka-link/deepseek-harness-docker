@@ -699,8 +699,12 @@
           <div class="form-group">
             <label class="form-label">访问认证码 (AUTH_TOKEN)</label>
             <div style="display:flex; gap:6px;">
-              <input type="password" id="editAuthToken" class="form-control" placeholder="留空则禁用认证直通" />
+              <input type="password" id="editAuthToken" class="form-control" placeholder="留空则保持现有设置不变" />
               <button class="btn" type="button" onclick="toggleTokenVisible()">显示</button>
+            </div>
+            <div style="margin-top:6px; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" id="clearAuthCheckbox" style="cursor:pointer;" />
+              <label for="clearAuthCheckbox" style="cursor:pointer; user-select:none;">清除现有访问口令 (开放免密直通)</label>
             </div>
           </div>
           <div class="form-group">
@@ -943,17 +947,17 @@
           actionBtns = '<span style="color:var(--text-muted); font-size:12px;">受保护 (系统必备)</span>';
         } else {
           const toggleBtn = p.enabled
-            ? `<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="togglePlugin('${escapeHtml(p.name)}', false)">禁用</button>`
-            : `<button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="togglePlugin('${escapeHtml(p.name)}', true)">启用</button>`;
+            ? `<button class="btn btn-danger btn-plugin-toggle" style="padding:4px 10px; font-size:12px;" data-enable="false">禁用</button>`
+            : `<button class="btn btn-primary btn-plugin-toggle" style="padding:4px 10px; font-size:12px;" data-enable="true">启用</button>`;
           
           const uninstallBtn = !p.isCustom
-            ? `<button class="btn btn-danger" style="padding:4px 10px; font-size:12px; margin-left:6px;" onclick="uninstallPlugin('${escapeHtml(p.name)}')" title="彻底删除文件与Patch">卸载</button>`
+            ? `<button class="btn btn-danger btn-plugin-uninstall" style="padding:4px 10px; font-size:12px; margin-left:6px;" title="彻底删除文件与Patch">卸载</button>`
             : '';
           actionBtns = toggleBtn + uninstallBtn;
         }
 
         return `
-          <tr>
+          <tr data-plugin-name="${escapeHtml(p.name)}">
             <td>
               <div style="font-weight:600; font-size:13px; color:var(--text-main);">${escapeHtml(p.name)}</div>
             </td>
@@ -970,6 +974,25 @@
         `;
       }).join('');
     }
+
+    // 委托绑定插件按钮点击事件，彻底消除内联 onclick 转义漏洞
+    document.getElementById('pluginsTableBody').addEventListener('click', (e) => {
+      const toggleBtn = e.target.closest('.btn-plugin-toggle');
+      if (toggleBtn) {
+        const tr = toggleBtn.closest('tr');
+        const name = tr?.dataset?.pluginName;
+        const enable = toggleBtn.dataset.enable === 'true';
+        if (name) togglePlugin(name, enable);
+        return;
+      }
+      const uninstallBtn = e.target.closest('.btn-plugin-uninstall');
+      if (uninstallBtn) {
+        const tr = uninstallBtn.closest('tr');
+        const name = tr?.dataset?.pluginName;
+        if (name) uninstallPlugin(name);
+        return;
+      }
+    });
 
     async function togglePlugin(name, enable) {
       const action = enable ? '启用' : '禁用';
@@ -1072,6 +1095,10 @@
     async function loadStatus() {
       try {
         const res = await fetch(`${adminBase}/api/status`);
+        if (res.status === 401) {
+          window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
+          return;
+        }
         const data = await res.json();
         currentData = data;
         const curVer = data.dsh?.version || 'unknown';
@@ -1169,15 +1196,41 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           timerInfo.textContent = '休眠策略: 始终保持运行';
         }
 
-        // Fill Settings Form
-        document.getElementById('editProxyPort').value = data.paths?.proxyPort || 3080;
-        document.getElementById('editAdminPath').value = data.paths?.admin || '/admin';
-        document.getElementById('editVncPath').value = data.paths?.vnc || '/vnc';
-        document.getElementById('editAuthToken').value = data.authToken || '';
-        document.getElementById('editResolution').value = (data.desktop?.width && data.desktop?.height) ? `${data.desktop.width}x${data.desktop.height}` : '1440x900';
-        document.getElementById('editIdleTimeout').value = String(data.desktop?.idleTimeoutMinutes !== undefined ? data.desktop.idleTimeoutMinutes : 30);
-        document.getElementById('editEnableCdp').value = data.desktop?.enableCdp ? 'true' : 'false';
-        document.getElementById('editCdpPort').value = data.desktop?.cdpPort || 9222;
+        // Desktop Tab 回填 (避免点击启动时重置分辨率或休眠设置)
+        const currentDesktopRes = (data.desktop?.width && data.desktop?.height) ? `${data.desktop.width}x${data.desktop.height}` : '1440x900';
+        const desktopResSelect = document.getElementById('desktopResolution');
+        if (desktopResSelect && document.activeElement !== desktopResSelect) {
+          desktopResSelect.value = currentDesktopRes;
+        }
+        const desktopIdleSelect = document.getElementById('desktopIdleTimeout');
+        if (desktopIdleSelect && document.activeElement !== desktopIdleSelect && data.desktop?.idleTimeoutMinutes !== undefined) {
+          desktopIdleSelect.value = String(data.desktop.idleTimeoutMinutes);
+        }
+
+        // Settings Form 回填 (仅在用户未处于输入状态时更新，杜绝轮询覆盖用户编辑)
+        const settingsTab = document.getElementById('settingsTab') || document.getElementById('tab-settings');
+        const isEditingSettings = settingsTab && settingsTab.contains(document.activeElement);
+        if (!isEditingSettings) {
+          document.getElementById('editProxyPort').value = data.paths?.proxyPort || 3080;
+          document.getElementById('editAdminPath').value = data.paths?.admin || '/admin';
+          document.getElementById('editVncPath').value = data.paths?.vnc || '/vnc';
+          document.getElementById('editResolution').value = currentDesktopRes;
+          document.getElementById('editIdleTimeout').value = String(data.desktop?.idleTimeoutMinutes !== undefined ? data.desktop.idleTimeoutMinutes : 30);
+          document.getElementById('editEnableCdp').value = data.desktop?.enableCdp ? 'true' : 'false';
+          document.getElementById('editCdpPort').value = data.desktop?.cdpPort || 9222;
+
+          const tokenInput = document.getElementById('editAuthToken');
+          if (tokenInput && document.activeElement !== tokenInput) {
+            tokenInput.placeholder = data.hasAuthToken
+              ? '•••••••• (已设置访问口令，留空则保持不变)'
+              : '未设置口令 (留空则保持免密直通)';
+            tokenInput.value = '';
+          }
+          const clearCheckbox = document.getElementById('clearAuthCheckbox');
+          if (clearCheckbox && document.activeElement !== clearCheckbox) {
+            clearCheckbox.checked = false;
+          }
+        }
       } catch (err) {
         console.error('loadStatus error:', err);
       }
@@ -1635,16 +1688,47 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           const tr = document.createElement('tr');
           const timeStr = new Date(s.createdAt).toLocaleString();
           const isDefault = s.filename.includes('default');
-          tr.innerHTML = `
-            <td><strong>${s.filename}</strong> ${isDefault ? '<span class="status-badge status-running" style="font-size:11px; padding:2px 6px;">出厂初始</span>' : ''}</td>
-            <td>${s.sizeFormatted}</td>
-            <td>${timeStr}</td>
-            <td style="text-align:right;">
-              <button class="btn" onclick="restoreSnapshot('${s.filename}')">还原</button>
-              <a class="btn" href="${adminBase}/api/snapshots/download?file=${encodeURIComponent(s.filename)}">下载</a>
-              <button class="btn btn-danger" onclick="deleteSnapshot('${s.filename}')">删除</button>
-            </td>
-          `;
+
+          const tdName = document.createElement('td');
+          const strong = document.createElement('strong');
+          strong.textContent = s.filename;
+          tdName.appendChild(strong);
+          if (isDefault) {
+            const badge = document.createElement('span');
+            badge.className = 'status-badge status-running';
+            badge.style.cssText = 'font-size:11px; padding:2px 6px; margin-left:6px;';
+            badge.textContent = '出厂初始';
+            tdName.appendChild(badge);
+          }
+
+          const tdSize = document.createElement('td');
+          tdSize.textContent = s.sizeFormatted;
+
+          const tdTime = document.createElement('td');
+          tdTime.textContent = timeStr;
+
+          const tdAction = document.createElement('td');
+          tdAction.style.textAlign = 'right';
+
+          const btnRestore = document.createElement('button');
+          btnRestore.className = 'btn';
+          btnRestore.textContent = '还原';
+          btnRestore.addEventListener('click', () => restoreSnapshot(s.filename));
+
+          const linkDownload = document.createElement('a');
+          linkDownload.className = 'btn';
+          linkDownload.style.marginLeft = '6px';
+          linkDownload.textContent = '下载';
+          linkDownload.href = `${adminBase}/api/snapshots/download?file=${encodeURIComponent(s.filename)}`;
+
+          const btnDelete = document.createElement('button');
+          btnDelete.className = 'btn btn-danger';
+          btnDelete.style.marginLeft = '6px';
+          btnDelete.textContent = '删除';
+          btnDelete.addEventListener('click', () => deleteSnapshot(s.filename));
+
+          tdAction.append(btnRestore, linkDownload, btnDelete);
+          tr.append(tdName, tdSize, tdTime, tdAction);
           tbody.appendChild(tr);
         });
       } catch (err) {
@@ -1771,7 +1855,8 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       const newPort = parseInt(document.getElementById('editProxyPort').value) || 3080;
       const newAdmin = document.getElementById('editAdminPath').value.trim() || '/admin';
       const newVnc = document.getElementById('editVncPath').value.trim() || '/vnc';
-      const newToken = document.getElementById('editAuthToken').value.trim();
+      const rawToken = document.getElementById('editAuthToken').value.trim();
+      const clearAuth = document.getElementById('clearAuthCheckbox')?.checked || false;
       const newRes = document.getElementById('editResolution').value;
       const newIdle = parseInt(document.getElementById('editIdleTimeout').value);
       const newEnableCdp = document.getElementById('editEnableCdp').value === 'true';
@@ -1780,7 +1865,6 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       const oldPort = currentData.paths?.proxyPort || 3080;
       const oldAdmin = currentData.paths?.admin || '/admin';
       const oldVnc = currentData.paths?.vnc || '/vnc';
-      const oldToken = currentData.authToken || '';
       const oldRes = (currentData.desktop?.width && currentData.desktop?.height) ? `${currentData.desktop.width}x${currentData.desktop.height}` : '1440x900';
       const oldIdle = currentData.desktop?.idleTimeoutMinutes !== undefined ? currentData.desktop.idleTimeoutMinutes : 30;
       const oldEnableCdp = currentData.desktop?.enableCdp ? true : false;
@@ -1790,7 +1874,11 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       if (newPort !== oldPort) diffs.push(`服务端口: ${oldPort} -> ${newPort}`);
       if (newAdmin !== oldAdmin) diffs.push(`管理后台路径: ${oldAdmin} -> ${newAdmin}`);
       if (newVnc !== oldVnc) diffs.push(`桌面 VNC 路径: ${oldVnc} -> ${newVnc}`);
-      if (newToken !== oldToken) diffs.push(`访问认证码: ${oldToken ? '已修改' : '新增设置'}`);
+      if (rawToken) {
+        diffs.push('访问认证码: 设置/更新为新口令');
+      } else if (clearAuth && currentData.hasAuthToken) {
+        diffs.push('访问认证码: 清除口令 (设为免密直通)');
+      }
       if (newRes !== oldRes) diffs.push(`桌面分辨率: ${oldRes} -> ${newRes}`);
       if (newIdle !== oldIdle) diffs.push(`空闲休眠时间: ${oldIdle}分钟 -> ${newIdle}分钟`);
       if (newEnableCdp !== oldEnableCdp) diffs.push(`CDP 远程调试: ${oldEnableCdp ? '开' : '关'} -> ${newEnableCdp ? '开' : '关'}`);
@@ -1804,7 +1892,8 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         proxyPort: newPort,
         adminPath: newAdmin,
         vncPath: newVnc,
-        authToken: newToken,
+        authToken: rawToken ? rawToken : undefined,
+        clearAuthToken: clearAuth,
         resolution: newRes,
         idleTimeoutMinutes: newIdle,
         enableCdp: newEnableCdp,
@@ -1812,7 +1901,13 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       };
 
       const container = document.getElementById('diffListContainer');
-      container.innerHTML = diffs.map(d => `<div class="diff-item">• ${d}</div>`).join('');
+      container.innerHTML = '';
+      diffs.forEach(d => {
+        const div = document.createElement('div');
+        div.className = 'diff-item';
+        div.textContent = '• ' + d;
+        container.appendChild(div);
+      });
 
       document.getElementById('diffPortWarning').style.display = newPort !== oldPort ? 'block' : 'none';
       document.getElementById('confirmModal').style.display = 'flex';
@@ -1838,16 +1933,23 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         const data = await res.json();
 
         if (data.ok) {
+          const newProtocol = window.location.protocol;
           const newHost = window.location.hostname;
           const newPort = data.newPort;
           const newPath = data.newAdminPath;
-          const targetUrl = `http://${newHost}:${newPort}${newPath}/`;
+          const portPart = (newProtocol === 'http:' && newPort === 80) || (newProtocol === 'https:' && newPort === 443)
+            ? ''
+            : `:${newPort}`;
+          const targetUrl = `${newProtocol}//${newHost}${portPart}${newPath}/`;
 
-          document.querySelector('.modal-box').innerHTML = `
+          const modalBox = document.querySelector('.modal-box');
+          modalBox.innerHTML = `
             <h3 style="color:#10b981; margin-bottom:12px;">✅ 配置保存成功</h3>
-            <p style="font-size:13px; line-height:1.6; margin-bottom:14px;">网关服务正在重启生效。<br />新管理后台地址为：<br /><strong>${targetUrl}</strong></p>
+            <p style="font-size:13px; line-height:1.6; margin-bottom:14px;">网关服务正在重启生效。<br />新管理后台地址为：<br /><strong id="targetUrlDisplay"></strong></p>
             <p style="color:#64748b; font-size:12px;" id="redirectCountdown">将在 3 秒后自动跳转...</p>
           `;
+          const urlElem = document.getElementById('targetUrlDisplay');
+          if (urlElem) urlElem.textContent = targetUrl;
 
           let cd = 3;
           const timer = setInterval(() => {

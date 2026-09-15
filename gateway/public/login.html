@@ -301,12 +301,20 @@
     const urlParams = new URLSearchParams(window.location.search);
     function getSafeRedirect(raw) {
       if (!raw || typeof raw !== 'string') return '/';
-      raw = raw.trim();
-      // 防止开放重定向与 javascript: 协议注入：只允许单个斜杠开头的内部相对路径
-      if (/^\/[^\/\\]/.test(raw) || raw === '/') {
-        return raw;
+      try {
+        // 使用 WHATWG URL 严格限定 origin 必须与当前站点完全一致，彻底杜绝 //, /\\, \\t 等解析旁路
+        const parsed = new URL(raw, window.location.origin);
+        if (parsed.origin !== window.location.origin) {
+          return '/';
+        }
+        const path = parsed.pathname + parsed.search + parsed.hash;
+        if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\') || /[\x00-\x1f\s]/.test(path)) {
+          return '/';
+        }
+        return path;
+      } catch {
+        return '/';
       }
-      return '/';
     }
     const redirectUrl = getSafeRedirect(urlParams.get('redirect'));
 

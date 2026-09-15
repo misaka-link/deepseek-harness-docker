@@ -169,7 +169,17 @@ function getPlugins() {
   return { ok: true, plugins: list };
 }
 
+function isValidPluginName(name) {
+  if (!name || typeof name !== 'string') return false;
+  // 仅允许标准合法 npm 包名 (如 "dshmarket", "@scope/package")，彻底杜绝相对路径字符与路径穿越
+  const npmRegex = /^(@[a-z0-9_.-]+\/)?[a-z0-9_.-]+$/i;
+  return npmRegex.test(name) && !name.includes('..');
+}
+
 function togglePlugin(name, enable) {
+  if (!isValidPluginName(name)) {
+    throw new Error('非法或不安全的插件名称: ' + name);
+  }
   if (CORE_PACKAGES.has(name)) {
     throw new Error('系统核心组件 (' + name + ') 不允许禁用，否则会导致系统无法运行');
   }
@@ -201,6 +211,9 @@ function togglePlugin(name, enable) {
 }
 
 function uninstallPlugin(name) {
+  if (!isValidPluginName(name)) {
+    throw new Error('非法或不安全的插件名称: ' + name);
+  }
   if (CORE_PACKAGES.has(name)) {
     throw new Error('系统核心组件 (' + name + ') 不允许卸载');
   }
@@ -230,8 +243,13 @@ function uninstallPlugin(name) {
   // 3. 清除 cordis 补丁残留
   cleanPatchForPlugin(name);
 
-  // 4. 清理 node_modules 目录与插件数据目录
-  const pluginDir = path.join(MOD_DIR, name);
+  // 4. 清理 node_modules 目录与插件数据目录 (严格沙箱前缀校验)
+  const pluginDir = path.resolve(MOD_DIR, name);
+  const resolvedModDir = path.resolve(MOD_DIR);
+  if (!pluginDir.startsWith(resolvedModDir + path.sep)) {
+    throw new Error('检测到非法越界删除操作，已拦截: ' + pluginDir);
+  }
+
   try {
     if (fs.existsSync(pluginDir)) {
       fs.rmSync(pluginDir, { recursive: true, force: true });
@@ -240,9 +258,11 @@ function uninstallPlugin(name) {
     console.warn('[plugin-manager] 删除 node_modules 插件目录失败:', err.message);
   }
 
-  const dataDir = path.join(PLUGINS_DATA_DIR, name.replace(/^@.*\//, ''));
+  const sanitizedScopeName = name.replace(/^@.*\//, '');
+  const dataDir = path.resolve(PLUGINS_DATA_DIR, sanitizedScopeName);
+  const resolvedDataDir = path.resolve(PLUGINS_DATA_DIR);
   try {
-    if (fs.existsSync(dataDir)) {
+    if (dataDir.startsWith(resolvedDataDir + path.sep) && fs.existsSync(dataDir)) {
       fs.rmSync(dataDir, { recursive: true, force: true });
     }
   } catch {}

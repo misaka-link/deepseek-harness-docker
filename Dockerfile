@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     procps \
     psmisc \
+    iproute2 \
     locales \
     python3 \
     python-is-python3 \
@@ -301,7 +302,7 @@ RUN cd /app/gateway && npm install --omit=dev \
 
 # 7. 配置工作目录与挂载卷声明
 WORKDIR /workspace
-VOLUME ["/root/.dsh", "/workspace", "/root/.config/chromium"]
+VOLUME ["/root/.dsh", "/root/.dsh-snapshots", "/workspace", "/root/.config/chromium"]
 
 # 8. 暴露统一对外的服务端口
 EXPOSE 3080

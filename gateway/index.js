@@ -60,6 +60,7 @@ if (persisted.desktop) {
 
 // ── 端口与动态路径配置 ───────────────────────────────────────
 const PROXY_PORT = Number(persisted.proxyPort || process.env.PROXY_PORT) || 3080;
+process.env.PROXY_PORT = String(PROXY_PORT);
 const DSH_PORT = Number(process.env.DSH_PORT) || 3079;
 const VNC_PORT = Number(process.env.VNC_PORT) || 6080;
 
@@ -237,7 +238,10 @@ function readJsonBody(req) {
     let body = '';
     req.on('data', chunk => {
       body += chunk;
-      if (body.length > 1024 * 512) req.destroy();
+      if (body.length > 1024 * 512) {
+        req.destroy(new Error('Payload too large'));
+        reject(new Error('请求体过大 (超过 512KB)'));
+      }
     });
     req.on('end', () => {
       try {
@@ -274,7 +278,8 @@ async function handleAdminApi(req, res, pathname, query) {
           proxyPort: PROXY_PORT
         },
         authEnabled: isAuthEnabled(),
-        authToken: getAuthToken()
+        authToken: isAuthEnabled() && getAuthToken() ? '******' : '',
+        hasAuthToken: Boolean(getAuthToken())
       });
     }
 
@@ -467,11 +472,18 @@ async function handleAdminApi(req, res, pathname, query) {
       const height = parseInt(parts[1]) || 900;
       const idleTimeoutMinutes = body.idleTimeoutMinutes !== undefined ? Number(body.idleTimeoutMinutes) : 30;
 
+      let updatedToken = getAuthToken();
+      if (body.clearAuthToken === true) {
+        updatedToken = '';
+      } else if (body.authToken !== undefined && body.authToken !== '' && body.authToken !== '******') {
+        updatedToken = String(body.authToken).trim();
+      }
+
       const newCfg = {
         proxyPort: newPort,
         adminPath: newAdmin,
         vncPath: newVnc,
-        authToken: body.authToken !== undefined ? String(body.authToken).trim() : getAuthToken(),
+        authToken: updatedToken,
         desktop: {
           width,
           height,
@@ -487,7 +499,11 @@ async function handleAdminApi(req, res, pathname, query) {
         return sendJson(res, 500, { ok: false, error: '持久化配置文件写入失败' });
       }
 
-      console.log('[gateway] 管理后台提交新配置:', newCfg);
+      const logSafeCfg = {
+        ...newCfg,
+        authToken: newCfg.authToken ? '******' : ''
+      };
+      console.log('[gateway] 管理后台提交新配置:', logSafeCfg);
 
       // 返回跳转新 URL 信息
       sendJson(res, 200, {
@@ -640,6 +656,19 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ ok: false, error: '未授权，请先登录' }));
     }
+  }
+
+  // 3.5 稳定桌面插件接口 (经鉴权后可用，提供与 ADMIN_PATH 解耦的稳定基准路径)
+  if (pathname === '/__api/desktop/status' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      desktop: desktopManager.getStatus(),
+      paths: { admin: ADMIN_PATH, vnc: VNC_PATH, proxyPort: PROXY_PORT }
+    });
+  }
+  if (pathname === '/__api/desktop/start' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const r = await desktopManager.start(body);
+    return sendJson(res, r.ok ? 200 : 500, r);
   }
 
   // 4. 自定义 Admin 路由 (ADMIN_PATH)

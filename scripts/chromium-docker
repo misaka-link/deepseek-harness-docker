@@ -10,6 +10,4 @@ exec /usr/bin/chromium \
   --no-first-run \
   --no-default-browser-check \
   --password-store=basic \
-  --remote-debugging-address=127.0.0.1 \
-  --remote-debugging-port=9222 \
   "$@"

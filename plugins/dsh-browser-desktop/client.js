@@ -49,8 +49,8 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         const storedSidebarTab = typeof localStorage !== 'undefined' && localStorage.getItem('dsh_desktop_enable_sidebar_tab') === 'true';
-        fetch('/admin/api/status')
-          .then(r => r.json())
+        fetch('/__api/desktop/status')
+          .then(r => r.ok ? r.json() : fetch('/admin/api/status').then(r2 => r2.json()))
           .then(data => {
             if (data && data.desktop) {
               const loaded = {
@@ -62,6 +62,9 @@ window.__ModuleLoader__.load({
                 vncPath: data.paths?.vnc || '/vnc',
                 enableSidebarTab: data.desktop.enableSidebarTab !== undefined ? !!data.desktop.enableSidebarTab : storedSidebarTab
               };
+              if (typeof localStorage !== 'undefined' && data.paths?.vnc) {
+                localStorage.setItem('dsh_desktop_vnc_path', data.paths.vnc);
+              }
               setForm(loaded);
               setInitialForm(loaded);
             }
@@ -93,19 +96,27 @@ window.__ModuleLoader__.load({
           const width = parseInt(parts[0]) || 1440;
           const height = parseInt(parts[1]) || 900;
           
-          await fetch('/admin/api/desktop/start', {
+          const startPayload = {
+            width,
+            height,
+            durationMinutes: form.idleTimeoutMinutes,
+            idleTimeoutMinutes: form.idleTimeoutMinutes,
+            enableCdp: form.enableCdp,
+            cdpPort: form.cdpPort,
+            enableSidebarTab: form.enableSidebarTab
+          };
+          const startRes = await fetch('/__api/desktop/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              width,
-              height,
-              durationMinutes: form.idleTimeoutMinutes,
-              idleTimeoutMinutes: form.idleTimeoutMinutes,
-              enableCdp: form.enableCdp,
-              cdpPort: form.cdpPort,
-              enableSidebarTab: form.enableSidebarTab
-            })
+            body: JSON.stringify(startPayload)
           });
+          if (!startRes.ok) {
+            await fetch('/admin/api/desktop/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(startPayload)
+            });
+          }
 
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem('dsh_desktop_enable_sidebar_tab', String(form.enableSidebarTab));
@@ -339,7 +350,8 @@ window.__ModuleLoader__.load({
 
     // 右侧边栏专用内嵌 VNC 容器组件 (当开关开启且上游环境支持 SidebarRight 时渲染)
     function VncDesktopSidebarPane() {
-      const vncUrl = '/vnc/?autoconnect=1&resize=scale';
+      const storedVncPath = typeof localStorage !== 'undefined' ? (localStorage.getItem('dsh_desktop_vnc_path') || '/vnc') : '/vnc';
+      const vncUrl = `${storedVncPath.replace(/\/+$/, '')}/?autoconnect=1&resize=scale`;
       const [reloadKey, setReloadKey] = React.useState(1);
 
       return React.createElement(

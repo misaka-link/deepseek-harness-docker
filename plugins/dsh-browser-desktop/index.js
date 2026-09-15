@@ -21,6 +21,7 @@ export const Config = z.object({
 export function apply(ctx, config = {}) {
   // 实时配置状态，初始由系统注入，随设置中心热更新动态刷新
   let activeConfig = {
+    enabled: true,
     resolution: '1920x1080',
     screenshotQuality: 'high',
     screenshotDir: '',
@@ -36,12 +37,12 @@ export function apply(ctx, config = {}) {
   const cdpBase = () => `http://127.0.0.1:${cdpPort()}`;
   const vncPath = () => activeConfig.vncPath || '/vnc';
 
-  // 内部网关管理接口基地址
-  const gatewayControlUrl = `http://127.0.0.1:${process.env.PROXY_PORT || 3080}/__internal/desktop`;
+  // 内部网关管理接口基地址 (动态读取 PROXY_PORT)
+  const gatewayControlUrl = () => `http://127.0.0.1:${process.env.PROXY_PORT || 3080}/__internal/desktop`;
 
   async function callDesktopManager(endpoint, body = {}) {
     try {
-      const res = await fetch(`${gatewayControlUrl}/${endpoint}`, {
+      const res = await fetch(`${gatewayControlUrl()}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -218,6 +219,7 @@ export function apply(ctx, config = {}) {
     // 2. 若 AI 未提供 savePath：在当前项目工作区（或配置的子目录）自动生成时间戳唯一文件名，绝不覆盖历史截图；
     // 3. 严格尊重 AI 指定的文件扩展名与路径，不再强制将 .png 改名为 .jpg。
     const projectDir = sessionCwd || process.cwd();
+    const resolvedProjectDir = path.resolve(projectDir);
     const baseDir = (activeConfig.screenshotDir && activeConfig.screenshotDir.trim())
       ? path.resolve(projectDir, activeConfig.screenshotDir.trim())
       : projectDir;
@@ -225,7 +227,16 @@ export function apply(ctx, config = {}) {
     let targetFile;
     if (typeof savePath === 'string' && savePath.trim()) {
       const trimmed = savePath.trim();
-      targetFile = path.isAbsolute(trimmed) ? trimmed : path.resolve(projectDir, trimmed);
+      const resolved = path.isAbsolute(trimmed) ? path.resolve(trimmed) : path.resolve(projectDir, trimmed);
+
+      // 工作区边界沙箱检查：严禁跳出当前会话工作区 (防护 Prompt Injection 越界写宿主关键配置)
+      if (!resolved.startsWith(resolvedProjectDir + path.sep) && resolved !== resolvedProjectDir) {
+        const safeBase = path.basename(trimmed) || `screenshot-${Date.now()}`;
+        targetFile = path.resolve(baseDir, safeBase);
+      } else {
+        targetFile = resolved;
+      }
+
       // 如果没有扩展名，根据画质自动补齐合适后缀
       if (!path.extname(targetFile)) {
         targetFile += (isHigh ? '.png' : '.jpg');
@@ -396,6 +407,9 @@ export function apply(ctx, config = {}) {
       }]
     },
     async execute(args, exec) {
+      if (activeConfig.enabled === false) {
+        throw new Error('容器图形浏览器桌面已在设置中心被禁用');
+      }
       if (!args || typeof args.url !== 'string') {
         throw new Error('url 参数必须是非空字符串');
       }
@@ -448,6 +462,9 @@ export function apply(ctx, config = {}) {
       }]
     },
     async execute(args, exec) {
+      if (activeConfig.enabled === false) {
+        throw new Error('容器图形浏览器桌面已在设置中心被禁用');
+      }
       const rawPath = typeof args?.savePath === 'string' ? args.savePath.trim() : null;
       const sessionCwd = exec?.agent?.session?.header?.cwd || process.cwd();
       return captureScreenshotDual(rawPath, args?.quality, args?.tabId, sessionCwd);
@@ -493,6 +510,9 @@ export function apply(ctx, config = {}) {
       }]
     },
     async execute(args) {
+      if (activeConfig.enabled === false) {
+        throw new Error('容器图形浏览器桌面已在设置中心被禁用');
+      }
       // 标签页查询与管理动作
       if (args.action === 'tabs') {
         try {
@@ -604,9 +624,11 @@ export function apply(ctx, config = {}) {
     }
   });
 
-  ctx.systemPrompt.section({
-    name: 'tool:browser_tools',
-    order: 110,
-    text: 'When you need to view or interact with a webpage, call browser_open (by default it reuses or navigates the active tab to save container memory; pass newTab: true only when you explicitly need multiple tabs open side-by-side; returns tabId). You can call browser_screenshot to capture a screenshot: you can pass your own savePath (supports relative or absolute path, e.g. "screenshot.png" or "doc/preview.png"; if omitted, a unique timestamped file is auto-generated in the current project workspace so previous captures are never overwritten), tabId (optional, targets a specific tab), and quality (high, medium, low). When done with a specific webpage task, call browser_control with action: "close_tab" (optionally specifying tabId) to close that tab, or action: "close_all_tabs" to reset to blank. Call browser_control with action: "stop" only when all browser tasks are completely finished and the entire desktop should be shut down.'
-  });
+  if (activeConfig.enabled !== false) {
+    ctx.systemPrompt.section({
+      name: 'tool:browser_tools',
+      order: 110,
+      text: 'When you need to view or interact with a webpage, call browser_open (by default it reuses or navigates the active tab to save container memory; pass newTab: true only when you explicitly need multiple tabs open side-by-side; returns tabId). You can call browser_screenshot to capture a screenshot: you can pass your own savePath (supports relative or absolute path, e.g. "screenshot.png" or "doc/preview.png"; if omitted, a unique timestamped file is auto-generated in the current project workspace so previous captures are never overwritten), tabId (optional, targets a specific tab), and quality (high, medium, low). When done with a specific webpage task, call browser_control with action: "close_tab" (optionally specifying tabId) to close that tab, or action: "close_all_tabs" to reset to blank. Call browser_control with action: "stop" only when all browser tasks are completely finished and the entire desktop should be shut down.'
+    });
+  }
 }

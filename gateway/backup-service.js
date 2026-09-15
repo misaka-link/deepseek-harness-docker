@@ -4,6 +4,7 @@ const path = require('path');
 
 const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
 const DSH_DIR = '/root/.dsh';
+const DSH_PORT = Number(process.env.DSH_PORT) || 3079;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024; // 300MB
 
 try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
@@ -98,7 +99,8 @@ async function createBackup(name = '') {
       '--warning=no-file-changed',
       '--exclude=.dsh/.pnpm-store',
       '--exclude=**/node_modules/.cache',
-      '--exclude=.dsh/tmp'
+      '--exclude=.dsh/tmp',
+      '--exclude=.dsh/gateway.config.json'
     ];
 
     if (isMultiThread) {
@@ -173,7 +175,7 @@ async function restoreBackup(filename, dshManager) {
     if (dshManager && typeof dshManager.stop === 'function') {
       await dshManager.stop();
     }
-    try { spawnSync('fuser', ['-k', '-9', '3079/tcp'], { stdio: 'ignore' }); } catch {}
+    try { spawnSync('fuser', ['-k', '-9', `${DSH_PORT}/tcp`], { stdio: 'ignore' }); } catch {}
     try {
       const psOut = spawnSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8' });
       if (psOut.status === 0 && psOut.stdout) {

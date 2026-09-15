@@ -90,17 +90,38 @@ if (fs.existsSync(pkgPath)) {
   }
 }
 
-// 4. 清除 cordis.patch.yml 中的重复 insert 项
+// 4. 清除 cordis.patch.yml 中的重复 insert 项 (按顶级条目结构化过滤，绝不误伤相邻插件)
 if (fs.existsSync(patchPath)) {
   try {
-    let content = fs.readFileSync(patchPath, 'utf8');
-    if (content.includes('- insert:') && content.includes('dsh-browser-desktop')) {
-      content = content.replace(/- insert:[\s\S]*?dsh-browser-desktop[\s\S]*?(?=- |$)/g, '').trim();
-      if (!content || content === '') content = '[]';
-      fs.writeFileSync(patchPath, content + '\n', 'utf8');
+    const rawYaml = fs.readFileSync(patchPath, 'utf8');
+    if (rawYaml.includes('- insert:') && rawYaml.includes('dsh-browser-desktop')) {
+      const lines = rawYaml.split('\n');
+      const entries = [];
+      let current = [];
+      let header = [];
+      let started = false;
+
+      for (const line of lines) {
+        if (/^-\s+/.test(line)) {
+          started = true;
+          if (current.length > 0) entries.push(current.join('\n'));
+          current = [line];
+        } else if (!started) {
+          header.push(line);
+        } else {
+          current.push(line);
+        }
+      }
+      if (current.length > 0) entries.push(current.join('\n'));
+
+      const filtered = entries.filter(e => !e.includes('dsh-browser-desktop') || !/insert:/i.test(e));
+      const res = (header.length > 0 ? header.join('\n') + '\n' : '') + filtered.join('\n');
+      fs.writeFileSync(patchPath, res.trim() + '\n', 'utf8');
       console.log('[install-plugin] 清除 cordis.patch.yml 中多余的 insert 条目成功');
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[install-plugin] 处理 cordis.patch.yml 失败:', e.message);
+  }
 }
 
 // 5. 自动在 DSH 存储库中初始化默认工作区
@@ -170,11 +191,29 @@ if (fs.existsSync(pathPluginSource)) {
   }
 }
 
-// 7. 自动识别并装配已预装的 Market 插件 (如 dshmarket, @hytime/dsh-thinking-effort)
+// 7. 自动识别并装配已预装的 Market 插件 (从 plugins.market.list 动态同步，避免双份维护脱节)
 const marketPlugins = [
   { id: 'dshmarket', name: 'dshmarket', path: '/usr/local/lib/node_modules/dshmarket' },
   { id: 'dsh-thinking-effort', name: '@hytime/dsh-thinking-effort', path: '/usr/local/lib/node_modules/@hytime/dsh-thinking-effort' }
 ];
+
+const listFile = '/app/plugins.market.list';
+if (fs.existsSync(listFile)) {
+  try {
+    const listLines = fs.readFileSync(listFile, 'utf8').split('\n');
+    for (const line of listLines) {
+      const clean = line.replace(/#.*/, '').trim();
+      if (clean && !marketPlugins.some(item => item.name === clean)) {
+        const shortId = clean.replace(/^@.*\//, '');
+        marketPlugins.push({
+          id: shortId,
+          name: clean,
+          path: path.join('/usr/local/lib/node_modules', clean)
+        });
+      }
+    }
+  } catch {}
+}
 
 for (const p of marketPlugins) {
   if (fs.existsSync(p.path)) {

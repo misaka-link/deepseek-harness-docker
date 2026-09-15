@@ -156,13 +156,12 @@ for (const searchDir of SEARCH_DIRS) {
     try {
       let gContent = fs.readFileSync(generalClientTarget, 'utf8');
       if (gContent.includes('function SettingsDocumentAction(') && !gContent.includes('function SettingsDocumentAction() { return null; }')) {
-        const startIdx = gContent.indexOf('function SettingsDocumentAction(');
-        const endIdx = gContent.indexOf('//#endregion', startIdx);
-        if (startIdx !== -1 && endIdx !== -1) {
-          gContent = gContent.slice(0, startIdx) + 'function SettingsDocumentAction() { return null; }\n\t\t' + gContent.slice(endIdx);
-          fs.writeFileSync(generalClientTarget, gContent, 'utf8');
-          console.log(`[patch-dsh-client] 成功消除“配置文件”按钮: ${generalClientTarget}`);
-        }
+        gContent = gContent.replace(
+          /function SettingsDocumentAction\s*\([^)]*\)\s*\{[\s\S]*?\n(\t*\}|\s*\})/,
+          'function SettingsDocumentAction() { return null; }'
+        );
+        fs.writeFileSync(generalClientTarget, gContent, 'utf8');
+        console.log(`[patch-dsh-client] 成功消除“配置文件”按钮: ${generalClientTarget}`);
       }
     } catch (err) {
       console.warn(`[patch-dsh-client] 消除设置页按钮失败: ${err.message}`);
