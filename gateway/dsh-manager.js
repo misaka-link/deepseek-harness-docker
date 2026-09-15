@@ -53,6 +53,7 @@ async function ensurePortReleased(port, timeoutMs = 3500) {
 }
 
 const DEFAULT_ADAPTED_VERSIONS = [
+  '0.1.6-alpha.1',
   '0.1.5-rc.2',
   '0.1.5-rc.1',
   '0.1.2-rc.1'
@@ -161,7 +162,7 @@ class DshManager {
         }
       } catch {}
     }
-    return this.lastKnownVersion || '0.1.5-rc.2';
+    return this.lastKnownVersion || '0.1.6-alpha.1';
   }
 
   async fetchAvailableVersions(force = false) {
