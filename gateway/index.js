@@ -598,7 +598,9 @@ function isAllowedWsOrigin(req) {
   const origin = req.headers['origin'];
   if (!origin) return true;
   try {
-    return new URL(origin).host === req.headers['host'];
+    const originHost = new URL(origin).host;
+    const reqHost = req.headers['x-forwarded-host'] || req.headers['host'];
+    return originHost === reqHost || originHost === '127.0.0.1' || originHost === 'localhost';
   } catch {
     return false;
   }
