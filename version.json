@@ -1,0 +1,44 @@
+{
+  "project": "deepseek-harness-docker",
+  "name": "DeepSeek Harness Docker 套件",
+  "description": "专为官方 DeepSeek Harness 打造的开箱即用容器化套件与可视化 Web Admin 控制台",
+  "repo": {
+    "projectUrl": "https://github.com/misaka-link/deepseek-harness-docker",
+    "projectReleases": "https://github.com/misaka-link/deepseek-harness-docker/releases",
+    "upstreamRepo": "https://github.com/deepseek-ai/deepseek-harness",
+    "upstreamReleases": "https://github.com/deepseek-ai/deepseek-harness/releases",
+    "upstreamNpm": "https://www.npmjs.com/package/@deepseek-ai/dsh"
+  },
+  "latest": {
+    "version": "0.1.1",
+    "releaseDate": "2026-09-15",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1",
+    "changelog": "优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)"
+  },
+  "compatibility": {
+    "recommendedDsh": "0.1.6-alpha.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.6-alpha.2",
+    "adaptedVersions": [
+      "0.1.6-alpha.2",
+      "0.1.6-alpha.1",
+      "0.1.5-rc.2",
+      "0.1.5-rc.1",
+      "0.1.2-rc.1"
+    ],
+    "rules": [
+      {
+        "pattern": "<0.1.5-rc.1",
+        "level": "warning",
+        "title": "向后降级格式风险",
+        "message": "官方自 0.1.5-rc.1 起采用了全新的会话存储结构，向下降级至 0.1.5 以下可能导致新格式会话无法向前兼容读取。"
+      },
+      {
+        "pattern": ">=0.2.0",
+        "level": "danger",
+        "title": "底层协议重大重构 · 不再兼容在线切换",
+        "message": "官方 DSH 0.2.x 调整了底层 RPC 与连接鉴权体系，当前容器底层镜像无法直接在线热切换。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！",
+        "action": "force-docker-pull"
+      }
+    ]
+  }
+}

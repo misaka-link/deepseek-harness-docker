@@ -46,6 +46,107 @@
     .nav-logo { width: 32px; height: 32px; background: linear-gradient(135deg, #1677ff, #0284c7); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; }
     .nav-badge { padding: 3px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; background: #e0f2fe; color: #0284c7; }
     .nav-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* 多级预设状态徽标胶囊 (5 级态势体系) */
+    .badge-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .badge-status-pill:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    /* 级别 1: 绿色 正常 / 最新 */
+    .badge-status-success {
+      background: #ecfdf5;
+      color: #065f46;
+      border-color: #a7f3d0;
+    }
+    .badge-status-success .badge-dot {
+      background: #10b981;
+      box-shadow: 0 0 0 2px #d1fae5;
+    }
+
+    /* 级别 2: 蓝色 一般 / 发现新版 */
+    .badge-status-info {
+      background: #eff6ff;
+      color: #1e40af;
+      border-color: #bfdbfe;
+    }
+    .badge-status-info .badge-dot {
+      background: #3b82f6;
+      box-shadow: 0 0 0 2px #dbeafe;
+    }
+
+    /* 级别 3: 琥珀金 警告 / 待适配 / 潜在差异 */
+    .badge-status-warning {
+      background: #fffbeb;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+    .badge-status-warning .badge-dot {
+      background: #f59e0b;
+      box-shadow: 0 0 0 2px #fef3c7;
+    }
+
+    /* 级别 4: 绯红 严重危险 / 架构破坏 / 不再兼容 */
+    .badge-status-danger {
+      background: #fef2f2;
+      color: #991b1b;
+      border-color: #fecaca;
+      animation: pulseDanger 2s infinite ease-in-out;
+    }
+    .badge-status-danger .badge-dot {
+      background: #ef4444;
+      box-shadow: 0 0 0 2px #fee2e2;
+    }
+
+    /* 级别 5: 中性灰 离线 / 默认 */
+    .badge-status-neutral {
+      background: #f1f5f9;
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+    .badge-status-neutral .badge-dot {
+      background: #94a3b8;
+      box-shadow: 0 0 0 2px #e2e8f0;
+    }
+
+    @keyframes pulseDanger {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+      50% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+    }
+
+    .btn-nav-link {
+      background: #f8fafc;
+      color: var(--text-muted);
+      border-color: var(--card-border);
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .btn-nav-link:hover {
+      background: #ffffff;
+      color: var(--text-main);
+      border-color: #94a3b8;
+    }
     .btn {
       padding: 7px 14px;
       border-radius: var(--radius-md);
@@ -370,16 +471,46 @@
 <body>
   <!-- Navbar -->
   <header class="navbar">
-    <a href="/" class="nav-brand">
-      <div class="nav-logo">
-        <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <a href="/" class="nav-brand">
+        <div class="nav-logo">
+          <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <span>DeepSeek Harness 管理面板</span>
+      </a>
+
+      <!-- 双版本与安全态势徽标组 (点击呼出版本更新中心) -->
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="badge-status-pill badge-status-success" id="headerProjectBadge" onclick="openVersionHubModal()" title="点击查看容器套件版本状态与更新说明">
+          <span class="badge-dot"></span>
+          <span id="headerProjectText">容器套件 v0.1.1</span>
+        </div>
+        <div class="badge-status-pill badge-status-neutral" id="headerDshBadge" onclick="openVersionHubModal()" title="点击查看 DSH 核心状态与官方动态">
+          <span class="badge-dot"></span>
+          <span id="headerDshText">DSH 核心 v...</span>
+        </div>
       </div>
-      <span>DeepSeek Harness 管理面板</span>
-      <span class="nav-badge" id="headerVersionBadge">v...</span>
-    </a>
+    </div>
+
     <div class="nav-actions">
+      <!-- Issue #3: 本项目与 DSH 官方仓库快速跳转直达链接 -->
+      <div style="display:flex; align-items:center; gap:6px; margin-right:2px;">
+        <a href="https://github.com/misaka-link/deepseek-harness-docker" target="_blank" class="btn btn-nav-link" id="linkRepoProject" title="访问 deepseek-harness-docker 本项目仓库与 Releases">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>本项目 ↗</span>
+        </a>
+        <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" class="btn btn-nav-link" id="linkRepoDsh" title="访问官方 deepseek-ai/deepseek-harness 仓库与 Releases">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          <span>DSH 官方 ↗</span>
+        </a>
+      </div>
+
       <a href="/" class="btn" id="linkToWorkspace">进入工作区</a>
       <a href="/vnc/" target="_blank" class="btn" id="linkToVnc">打开桌面 (VNC)</a>
       <a href="/logout" class="btn btn-danger" title="退出并清除当前设备登录状态">
@@ -439,11 +570,14 @@
               <span class="badge-chip chip-blue" id="heroLatestTag">latest</span>
             </div>
             <div class="version-hero-val" id="heroLatestVersion">v...</div>
-            <div class="version-hero-meta">
+            <div class="version-hero-meta" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <span class="badge-chip chip-green" id="heroUpdateStatusChip">✔ 当前已是最新版本</span>
               <button class="btn" style="padding:2px 10px; font-size:11px; display:none;" id="btnQuickSelectLatest" onclick="quickSelectLatestVersion()">
                 一键选用最新版
               </button>
+              <a id="heroLatestReleaseLink" href="https://github.com/deepseek-ai/deepseek-harness/releases" target="_blank" class="btn" style="padding:2px 8px; font-size:11px; text-decoration:none;" title="前往 GitHub 查看官方 Release 说明">
+                Release 说明 ↗
+              </a>
             </div>
           </div>
 
@@ -799,6 +933,23 @@
           </div>
         </div>
 
+        <!-- 警报 0：严重危险！底层架构破坏/不再兼容在线切换 (danger 级别) -->
+        <div class="notice-card notice-danger" id="modalIncompatibleDangerWarn" style="display:none; margin-bottom:10px; border-left:4px solid #ef4444;">
+          <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;color:#dc2626;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+          </svg>
+          <div>
+            <div style="font-weight:700; margin-bottom:2px; color:#991b1b;" id="modalIncompatibleTitle">⛔ 严重预警：底层架构重大重构 · 不再兼容在线切换</div>
+            <div id="modalIncompatibleMsg">官方该版本调整了底层架构与通信协议，当前 Docker 镜像底座无法直接在线热切换。切勿在线强制切换，否则可能导致容器服务异常！强烈建议直接重新拉取最新 Docker 镜像重新部署。</div>
+            <div style="margin-top:6px;">
+              <a id="modalIncompatibleReleaseLink" href="https://github.com/deepseek-ai/deepseek-harness/releases" target="_blank" style="color:#b91c1c; font-weight:600; text-decoration:underline; font-size:12px;">
+                前往官方 GitHub Releases 查看详细更新日志 ↗
+              </a>
+            </div>
+          </div>
+        </div>
+
         <!-- 警报 1：高危！降级破坏性变更警告 (从 0.1.5+ 往旧版降级时触发) -->
         <div class="notice-card notice-danger" id="modalDowngradeWarn" style="display:none; margin-bottom:10px;">
           <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -861,6 +1012,109 @@
         <button class="btn btn-primary" onclick="executeInstallConfirmed(true)" id="btnModalAutoBackup">
           ⭐ 一键备份并切换 (推荐)
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 版本与更新控制中心模态弹窗 -->
+  <div class="modal-overlay" id="versionHubModal" style="display:none;">
+    <div class="modal-box" style="max-width: 620px;">
+      <div class="modal-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <svg style="width:20px;height:20px;color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span style="font-size:16px; font-weight:700;">版本与更新控制中心</span>
+        </div>
+        <button onclick="closeVersionHubModal()" style="background:transparent; border:none; cursor:pointer; color:var(--text-muted); font-size:20px; line-height:1;" title="关闭">&times;</button>
+      </div>
+
+      <div class="modal-body" style="margin-bottom:18px;">
+        <!-- 容器套件状态卡片 -->
+        <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:14px 16px; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px;">
+              <span style="color:var(--primary);">📦 本项目容器套件 (Docker Suite)</span>
+            </div>
+            <span class="badge-status-pill badge-status-success" id="hubProjectStatusBadge">检测中...</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px; margin-bottom:10px;">
+            <div style="background:#ffffff; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 12px;">
+              <span style="color:var(--text-muted); display:block; margin-bottom:3px;">本地容器套件版本</span>
+              <strong id="hubProjectCurrent" style="font-size:14px; color:var(--text-main);">v0.1.1</strong>
+            </div>
+            <div style="background:#ffffff; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 12px;">
+              <span style="color:var(--text-muted); display:block; margin-bottom:3px;">远端最新版本</span>
+              <strong id="hubProjectLatest" style="font-size:14px; color:var(--primary);">v0.1.1</strong>
+            </div>
+          </div>
+
+          <div id="hubProjectNoticeBox" class="notice-card notice-info" style="margin-bottom:10px; font-size:12px; line-height:1.5;">
+            <div><strong>🎉 运行良好：</strong>本项目容器套件当前已处于最新稳定版本。</div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; flex-wrap:wrap; gap:8px;">
+            <a id="hubProjectReleaseLink" href="https://github.com/misaka-link/deepseek-harness-docker/releases" target="_blank" class="btn" style="font-size:12px; padding:4px 10px;">
+              <span>查看本项目 Releases ↗</span>
+            </a>
+            <a href="https://github.com/misaka-link/deepseek-harness-docker" target="_blank" style="color:var(--text-muted); text-decoration:none; font-size:12px;">
+              前往 GitHub 源码仓库 ↗
+            </a>
+          </div>
+        </div>
+
+        <!-- 官方 DSH 核心引擎状态卡片 -->
+        <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:14px 16px; margin-bottom:6px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px;">
+              <span style="color:#0284c7;">⚡ 官方 DSH 核心引擎 (@deepseek-ai/dsh)</span>
+            </div>
+            <span class="badge-status-pill badge-status-neutral" id="hubDshStatusBadge">检测中...</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px; margin-bottom:10px;">
+            <div style="background:#ffffff; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 12px;">
+              <span style="color:var(--text-muted); display:block; margin-bottom:3px;">当前运行核心版本</span>
+              <strong id="hubDshCurrent" style="font-size:14px; color:var(--text-main);">v...</strong>
+            </div>
+            <div style="background:#ffffff; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 12px;">
+              <span style="color:var(--text-muted); display:block; margin-bottom:3px;">官方最新发布 (npm)</span>
+              <strong id="hubDshLatest" style="font-size:14px; color:#0284c7;">v...</strong>
+            </div>
+          </div>
+
+          <div id="hubDshNoticeBox" class="notice-card notice-info" style="margin-bottom:10px; font-size:12px; line-height:1.5;">
+            <div><strong>✔ 稳定就绪：</strong>当前核心版本已针对本镜像进行深度适配，运行正常。</div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; flex-wrap:wrap; gap:8px;">
+            <a id="hubDshReleaseLink" href="https://github.com/deepseek-ai/deepseek-harness/releases" target="_blank" class="btn" style="font-size:12px; padding:4px 10px;">
+              <span>查看官方 DSH Releases ↗</span>
+            </a>
+            <div style="display:flex; gap:10px;">
+              <a href="https://www.npmjs.com/package/@deepseek-ai/dsh" target="_blank" style="color:var(--text-muted); text-decoration:none; font-size:12px;">
+                npm 官方包页 ↗
+              </a>
+              <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" style="color:var(--text-muted); text-decoration:none; font-size:12px;">
+                官方仓库 ↗
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn" onclick="fetchVersionCheck(true)" id="btnRefreshVersionCheck">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span>重新检测更新</span>
+        </button>
+        <button class="btn btn-primary" onclick="closeVersionHubModal()">关闭</button>
       </div>
     </div>
   </div>
@@ -1075,10 +1329,190 @@
     let availableCachedVersions = [];
     let availableAdaptedVersions = [];
     let availableDistTags = {};
+    let availableEvaluations = {};
+    let versionCheckData = null;
     let latestVersion = '';
     let currentVersion = '';
     let hasLoggedInitialBanner = false;
     let pendingInstallVersion = '';
+
+    // ── 版本检测与多级安全态势预警中枢 ─────────────────────────
+    async function fetchVersionCheck(force = false) {
+      const btn = document.getElementById('btnRefreshVersionCheck');
+      if (btn && force) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>正在检测中...</span>';
+      }
+      try {
+        const res = await fetch(`${adminBase}/api/version/check?refresh=${force ? '1' : '0'}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !data.ok) return;
+        versionCheckData = data;
+
+        const proj = data.project || {};
+        const dsh = data.dsh || {};
+
+        // 1. 更新顶部栏【容器套件】版本胶囊状态
+        const pBadge = document.getElementById('headerProjectBadge');
+        const pText = document.getElementById('headerProjectText');
+        if (pBadge && pText) {
+          pBadge.className = `badge-status-pill badge-status-${proj.level || 'success'}`;
+          let pLabel = `容器套件 v${proj.current || '0.1.1'}`;
+          if (proj.level === 'danger') {
+            pLabel += ' • 不再兼容 ⛔';
+          } else if (proj.hasUpdate) {
+            pLabel += ' • 发现新版 ↗';
+          }
+          pText.textContent = pLabel;
+        }
+
+        // 2. 更新顶部栏【DSH 核心】版本胶囊状态
+        const dBadge = document.getElementById('headerDshBadge');
+        const dText = document.getElementById('headerDshText');
+        if (dBadge && dText) {
+          dBadge.className = `badge-status-pill badge-status-${dsh.level || 'neutral'}`;
+          let dLabel = `DSH 核心 v${dsh.current || currentVersion || '...'}`;
+          if (dsh.level === 'danger') {
+            dLabel += ' • 异常警示 ⛔';
+          } else if (dsh.hasUpdate) {
+            dLabel += ' • 有新版 ↗';
+          }
+          dText.textContent = dLabel;
+        }
+
+        // 3. 更新 Issue #3 快速跳转直达链接
+        const linkProj = document.getElementById('linkRepoProject');
+        if (linkProj && proj.projectUrl) linkProj.href = proj.projectUrl;
+        const linkDsh = document.getElementById('linkRepoDsh');
+        if (linkDsh && dsh.upstreamRepo) linkDsh.href = dsh.upstreamRepo;
+
+        // 4. 更新 Hero 看板上的 Release 链接
+        const heroRelLink = document.getElementById('heroLatestReleaseLink');
+        if (heroRelLink && dsh.upstreamReleases) {
+          heroRelLink.href = dsh.upstreamReleases;
+        }
+
+        // 5. 同步渲染版本控制与更新中心弹窗
+        renderVersionHubModal(data);
+      } catch (err) {
+        console.warn('版本检测请求异常:', err);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `
+            <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>重新检测更新</span>
+          `;
+        }
+      }
+    }
+
+    function renderVersionHubModal(data) {
+      if (!data) return;
+      const proj = data.project || {};
+      const dsh = data.dsh || {};
+
+      // 容器套件卡片渲染
+      const curElem = document.getElementById('hubProjectCurrent');
+      if (curElem) curElem.textContent = 'v' + (proj.current || '0.1.1');
+      const latElem = document.getElementById('hubProjectLatest');
+      if (latElem) latElem.textContent = 'v' + (proj.latest || proj.current || '0.1.1');
+
+      const hubProjBadge = document.getElementById('hubProjectStatusBadge');
+      if (hubProjBadge) {
+        hubProjBadge.className = `badge-status-pill badge-status-${proj.level || 'success'}`;
+        if (proj.level === 'danger') hubProjBadge.textContent = '⛔ 架构破坏 / 不再兼容';
+        else if (proj.level === 'warning') hubProjBadge.textContent = '⚠️ 存在底座适配建议';
+        else if (proj.hasUpdate) hubProjBadge.textContent = '💡 发现新版可用';
+        else hubProjBadge.textContent = '✔ 当前已是最新版';
+      }
+
+      const hubProjNotice = document.getElementById('hubProjectNoticeBox');
+      if (hubProjNotice) {
+        if (proj.level === 'danger') {
+          hubProjNotice.className = 'notice-card notice-danger';
+          hubProjNotice.style.background = '#fef2f2';
+          hubProjNotice.style.borderColor = '#fecaca';
+          hubProjNotice.style.color = '#991b1b';
+          hubProjNotice.innerHTML = `<div><strong>⛔ 严重架构破坏预警：</strong>新版调整了底层关键协议或依赖，当前旧容器无法直接兼容，请重新拉取最新 Docker 镜像重新部署。</div>`;
+        } else if (proj.hasUpdate) {
+          hubProjNotice.className = 'notice-card notice-info';
+          hubProjNotice.style.background = '#eff6ff';
+          hubProjNotice.style.borderColor = '#bfdbfe';
+          hubProjNotice.style.color = '#1e40af';
+          hubProjNotice.innerHTML = `<div><strong>💡 发现新版本 (v${escapeHtml(proj.latest)})：</strong>${escapeHtml(proj.changelog || '包含系统与控制台功能优化')}</div>`;
+        } else {
+          hubProjNotice.className = 'notice-card notice-info';
+          hubProjNotice.style.background = '#f0fdf4';
+          hubProjNotice.style.borderColor = '#bbf7d0';
+          hubProjNotice.style.color = '#166534';
+          hubProjNotice.innerHTML = `<div><strong>🎉 运行良好：</strong>本项目容器套件当前已处于最新稳定版本，环境健康。</div>`;
+        }
+      }
+
+      const hubProjRel = document.getElementById('hubProjectReleaseLink');
+      if (hubProjRel) hubProjRel.href = proj.releaseUrl || proj.projectReleases || 'https://github.com/misaka-link/deepseek-harness-docker/releases';
+
+      // DSH 核心引擎卡片渲染
+      const dshCurElem = document.getElementById('hubDshCurrent');
+      if (dshCurElem) dshCurElem.textContent = 'v' + (dsh.current || currentVersion || '...');
+      const dshLatElem = document.getElementById('hubDshLatest');
+      if (dshLatElem) dshLatElem.textContent = dsh.latest ? 'v' + dsh.latest : '检测中...';
+
+      const hubDshBadge = document.getElementById('hubDshStatusBadge');
+      if (hubDshBadge) {
+        hubDshBadge.className = `badge-status-pill badge-status-${dsh.level || 'neutral'}`;
+        if (dsh.level === 'danger') hubDshBadge.textContent = '⛔ 不再兼容在线热切';
+        else if (dsh.level === 'warning') hubDshBadge.textContent = '⚠️ 未经特殊适配';
+        else if (dsh.hasUpdate) hubDshBadge.textContent = '💡 官方新发布可用';
+        else hubDshBadge.textContent = '✔ 官方深度适配稳定版';
+      }
+
+      const hubDshNotice = document.getElementById('hubDshNoticeBox');
+      if (hubDshNotice) {
+        if (dsh.notice && dsh.notice.message) {
+          hubDshNotice.className = `notice-card notice-${dsh.notice.level || 'info'}`;
+          hubDshNotice.innerHTML = `<div><strong>${escapeHtml(dsh.notice.title || '核心状态提示')}：</strong>${escapeHtml(dsh.notice.message)}</div>`;
+        } else if (dsh.hasUpdate) {
+          hubDshNotice.className = 'notice-card notice-info';
+          hubDshNotice.style.background = '#eff6ff';
+          hubDshNotice.style.borderColor = '#bfdbfe';
+          hubDshNotice.style.color = '#1e40af';
+          hubDshNotice.innerHTML = `<div><strong>💡 官方新发布：</strong>上游已发布 v${escapeHtml(dsh.latest)}，可在【DSH 版本管理】面板中评估并按需切换。</div>`;
+        } else {
+          hubDshNotice.className = 'notice-card notice-info';
+          hubDshNotice.style.background = '#f0fdf4';
+          hubDshNotice.style.borderColor = '#bbf7d0';
+          hubDshNotice.style.color = '#166534';
+          hubDshNotice.innerHTML = `<div><strong>✔ 稳定运行：</strong>当前核心版本已针对本容器镜像进行了深度适配与回环兼容补丁注入。</div>`;
+        }
+      }
+
+      const hubDshRel = document.getElementById('hubDshReleaseLink');
+      if (hubDshRel) hubDshRel.href = dsh.upstreamReleases || 'https://github.com/deepseek-ai/deepseek-harness/releases';
+    }
+
+    function openVersionHubModal() {
+      const m = document.getElementById('versionHubModal');
+      if (m) {
+        m.style.display = 'flex';
+        if (versionCheckData) {
+          renderVersionHubModal(versionCheckData);
+        } else {
+          fetchVersionCheck(false);
+        }
+      }
+    }
+
+    function closeVersionHubModal() {
+      const m = document.getElementById('versionHubModal');
+      if (m) m.style.display = 'none';
+    }
 
     function toggleTokenVisible() {
       const input = document.getElementById('editAuthToken');
@@ -1104,8 +1538,16 @@
         const curVer = data.dsh?.version || 'unknown';
         currentVersion = curVer;
 
-        // Navbar & Version
-        document.getElementById('headerVersionBadge').textContent = 'v' + curVer;
+        // Navbar Dual Badges
+        const curProjVer = data.project?.version || '0.1.1';
+        const pText = document.getElementById('headerProjectText');
+        if (pText && !pText.textContent.includes('•')) {
+          pText.textContent = `容器套件 v${curProjVer}`;
+        }
+        const dText = document.getElementById('headerDshText');
+        if (dText && !dText.textContent.includes('•')) {
+          dText.textContent = `DSH 核心 v${curVer}`;
+        }
         document.getElementById('linkToVnc').href = data.paths?.vnc || '/vnc/';
         document.getElementById('vncDirectBtn').href = data.paths?.vnc || '/vnc/';
 
@@ -1248,7 +1690,8 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         availableDistTags = tags;
         const versions = data.versions || [];
         availableCachedVersions = data.cachedVersions || [];
-        availableAdaptedVersions = data.adaptedVersions || ['0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        availableAdaptedVersions = data.adaptedVersions || ['0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        availableEvaluations = data.versionEvaluations || {};
         currentVersion = data.current || currentVersion;
         latestVersion = data.latest || tags.latest || '';
 
@@ -1306,10 +1749,16 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
 
           let label = v;
           if (matchedTags.length > 0) label += ` (${matchedTags.join(', ')})`;
-          if (isAdapted) {
-            label += ' [已适配]';
+          
+          const evalItem = availableEvaluations[v];
+          if (evalItem?.level === 'danger') {
+            label += ' [⛔ 不再兼容在线切换]';
+          } else if (evalItem?.level === 'warning' && (evalItem.title.includes('降级') || evalItem.message.includes('会话'))) {
+            label += ' [⚠️ 会话降级风险]';
+          } else if (isAdapted) {
+            label += ' [✔ 深度适配]';
           } else {
-            label += ' [未适配]';
+            label += ' [⚠️ 未经特殊适配]';
           }
           if (isCached) label += ' ⚡本地快照';
           if (isCurrent) label += ' ★当前运行';
@@ -1394,6 +1843,25 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         : '<span class="badge-chip chip-green">✔ 官方深度适配版本</span>';
 
       // 动态展示特定警告
+      const evalItem = availableEvaluations[version];
+      const isDanger = (evalItem?.level === 'danger');
+      const dangerCard = document.getElementById('modalIncompatibleDangerWarn');
+      if (dangerCard) {
+        if (isDanger) {
+          dangerCard.style.display = 'flex';
+          const dangerTitle = document.getElementById('modalIncompatibleTitle');
+          if (dangerTitle) dangerTitle.textContent = `⛔ [严重安全警告] ${evalItem.title || '底层架构重大重构 · 不再兼容在线切换'}`;
+          const dangerMsg = document.getElementById('modalIncompatibleMsg');
+          if (dangerMsg) dangerMsg.textContent = evalItem.message || '官方该版本调整了底层 RPC 与连接鉴权体系，当前 Docker 镜像底座无法直接在线热切换。切勿在线强制切换，否则可能导致容器服务异常！强烈建议直接重新拉取最新 Docker 镜像重新部署。';
+          const dangerLink = document.getElementById('modalIncompatibleReleaseLink');
+          if (dangerLink && versionCheckData?.dsh?.upstreamReleases) {
+            dangerLink.href = versionCheckData.dsh.upstreamReleases;
+          }
+        } else {
+          dangerCard.style.display = 'none';
+        }
+      }
+
       document.getElementById('modalDowngradeWarn').style.display = isDowngrade ? 'flex' : 'none';
       document.getElementById('modalUnadaptedWarn').style.display = isUnadapted ? 'flex' : 'none';
 
@@ -1978,7 +2446,9 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
     loadVersions();
     loadSnapshots();
     loadPlugins();
+    fetchVersionCheck();
     setInterval(loadStatus, 8000);
+    setInterval(fetchVersionCheck, 60000);
   </script>
 </body>
 </html>

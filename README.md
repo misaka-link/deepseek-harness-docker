@@ -1,8 +1,11 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.1`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.1`  
+> 🔗 **快速直达链接**：
+> - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
+> - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.1`、`:0.1.6-alpha.1-market`），精确锁定底层 DSH 官方引擎；  
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.2`、`:0.1.6-alpha.2-market`），精确锁定底层 DSH 官方引擎；  
 > 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.1`、`:0.1.1-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
@@ -35,7 +38,7 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 静态资源版本化隔离，配合 `dsh-browser-desktop` 插件，AI 可自主操控网页与实时截屏 |
 
-| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.1.6-alpha.1) |
+| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.1.6-alpha.2) |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，完美支持 DeepSeek-V41-Flash 等最新模型 |
@@ -48,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.1`<br>(`...:dsh-0.1.6-alpha.1`) | `...:0.1.1`<br>(`...:v0.1.1`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.1-market`<br>(`...:dsh-0.1.6-alpha.1-market`) | `...:0.1.1-market`<br>(`...:v0.1.1-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.1`<br>(`...:v0.1.1`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.1-market`<br>(`...:v0.1.1-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
 
 ---
 
@@ -70,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.1` 或项目版本 `:0.1.1`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.1`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -85,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.1-market` 或项目版本 `:0.1.1-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.1-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -166,6 +169,20 @@ docker compose -f docker-compose.market.yml up -d
 
 ## 📝 版本更新历史 (Changelog)
 
+### v0.1.2
+- 🎛️ **Web Admin 顶部栏双版本矩阵与多级安全预警系统 (落实 Issue #3)**：
+  - **双版本解耦展示**：顶部栏清晰分离展示【容器套件版本】与【DSH 核心引擎版本】，彻底消除概念混淆；
+  - **Issue #3 快速跳转直达**：顶部栏与版本看板新增常驻直达按钮，一键快速跳转至官方 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库及本项目仓库查看最新 Release 说明与源码；
+  - **5 级预设安全态势色彩体系**：设计 `success` (绿色正常/最新)、`info` (蓝色发现新版)、`warning` (黄色待适配/降级风险)、`danger` (绯红呼吸高亮/底层协议破坏/不再兼容)、`neutral` (中性灰离线) 全套预警机制；
+  - **专有版本元数据与多通道容灾 (`version.json`)**：免去 GitHub REST API 速率限制，通过全球 Anycast CDN + 官方 Raw + 镜像源多通道实现国内极速直达；
+  - **版本与更新控制中心**：点击顶部栏徽章随时呼出版本详情弹窗，对比本地与远端最新版本及 Changelog 摘要；
+- 🌟 **全面适配官方最新引擎 (`@deepseek-ai/dsh@0.1.6-alpha.2`)**：
+  - **全新插件管理页与运行时解析**：全面适配官方新增的 Web 侧边栏“插件管理页”，支持插件实时动态启停与 pnpm 依赖热装卸；适配运行时模块解析（Runtime Resolution）；
+  - **右侧边栏 Office 文档预览**：完美支持 Word (`.docx`)、Excel (`.xlsx`)、PowerPoint (`.pptx`) 在右侧边栏的开箱即用原生渲染，依托容器内完整的文泉驿微米黑与 Noto CJK 中文字体库呈现高保真文档排版；
+  - **回合变更审阅与侧边栏内嵌浏览器**：全面兼容官方新增的回合结束文件变更卡片（逐文件 Diff 审阅）以及侧边栏内嵌沙箱浏览器 (`ui-sidebar-browser`)；
+  - **容器虚拟桌面和谐共存**：容器真实的 Chromium + noVNC 桌面扩展插件 (`dsh-browser-desktop`) 与官方右侧边栏新功能无缝协作，各 Tab 职责清晰；
+  - **管理后台与探测链升级**：版本管理看板与动态探测链默认置顶推荐 `0.1.6-alpha.2`，向下平滑兼容历史版本。
+
 ### v0.1.1
 - 🛡️ **全方位安全加固与漏洞防御**：
   - 修复登录跳转开放重定向漏洞，基于 WHATWG URL 规范严格白名单校验；
@@ -223,5 +240,6 @@ docker compose -f docker-compose.market.yml up -d
 ## 🙏 感谢与参考项目
 
 本项目在架构设计与容器化实现过程中，参考并借鉴了以下优秀开源项目，特此鸣谢：
+- [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)：官方 DeepSeek Harness 上游核心开源仓库；
 - [runzhliu/deepseek-harness-docker](https://github.com/runzhliu/deepseek-harness-docker)：提供了无头桌面集成基线参考，并在 v0.0.9 中深度借鉴了其关于非侵入环境变量隔离（Issue #20）、noVNC 静态版本化防缓存（commit `ead7ce5`）、Debian Trixie 运行时升级（commit `bb497b2`）以及 WSL2 路径兼容 Shim（commit `2414144`）等优秀工程化实践；
 - [smanx/deepseek-harness-docker](https://github.com/smanx/deepseek-harness-docker)

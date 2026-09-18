@@ -14,7 +14,7 @@ DSH_ALPHA=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"alph
 DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
 DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
 DSH_VERSION="${DSH_VERSION:-${DSH_ALPHA:-${DSH_NEXT:-$DSH_LATEST}}}"
-[ -z "$DSH_VERSION" ] && DSH_VERSION="0.1.6-alpha.1"
+[ -z "$DSH_VERSION" ] && DSH_VERSION="0.1.6-alpha.2"
 
 if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; then
   echo "========================================================="

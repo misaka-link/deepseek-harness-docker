@@ -4,6 +4,33 @@
 
 ---
 
+## [v0.1.2] - 2026-09-18
+
+### 控制台与交互升级 (Admin UI & Issue #3)
+- 🎛️ **Web Admin 顶部栏双版本清晰矩阵与 5 级安全态势预警体系 (落实 Issue #3)**：
+  - **双版本解耦展示**：彻底废除单一模糊的 `v...` 徽标，划分为独立的【容器套件版本: `v0.1.2`】与【DSH 核心版本: `v0.1.6-alpha.2`】，解决概念混淆；
+  - **Issue #3 快速跳转直达**：顶部栏与版本看板新增常驻直达按钮，一键快速跳转至官方 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库及本项目 [misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) 仓库查看最新 Release Notes 与 Changelog 说明；
+  - **5 级预设安全态势色彩矩阵**：设计 `success` (绿色正常/最新)、`info` (蓝色发现新版)、`warning` (黄色待适配/降级风险)、`danger` (绯红双重呼吸脉冲高亮/底层协议破坏/不再兼容)、`neutral` (中性灰离线) 预警机制；
+  - **专有版本元数据与多通道容灾 (`version.json`)**：在仓库根目录建立程序专用元数据，免去 GitHub REST API 速率限制，通过全球 Anycast CDN (jsDelivr) + 官方 Raw + 镜像源多通道实现国内极速直达；
+  - **版本与更新控制中心**：点击顶部栏徽章随时呼出版本详情弹窗，分栏对比本地与远端最新版本及 Changelog 摘要；
+  - **破坏性版本切换红线防护**：在版本切换弹窗中对命中 `danger` 级别的破坏性版本进行红色高亮警告，防止错误在线热切换导致服务崩溃。
+
+### 核心引擎适配 (DSH Engine Adaptation)
+- 🌟 **全面适配官方最新引擎 (`@deepseek-ai/dsh@0.1.6-alpha.2`)**：
+  - **插件管理页与运行时依赖解析**：全面适配官方新增的 Web 侧边栏“插件管理页”，支持直观查看、实时启用/禁用 profile 插件，以及通过官方 `@deepseek-ai/dsh-plugin-manager` 借助内置 pnpm 进行插件组合包（Bundle）的持久化安装与卸载；适配最新的运行时模块解析机制（Runtime Resolution）；
+  - **侧边栏 Office 文档原生预览**：深度兼容官方引入的 `@deepseek-ai/dsh-office-to-pdf` 模块，无需宿主安装庞大的外部 Office 软件，基于独立 WASM 引擎在右侧边栏直接预览 Word (`.docx`)、Excel (`.xlsx`)、PowerPoint (`.pptx`) 文件；结合容器内预装的中文字体库（文泉驿、Noto CJK）实现排版保真渲染；
+  - **会话回合文件变更卡片与 Diff 审阅**：全面兼容回合结束时生成的文件改动卡片与右侧边栏 Review Tab 逐文件代码对比功能；
+  - **侧边栏内嵌 Web 浏览器**：兼容官方右侧边栏沙箱浏览器 (`ui-sidebar-browser`)，可与本容器专属的 Chromium + noVNC 真实桌面工具插件 (`dsh-browser-desktop`) 各司其职、互补共存；
+  - **侧边栏 Subagent 会话与计划预览**：无缝支持官方在侧边栏直接展开子代理会话流与执行计划卡片；
+  - **默认模型列表对齐**：对齐官方移除过时的 V4 Flash / V4 Flash Vision Exp 默认条目，保持对 `DeepSeek-V41-Flash` (`deepseek-flash`) 与 `DeepSeek-V4-Pro` (`deepseek-v4-pro`) 的原生支持。
+
+### 基础设施与管理升级 (Infrastructure & Admin)
+- 🔄 **管理后台与 CI 探测链同步升级**：
+  - 升级 `gateway/dsh-manager.js` 与 `gateway/public/admin.html`，置顶推荐 `0.1.6-alpha.2`，平滑向下兼容 `0.1.6-alpha.1`、`0.1.5-rc.2`、`0.1.5-rc.1` 与 `0.1.2-rc.1`；
+  - 同步更新本地构建脚本 `build.sh`、CI 构建流 `.github/workflows/docker-build.yml` 及工程版本号至 `0.1.2`。
+
+---
+
 ## [v0.1.1] - 2026-09-15
 
 ### 安全加固 (Security)

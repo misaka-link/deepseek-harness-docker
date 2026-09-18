@@ -20,6 +20,7 @@ const desktopManager = require('./desktop-manager');
 const dshManager = require('./dsh-manager');
 const backupService = require('./backup-service');
 const pluginManager = require('./plugin-manager');
+const versionService = require('./version-service');
 
 // ── 配置文件持久化与动态读取 ──────────────────────────────────
 const CONFIG_FILE = process.env.GATEWAY_CONFIG_FILE || '/root/.dsh/gateway.config.json';
@@ -270,6 +271,9 @@ async function handleAdminApi(req, res, pathname, query) {
     // 1. 全局状态
     if (subPath === '/api/status' && req.method === 'GET') {
       return sendJson(res, 200, {
+        project: {
+          version: versionService.getLocalProjectVersion()
+        },
         dsh: dshManager.getStatus(),
         desktop: desktopManager.getStatus(),
         paths: {
@@ -283,10 +287,23 @@ async function handleAdminApi(req, res, pathname, query) {
       });
     }
 
+    // 1.1 版本与多级安全预警检测 (支持多通道 CDN / GitHub / 本地兜底)
+    if (subPath === '/api/version/check' && req.method === 'GET') {
+      const force = query.get('refresh') === '1';
+      const checkRes = await versionService.check(force, dshManager);
+      return sendJson(res, 200, checkRes);
+    }
+
     // 2. DSH 版本列表
     if (subPath === '/api/dsh/versions' && req.method === 'GET') {
       const force = query.get('refresh') === '1';
       const data = await dshManager.fetchAvailableVersions(force);
+      if (Array.isArray(data.versions)) {
+        data.versionEvaluations = {};
+        for (const v of data.versions) {
+          data.versionEvaluations[v] = versionService.evaluateTargetVersion(v);
+        }
+      }
       return sendJson(res, 200, data);
     }
 

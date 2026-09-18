@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.1.1)'
+        description: 'Project version tag (e.g. 0.1.2)'
         required: false
         default: '0.1.1'
   push:
@@ -114,7 +114,7 @@ jobs:
           DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
           DSH_VERSION="${DSH_ALPHA:-${DSH_NEXT:-$DSH_LATEST}}"
           if [ -z "$DSH_VERSION" ]; then
-            DSH_VERSION="0.1.6-alpha.1"
+            DSH_VERSION="0.1.6-alpha.2"
           fi
           echo "dsh_version=${DSH_VERSION}" >> $GITHUB_OUTPUT
           echo "Detected built-in DSH Version: ${DSH_VERSION}"

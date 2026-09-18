@@ -291,6 +291,7 @@ RUN if [ "$PREINSTALL_PLUGINS" = "1" ] || [ "$PREINSTALL_PLUGINS" = "true" ]; th
 RUN mkdir -p /app/gateway /app/scripts /app/plugins /workspace /root/.dsh /root/.dsh-snapshots /root/.config/chromium /go
 
 # 5. 复制项目脚本与网关程序
+COPY version.json /app/version.json
 COPY scripts/ /app/scripts/
 COPY gateway/ /app/gateway/
 COPY plugins/ /app/plugins/
