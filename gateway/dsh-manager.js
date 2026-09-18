@@ -140,7 +140,19 @@ class DshManager {
   }
 
   detectCrashingPlugin(recentLogs = []) {
-    const logText = (recentLogs || []).join('\n');
+    let combinedLogs = Array.isArray(recentLogs) ? [...recentLogs] : [];
+    if (this.lastExitInfo && Array.isArray(this.lastExitInfo.logs)) {
+      combinedLogs = [...this.lastExitInfo.logs, ...combinedLogs];
+    }
+    try {
+      if (fs.existsSync(DSH_WEB_LOG)) {
+        const fileContent = fs.readFileSync(DSH_WEB_LOG, 'utf8');
+        const fileLines = fileContent.split('\n').filter(Boolean).slice(-150);
+        combinedLogs = [...fileLines, ...combinedLogs];
+      }
+    } catch {}
+
+    const logText = combinedLogs.join('\n');
     if (!logText.trim()) return null;
 
     let pluginsList = [];
@@ -159,8 +171,60 @@ class DshManager {
     const candidatePlugins = pluginsList.filter(p => !p.isCore && p.enabled && !p.isUninstalled);
     if (candidatePlugins.length === 0) return null;
 
-    // 1. 深度扫描：Node.js 异常调用栈定位 (node_modules/<name>/... 或 imported from ...<name>)
+    // 1. 结构化 Cordis 加载器条目报错提取
+    // 匹配形如: failed to import loader entry archived-chats (dsh-archived-chats): ...
+    // 或: failed to apply loader entry include (cordis:include): ...
+    // 或: loader entry <id> (<name>): ...
+    const cordisEntryRegex = /(?:loader entry|failed to (?:import|apply|load|resolve)[^:\n]*loader entry)\s+([a-zA-Z0-9_\-\.\@\/]+)(?:\s*\(([@a-zA-Z0-9_\-\.\/]+)\))?/gi;
+    let m;
+    while ((m = cordisEntryRegex.exec(logText)) !== null) {
+      const entryId = m[1];
+      const pkgName = m[2];
+      for (const p of candidatePlugins) {
+        if (p.isCore) continue;
+        const cleanName = p.name.replace(/^@.*\//, '');
+        if ((pkgName && (p.name === pkgName || cleanName === pkgName || p.name.endsWith('/' + pkgName))) ||
+            (entryId && (p.name === entryId || cleanName === entryId || p.name === 'dsh-' + entryId || cleanName === 'dsh-' + entryId))) {
+          return {
+            name: p.name,
+            reason: 'cordis_loader_entry_failure',
+            matched: `Cordis 加载器明确报告条目装载失败: ${entryId}${pkgName ? ` (${pkgName})` : ''}`
+          };
+        }
+      }
+    }
+
+    // 2. 括号包裹的明确包名检测 (Cordis 在错误信息中固定用括号注明包名，如 `(dsh-archived-chats)`)
     for (const p of candidatePlugins) {
+      if (p.isCore) continue;
+      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const short = p.name.replace(/^@.*\//, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp('\\(\\s*(?:' + escaped + '|' + short + ')\\s*\\)', 'i').test(logText)) {
+        return {
+          name: p.name,
+          reason: 'plugin_paren_mention',
+          matched: `加载器报错信息明确标注故障拓展: (${p.name})`
+        };
+      }
+    }
+
+    // 3. 广义装载与依赖导入失败检测 (failed to import/load/apply ... <pluginName>)
+    for (const p of candidatePlugins) {
+      if (p.isCore) continue;
+      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const short = p.name.replace(/^@.*\//, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp('failed to (?:import|apply|load|resolve)[^\\n]*?\\b(?:' + escaped + '|' + short + ')\\b', 'i').test(logText)) {
+        return {
+          name: p.name,
+          reason: 'failed_to_import',
+          matched: `日志检测到拓展装载失败: ${p.name}`
+        };
+      }
+    }
+
+    // 4. 深度扫描：Node.js 异常调用栈定位 (node_modules/<name>/... 或 imported from ...<name>)
+    for (const p of candidatePlugins) {
+      if (p.isCore) continue;
       const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const stackRegex = new RegExp(`(?:node_modules[\\\\/]${escaped}[\\\\/]|imported from.*${escaped})`, 'i');
       if (stackRegex.test(logText)) {
@@ -172,22 +236,9 @@ class DshManager {
       }
     }
 
-    // 2. 深度扫描：Cordis 加载器或 dsh-app-boot 报告的激活失败/依赖缺失
+    // 5. 深度扫描：Cordis Patch 配置语法错误或冲突
     for (const p of candidatePlugins) {
-      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const short = p.name.replace(/^@.*\//, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const loaderRegex = new RegExp(`(?:entry|bundle|plugin):?\\s*(?:${escaped}|${short})\\s*(?:\\([^)]*\\))?:\\s*(?:failed|Error|Cannot find|syntax|exception)`, 'i');
-      if (loaderRegex.test(logText)) {
-        return {
-          name: p.name,
-          reason: 'loader_activation_failed',
-          matched: `Cordis 加载器报告拓展装载失败: ${p.name}`
-        };
-      }
-    }
-
-    // 3. 深度扫描：Cordis Patch 配置语法错误或冲突
-    for (const p of candidatePlugins) {
+      if (p.isCore) continue;
       const short = p.name.replace(/^@.*\//, '');
       if (logText.includes('patch') && (logText.includes(p.name) || logText.includes(short))) {
         return {
@@ -198,8 +249,9 @@ class DshManager {
       }
     }
 
-    // 4. 深度扫描：插件内部标签致命报错打印 (如 [dsh-xxx] Error)
+    // 6. 深度扫描：插件内部标签致命报错打印 (如 [dsh-xxx] Error)
     for (const p of candidatePlugins) {
+      if (p.isCore) continue;
       const short = p.name.replace(/^@.*\//, '');
       const tag = `[${short}]`;
       if (logText.includes(tag) && (logText.includes('Error') || logText.includes('Exception') || logText.includes('crash'))) {
@@ -475,6 +527,11 @@ class DshManager {
         // 若处于手动停止状态，不自动拉起
         if (this.manualStopped) {
           console.log('[dsh-manager] DSH 处于手动停止状态，守护管理器已暂停自动重新拉起');
+          return;
+        }
+        // 若在启动就绪探活期间即发生异常退出，由下方 waitReady 统一负责故障诊断、插件自动隔离与净化重启；
+        // 此处仅针对曾经成功就绪、但在后续运行中意外崩溃的情况执行带指数退避的守护重启，杜绝双重拉起与竞争
+        if (!this.ready) {
           return;
         }
         // 若非主动调用 stop()，自动执行守护拉起 (带频次熔断保护)
