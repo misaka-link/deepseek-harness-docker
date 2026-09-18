@@ -8,8 +8,59 @@ const patchPath = path.join(profileDir, 'cordis.patch.yml');
 const linkDir = path.join(profileDir, 'node_modules/@dsh-custom');
 const targetLink = path.join(linkDir, 'dsh-browser-desktop');
 const pluginSource = '/app/plugins/dsh-browser-desktop';
+const stateFile = '/root/.dsh/plugins-state.json';
 
 fs.mkdirSync(linkDir, { recursive: true });
+
+function readPluginState() {
+  try {
+    if (fs.existsSync(stateFile)) {
+      const data = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+      return {
+        disabled: Array.isArray(data.disabled) ? data.disabled : [],
+        uninstalled: Array.isArray(data.uninstalled) ? data.uninstalled : []
+      };
+    }
+  } catch (e) {
+    console.warn('[install-plugin] 读取 plugins-state.json 警告:', e.message);
+  }
+  return { disabled: [], uninstalled: [] };
+}
+
+function writePluginState(state) {
+  try {
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.writeFileSync(stateFile, JSON.stringify({
+      disabled: Array.from(new Set(state.disabled || [])),
+      uninstalled: Array.from(new Set(state.uninstalled || [])),
+      updatedAt: new Date().toISOString()
+    }, null, 2) + '\n', 'utf8');
+  } catch (e) {
+    console.warn('[install-plugin] 写入 plugins-state.json 警告:', e.message);
+  }
+}
+
+const pluginState = readPluginState();
+
+// 如果不存在 plugins-state.json 但存在已有的 package.json，说明已有运行历史
+// 自动推断现有已停用的插件，避免镜像升级时覆盖用户现有的禁用偏好
+if (!fs.existsSync(stateFile) && fs.existsSync(pkgPath)) {
+  try {
+    const existingPkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const deps = existingPkg.dependencies || {};
+    const bnds = existingPkg.dsh?.profile?.bundles || [];
+    let updated = false;
+    for (const dep of Object.keys(deps)) {
+      if (!bnds.includes(dep) && !pluginState.disabled.includes(dep)) {
+        pluginState.disabled.push(dep);
+        updated = true;
+      }
+    }
+    if (updated) {
+      writePluginState(pluginState);
+    }
+  } catch {}
+}
 
 // 0. 全局依赖自动补齐：将 DSH 内置的 @deepseek-ai/* 兄弟包链接至全局 /usr/local/lib/node_modules/@deepseek-ai
 // 彻底解决 dshmarket 等第三方插件因无法在上一级目录找到 @deepseek-ai/schemastery 等库而启动崩溃的问题
@@ -62,35 +113,68 @@ for (const src of possibleSchemasterySources) {
   }
 }
 
-// 2. 建立 node_modules junction / symlink
-try {
-  if (fs.existsSync(targetLink)) fs.unlinkSync(targetLink);
-  fs.symlinkSync(pluginSource, targetLink);
-  console.log('[install-plugin] 建立插件目录软链接成功:', targetLink);
-} catch (e) {
-  console.warn('[install-plugin] 建立软链接失败:', e.message);
-}
+// 2. 自动注册并配置 @dsh-custom/dsh-browser-desktop (尊重用户持久化偏好)
+const browserDesktopName = '@dsh-custom/dsh-browser-desktop';
+const isBrowserDesktopUninstalled = pluginState.uninstalled.includes(browserDesktopName);
+const isBrowserDesktopDisabled = pluginState.disabled.includes(browserDesktopName);
 
-// 3. 注入 profile package.json (bundles 列表与 dependencies link)
-if (fs.existsSync(pkgPath)) {
+if (isBrowserDesktopUninstalled) {
+  console.log('[install-plugin] 用户已明确卸载 dsh-browser-desktop，跳过装配');
   try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    pkg.dependencies = pkg.dependencies || {};
-    pkg.dependencies['@dsh-custom/dsh-browser-desktop'] = 'link:' + pluginSource;
-    pkg.dsh = pkg.dsh || { profile: {} };
-    pkg.dsh.profile = pkg.dsh.profile || {};
-    pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
-    if (!pkg.dsh.profile.bundles.includes('@dsh-custom/dsh-browser-desktop')) {
-      pkg.dsh.profile.bundles.push('@dsh-custom/dsh-browser-desktop');
-    }
-    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    console.log('[install-plugin] 注册 bundle 依赖到 package.json 成功');
+    if (fs.existsSync(targetLink) || fs.lstatSync(targetLink).isSymbolicLink()) fs.unlinkSync(targetLink);
+  } catch {}
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      let ch = false;
+      if (pkg.dependencies && pkg.dependencies[browserDesktopName]) {
+        delete pkg.dependencies[browserDesktopName];
+        ch = true;
+      }
+      if (pkg.dsh?.profile?.bundles?.includes(browserDesktopName)) {
+        pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== browserDesktopName);
+        ch = true;
+      }
+      if (ch) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    } catch {}
+  }
+} else {
+  try {
+    if (fs.existsSync(targetLink) || fs.lstatSync(targetLink).isSymbolicLink()) fs.unlinkSync(targetLink);
+    fs.symlinkSync(pluginSource, targetLink);
+    console.log('[install-plugin] 建立插件目录软链接成功:', targetLink);
   } catch (e) {
-    console.warn('[install-plugin] 更新 package.json 失败:', e.message);
+    console.warn('[install-plugin] 建立软链接失败:', e.message);
+  }
+
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      pkg.dependencies = pkg.dependencies || {};
+      pkg.dependencies[browserDesktopName] = 'link:' + pluginSource;
+      pkg.dsh = pkg.dsh || { profile: {} };
+      pkg.dsh.profile = pkg.dsh.profile || {};
+      pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
+
+      if (isBrowserDesktopDisabled) {
+        if (pkg.dsh.profile.bundles.includes(browserDesktopName)) {
+          pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== browserDesktopName);
+        }
+        console.log('[install-plugin] 用户已显式禁用 dsh-browser-desktop，保持停用状态 (不加入 bundles)');
+      } else {
+        if (!pkg.dsh.profile.bundles.includes(browserDesktopName)) {
+          pkg.dsh.profile.bundles.push(browserDesktopName);
+        }
+        console.log('[install-plugin] 注册 bundle 依赖到 package.json 成功');
+      }
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    } catch (e) {
+      console.warn('[install-plugin] 更新 package.json 失败:', e.message);
+    }
   }
 }
 
-// 4. 清除 cordis.patch.yml 中的重复 insert 项 (按顶级条目结构化过滤，绝不误伤相邻插件)
+// 3. 清除 cordis.patch.yml 中的重复 insert 项 (按顶级条目结构化过滤，绝不误伤相邻插件)
 if (fs.existsSync(patchPath)) {
   try {
     const rawYaml = fs.readFileSync(patchPath, 'utf8');
@@ -124,7 +208,7 @@ if (fs.existsSync(patchPath)) {
   }
 }
 
-// 5. 自动在 DSH 存储库中初始化默认工作区
+// 4. 自动在 DSH 存储库中初始化默认工作区
 const wsStoragePath = '/root/.dsh/storages/workspace.json';
 const defaultWsPath = process.env.DSH_WORKSPACE || '/workspace';
 fs.mkdirSync('/root/.dsh/storages', { recursive: true });
@@ -163,13 +247,36 @@ try {
   console.warn('[install-plugin] 初始化默认工作区失败:', e.message);
 }
 
-// 6. 自动注册 dsh-settings-config-path 插件到 Web Profile (显示只读路径)
+// 5. 自动注册 dsh-settings-config-path 插件到 Web Profile (尊重用户持久化偏好)
 const pathPluginSource = '/app/plugins/dsh-settings-config-path';
 const pathPluginTargetLink = path.join(linkDir, 'dsh-settings-config-path');
+const configPathPluginName = '@dsh-custom/dsh-settings-config-path';
+const isConfigPathUninstalled = pluginState.uninstalled.includes(configPathPluginName);
+const isConfigPathDisabled = pluginState.disabled.includes(configPathPluginName);
 
-if (fs.existsSync(pathPluginSource)) {
+if (isConfigPathUninstalled) {
+  console.log('[install-plugin] 用户已明确卸载 dsh-settings-config-path，跳过装配');
   try {
-    if (fs.existsSync(pathPluginTargetLink)) fs.unlinkSync(pathPluginTargetLink);
+    if (fs.existsSync(pathPluginTargetLink) || fs.lstatSync(pathPluginTargetLink).isSymbolicLink()) fs.unlinkSync(pathPluginTargetLink);
+  } catch {}
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      let ch = false;
+      if (pkg.dependencies && pkg.dependencies[configPathPluginName]) {
+        delete pkg.dependencies[configPathPluginName];
+        ch = true;
+      }
+      if (pkg.dsh?.profile?.bundles?.includes(configPathPluginName)) {
+        pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== configPathPluginName);
+        ch = true;
+      }
+      if (ch) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    } catch {}
+  }
+} else if (fs.existsSync(pathPluginSource)) {
+  try {
+    if (fs.existsSync(pathPluginTargetLink) || fs.lstatSync(pathPluginTargetLink).isSymbolicLink()) fs.unlinkSync(pathPluginTargetLink);
     fs.symlinkSync(pathPluginSource, pathPluginTargetLink);
     console.log('[install-plugin] 建立 dsh-settings-config-path 软链接成功');
   } catch (e) {}
@@ -178,20 +285,28 @@ if (fs.existsSync(pathPluginSource)) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
       pkg.dependencies = pkg.dependencies || {};
-      pkg.dependencies['@dsh-custom/dsh-settings-config-path'] = 'link:' + pathPluginSource;
+      pkg.dependencies[configPathPluginName] = 'link:' + pathPluginSource;
       pkg.dsh = pkg.dsh || { profile: {} };
       pkg.dsh.profile = pkg.dsh.profile || {};
       pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
-      if (!pkg.dsh.profile.bundles.includes('@dsh-custom/dsh-settings-config-path')) {
-        pkg.dsh.profile.bundles.push('@dsh-custom/dsh-settings-config-path');
+
+      if (isConfigPathDisabled) {
+        if (pkg.dsh.profile.bundles.includes(configPathPluginName)) {
+          pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== configPathPluginName);
+        }
+        console.log('[install-plugin] 用户已显式禁用 dsh-settings-config-path，保持停用状态 (不加入 bundles)');
+      } else {
+        if (!pkg.dsh.profile.bundles.includes(configPathPluginName)) {
+          pkg.dsh.profile.bundles.push(configPathPluginName);
+        }
+        console.log('[install-plugin] 注册 dsh-settings-config-path 到 package.json 成功');
       }
       fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-      console.log('[install-plugin] 注册 dsh-settings-config-path 到 package.json 成功');
     } catch (e) {}
   }
 }
 
-// 7. 自动识别并装配已预装的 Market 插件 (从 plugins.market.list 动态同步，避免双份维护脱节)
+// 6. 自动识别并装配已预装的 Market 插件 (从 plugins.market.list 动态同步，并完全尊重用户禁用/卸载偏好)
 const marketPlugins = [
   { id: 'dshmarket', name: 'dshmarket', path: '/usr/local/lib/node_modules/dshmarket' },
   { id: 'dsh-thinking-effort', name: '@hytime/dsh-thinking-effort', path: '/usr/local/lib/node_modules/@hytime/dsh-thinking-effort' }
@@ -216,12 +331,40 @@ if (fs.existsSync(listFile)) {
 }
 
 for (const p of marketPlugins) {
+  const isMarketUninstalled = pluginState.uninstalled.includes(p.name);
+  const isMarketDisabled = pluginState.disabled.includes(p.name);
+
+  // 若用户已显式卸载，保持卸载状态，清理残留软链接与引用，绝对不重新装配！
+  if (isMarketUninstalled) {
+    console.log(`[install-plugin] 用户已明确卸载 ${p.name}，保持卸载状态 (跳过装配)`);
+    const targetLnk = path.join(profileDir, 'node_modules', p.name);
+    try {
+      if (fs.existsSync(targetLnk) || fs.lstatSync(targetLnk).isSymbolicLink()) fs.unlinkSync(targetLnk);
+    } catch {}
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        let ch = false;
+        if (pkg.dependencies && pkg.dependencies[p.name]) {
+          delete pkg.dependencies[p.name];
+          ch = true;
+        }
+        if (pkg.dsh?.profile?.bundles?.includes(p.name)) {
+          pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== p.name);
+          ch = true;
+        }
+        if (ch) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+      } catch {}
+    }
+    continue;
+  }
+
   if (fs.existsSync(p.path)) {
     try {
       const scopeDir = path.dirname(path.join(profileDir, 'node_modules', p.name));
       fs.mkdirSync(scopeDir, { recursive: true });
       const targetLnk = path.join(profileDir, 'node_modules', p.name);
-      if (fs.existsSync(targetLnk)) fs.unlinkSync(targetLnk);
+      if (fs.existsSync(targetLnk) || fs.lstatSync(targetLnk).isSymbolicLink()) fs.unlinkSync(targetLnk);
       fs.symlinkSync(p.path, targetLnk);
 
       // 确保插件内部 node_modules/@deepseek-ai 指向全局依赖 (使用 lstatSync 处理悬空软链)
@@ -245,11 +388,19 @@ for (const p of marketPlugins) {
         pkg.dsh = pkg.dsh || { profile: {} };
         pkg.dsh.profile = pkg.dsh.profile || {};
         pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
-        if (!pkg.dsh.profile.bundles.includes(p.name)) {
-          pkg.dsh.profile.bundles.push(p.name);
+
+        if (isMarketDisabled) {
+          if (pkg.dsh.profile.bundles.includes(p.name)) {
+            pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== p.name);
+          }
+          console.log(`[install-plugin] 用户已显式禁用 ${p.name}，保持停用状态 (不加入 bundles)`);
+        } else {
+          if (!pkg.dsh.profile.bundles.includes(p.name)) {
+            pkg.dsh.profile.bundles.push(p.name);
+          }
+          console.log(`[install-plugin] 自动装配预装 Market 插件: ${p.name}`);
         }
         fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-        console.log(`[install-plugin] 自动装配预装 Market 插件: ${p.name}`);
       }
     } catch (e) {
       console.warn(`[install-plugin] 自动装配 Market 插件失败 (${p.name}):`, e.message);
@@ -277,7 +428,7 @@ for (const p of marketPlugins) {
   }
 }
 
-// 8. 确保 dsh-market 禁用独立进程重启 (由容器 dsh-manager 统一守护，防止双重启端口冲突)
+// 7. 确保 dsh-market 禁用独立进程重启 (由容器 dsh-manager 统一守护，防止双重启端口冲突)
 const settingsPath = '/root/.dsh/settings.yaml';
 try {
   if (fs.existsSync(settingsPath)) {

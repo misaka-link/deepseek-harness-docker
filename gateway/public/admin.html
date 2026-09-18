@@ -705,6 +705,23 @@
       <button class="tab-btn" onclick="switchTab('tab-settings')">网关与系统配置</button>
     </nav>
 
+    <!-- 故障自愈隔离告警横幅 -->
+    <div class="notice-card notice-warning" id="autoIsolatedAlert" style="display:none; margin-bottom:16px; border-left:4px solid #f59e0b; background:#fffbeb; padding:12px 16px; border-radius:8px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:12px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">🛡️</span>
+          <div>
+            <div style="font-weight:700; color:#92400e; font-size:13px;">已触发 DSH 启动崩溃自愈保护 (实验性)</div>
+            <div style="font-size:12px; color:#b45309; margin-top:2px;" id="autoIsolatedMsg">系统检测到异常拓展引发 DSH 启动失败，已自动将其停用隔离以保障服务可用。</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="showAutoIsolatedDetails()">查看排查日志</button>
+          <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="dismissAutoIsolatedAlert()">忽略提示</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Tab 1: DSH Version Management -->
     <section id="tab-dsh" class="tab-pane active">
       <div class="card">
@@ -820,7 +837,7 @@
         </div>
 
         <!-- 动态多阶段进度条与步骤指示器 -->
-        <div class="progress-wrap" id="dshInstallProgressWrap">
+        <div class="progress-wrap" id="dshInstallProgressWrap" style="display:none;">
           <div class="progress-header">
             <div class="progress-title" id="progressTitle">
               <span id="progressDot" class="dot" style="background:#3b82f6;"></span>
@@ -970,7 +987,7 @@
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="file" id="snapshotFileInput" accept=".tar.gz" style="display:none;" onchange="handleImportSnapshot(event)" />
             <button class="btn" id="btnImportSnapshot" onclick="document.getElementById('snapshotFileInput').click()" title="从本地上传导入 .tar.gz 快照归档">📥 导入快照 (.tar.gz)</button>
-            <button class="btn btn-primary" id="btnCreateSnapshot" onclick="createSnapshot()">+ 创建新快照</button>
+            <button class="btn btn-primary" id="btnCreateSnapshot" onclick="openCreateSnapshotModal()">+ 创建新快照</button>
           </div>
         </div>
         <div id="snapshotTaskBanner" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; align-items:center; gap:8px;">
@@ -983,13 +1000,14 @@
           <thead>
             <tr>
               <th>快照文件</th>
+              <th>备份类型</th>
               <th>大小</th>
               <th>创建时间</th>
               <th style="text-align:right;">操作</th>
             </tr>
           </thead>
           <tbody id="snapshotsTableBody">
-            <tr><td colspan="4" style="text-align:center; color:#94a3b8;">正在加载快照清单...</td></tr>
+            <tr><td colspan="5" style="text-align:center; color:#94a3b8;">正在加载快照清单...</td></tr>
           </tbody>
         </table>
       </div>
@@ -1056,6 +1074,29 @@
             <label class="form-label">CDP 调试端口</label>
             <input type="number" id="editCdpPort" class="form-control" min="1024" max="65535" placeholder="默认 9222" />
           </div>
+
+          <div class="form-group" style="grid-column: 1 / -1; background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:16px 18px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label class="form-label" style="margin-bottom:0; font-weight:700; color:var(--text-main);">启动崩溃自愈与故障插件自动隔离</label>
+                <span class="nav-badge" style="background:#fef3c7; color:#b45309; font-size:11px; font-weight:700;">实验性功能</span>
+              </div>
+              <select id="editAutoHealPlugins" class="form-control" style="width:200px; height:34px; font-size:13px;">
+                <option value="true">开启 (默认，自动隔离)</option>
+                <option value="false">关闭 (禁用自动隔离)</option>
+              </select>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr auto; gap:16px; align-items:center; padding-top:10px; border-top:1px dashed var(--card-border);">
+              <div>
+                <div style="font-weight:600; font-size:13px; color:var(--text-main);">单周期自愈隔离数量上限</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">单次 DSH 启动周期内最多允许自动隔离停用的故障插件数量（默认 5 个，达到上限后停止自动重试以防死锁）。</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <input type="number" id="editAutoHealMaxPerBoot" class="form-control" min="1" max="20" placeholder="默认 5" style="width:90px; text-align:center;" />
+                <span style="font-size:12px; color:var(--text-muted);">个</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:12px 14px; border-radius:8px; font-size:13px; margin: 16px 0; line-height: 1.5;">
@@ -1071,6 +1112,73 @@
       </div>
     </section>
   </main>
+
+  <!-- 创建快照与备份配置模态框 -->
+  <div class="modal-overlay" id="snapshotCreateModal" style="display:none;">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header" style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-weight:700; font-size:16px;">创建 DSH 配置文件快照与备份</span>
+        <button class="btn" style="padding:2px 8px; font-size:14px; border:none; background:none; cursor:pointer;" onclick="closeCreateSnapshotModal()">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px; margin-bottom:16px;">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600; margin-bottom:6px;">快照备注名称 (可选)</label>
+          <input type="text" id="snapshotNoteInput" class="form-control" placeholder="如: my_custom_models 或 升级前归档" style="width:100%;" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600; margin-bottom:8px;">备份选项与数据范围</label>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <label style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:var(--radius-md); cursor:pointer; background:var(--bg-main); transition:border-color 0.2s;">
+              <input type="radio" name="snapshotType" value="full" checked style="margin-top:3px; cursor:pointer;" />
+              <div>
+                <div style="font-weight:600; font-size:13px; color:var(--text-main);">📦 完整全量备份 (推荐)</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.4;">包含系统设置、模型凭据、插件配置，以及<b>所有会话对话历史与媒体附件</b>，适合整机环境灾备与迁移。</div>
+              </div>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:var(--radius-md); cursor:pointer; background:var(--bg-main); transition:border-color 0.2s;">
+              <input type="radio" name="snapshotType" value="config" style="margin-top:3px; cursor:pointer;" />
+              <div>
+                <div style="font-weight:600; font-size:13px; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+                  <span>⚡ 仅备份配置 (无对话内容)</span>
+                  <span style="font-size:10px; background:#fef3c7; color:#b45309; padding:1px 6px; border-radius:4px; font-weight:700;">新特性</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.4;">仅备份当前所有模型凭据、系统配置与已装配插件清单，<b>完全排除会话记录、对话数据与多媒体附件</b>，体积轻巧，便于快速导出分享！</div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeCreateSnapshotModal()">取消</button>
+        <button class="btn btn-primary" id="btnSubmitCreateSnapshot" onclick="submitCreateSnapshot()">开始打包备份</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 故障自愈排查详情模态框 -->
+  <div class="modal-overlay" id="autoIsolatedModal" style="display:none;">
+    <div class="modal-box" style="max-width: 680px; width: 90vw;">
+      <div class="modal-header" style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">🛡️</span>
+          <span style="font-weight:700; font-size:16px;">DSH 启动故障自愈隔离记录</span>
+        </div>
+        <button class="btn" style="padding:2px 8px; font-size:14px; border:none; background:none; cursor:pointer;" onclick="closeAutoIsolatedModal()">✕</button>
+      </div>
+      <div class="modal-body" style="margin-bottom:16px;">
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+          以下是网关守护管理器在最近一次或历史启动周期中，自动识别并隔离的故障插件记录及报错现场片段：
+        </div>
+        <div id="autoIsolatedListContainer" style="display:flex; flex-direction:column; gap:12px; max-height:420px; overflow-y:auto;">
+          <!-- 动态填充自愈事件 -->
+        </div>
+      </div>
+      <div class="modal-actions" style="display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn btn-danger" onclick="dismissAutoIsolatedAlert(true)">清空自愈记录与告警</button>
+        <button class="btn btn-primary" onclick="closeAutoIsolatedModal()">关闭</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Confirm Modal Dialog -->
   <div class="modal-overlay" id="confirmModal">
@@ -1407,13 +1515,23 @@
           typeBadge = '<span class="nav-badge" style="background:#fef3c7; color:#b45309;">社区拓展</span>';
         }
 
-        const statusBadge = p.enabled
-          ? '<span class="status-badge status-running"><span class="dot"></span> 已启用</span>'
-          : '<span class="status-badge status-stopped"><span class="dot"></span> 已停用</span>';
+        const isAutoIsolated = currentData?.autoIsolatedEvents?.some(ev => ev.plugin === p.name);
+        let statusBadge = '';
+        if (p.isUninstalled) {
+          statusBadge = '<span class="status-badge" style="background:#f1f5f9; color:#64748b;"><span class="dot" style="background:#94a3b8;"></span> 已卸载</span>';
+        } else if (p.enabled) {
+          statusBadge = '<span class="status-badge status-running"><span class="dot"></span> 已启用</span>';
+        } else if (isAutoIsolated) {
+          statusBadge = '<span class="status-badge status-stopped" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;" title="该插件因引发启动崩溃已被系统自动隔离停用"><span class="dot" style="background:#f59e0b;"></span> 已停用 (自愈隔离)</span>';
+        } else {
+          statusBadge = '<span class="status-badge status-stopped"><span class="dot"></span> 已停用</span>';
+        }
 
         let actionBtns = '';
         if (p.isCore) {
           actionBtns = '<span style="color:var(--text-muted); font-size:12px;">受保护 (系统必备)</span>';
+        } else if (p.isUninstalled) {
+          actionBtns = `<button class="btn btn-primary btn-plugin-install" style="padding:4px 10px; font-size:12px;">重新安装</button>`;
         } else {
           const toggleBtn = p.enabled
             ? `<button class="btn btn-danger btn-plugin-toggle" style="padding:4px 10px; font-size:12px;" data-enable="false">禁用</button>`
@@ -1461,7 +1579,33 @@
         if (name) uninstallPlugin(name);
         return;
       }
+      const installBtn = e.target.closest('.btn-plugin-install');
+      if (installBtn) {
+        const tr = installBtn.closest('tr');
+        const name = tr?.dataset?.pluginName;
+        if (name) installPlugin(name);
+        return;
+      }
     });
+
+    async function installPlugin(name) {
+      if (!confirm(`确定要重新安装拓展「${name}」吗？\n安装后需点击右上角「重启 DSH 生效」使改动应用到运行时。`)) return;
+
+      try {
+        const res = await fetch(`${adminBase}/api/plugins/install`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '安装失败');
+
+        alert(`拓展「${name}」已重新安装成功！请点击右上角「重启 DSH 生效」使其加载到运行时。`);
+        await loadPlugins();
+      } catch (err) {
+        alert('安装失败: ' + err.message);
+      }
+    }
 
     async function togglePlugin(name, enable) {
       const action = enable ? '启用' : '禁用';
@@ -1876,6 +2020,7 @@
     }
 
     let autoScrollTerminal = true;
+    let isVersionSwitchingInProgress = false;
 
     async function fetchDshLogs(force = false) {
       const term = document.getElementById('installTerminal');
@@ -1883,8 +2028,7 @@
       if (!term) return;
 
       // 如果正在执行版本切换流式日志安装，暂停常规日志覆盖
-      const wrap = document.getElementById('dshInstallProgressWrap');
-      if (wrap && wrap.style.display !== 'none' && !force) return;
+      if (isVersionSwitchingInProgress && !force) return;
 
       try {
         const res = await fetch(`${adminBase}/api/dsh/logs?lines=150`);
@@ -2081,6 +2225,28 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           const clearCheckbox = document.getElementById('clearAuthCheckbox');
           if (clearCheckbox && document.activeElement !== clearCheckbox) {
             clearCheckbox.checked = false;
+          }
+          const autoHealSelect = document.getElementById('editAutoHealPlugins');
+          if (autoHealSelect && document.activeElement !== autoHealSelect) {
+            autoHealSelect.value = data.autoHealPlugins !== false ? 'true' : 'false';
+          }
+          const autoHealMaxInput = document.getElementById('editAutoHealMaxPerBoot');
+          if (autoHealMaxInput && document.activeElement !== autoHealMaxInput) {
+            autoHealMaxInput.value = data.autoHealMaxPerBoot || 5;
+          }
+        }
+
+        // 自动故障自愈告警横幅更新
+        const autoHealAlert = document.getElementById('autoIsolatedAlert');
+        const autoHealMsg = document.getElementById('autoIsolatedMsg');
+        if (autoHealAlert) {
+          if (data.autoIsolatedEvents && data.autoIsolatedEvents.length > 0) {
+            autoHealAlert.style.display = 'block';
+            const latest = data.autoIsolatedEvents[0];
+            const timeStr = new Date(latest.time).toLocaleTimeString();
+            autoHealMsg.innerHTML = `检测到拓展「<strong>${escapeHtml(latest.plugin)}</strong>」引发 DSH 启动崩溃 (${escapeHtml(latest.reason)})，已于 ${timeStr} 自动将其停用隔离，当前核心服务已恢复可用。`;
+          } else {
+            autoHealAlert.style.display = 'none';
           }
         }
       } catch (err) {
@@ -2369,6 +2535,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       const version = pendingInstallVersion;
       if (!version) return;
       closeSwitchConfirmModal();
+      isVersionSwitchingInProgress = true;
 
       const installBtn = document.getElementById('installBtn');
       if (installBtn) installBtn.disabled = true;
@@ -2469,6 +2636,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         if (installBtn) installBtn.disabled = false;
         await loadStatus();
         await loadVersions();
+        setTimeout(() => { isVersionSwitchingInProgress = false; }, 3000);
       }
     }
 
@@ -2563,7 +2731,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         updateTaskBanner(data.activeTask);
         tbody.innerHTML = '';
         if (!data.snapshots || data.snapshots.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">暂无快照，可点击右上角创建或导入</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#94a3b8;">暂无快照，可点击右上角创建或导入</td></tr>';
           return;
         }
 
@@ -2571,6 +2739,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           const tr = document.createElement('tr');
           const timeStr = new Date(s.createdAt).toLocaleString();
           const isDefault = s.filename.includes('default');
+          const isConfig = s.type === 'config' || s.filename.includes('config');
 
           const tdName = document.createElement('td');
           const strong = document.createElement('strong');
@@ -2583,6 +2752,11 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
             badge.textContent = '出厂初始';
             tdName.appendChild(badge);
           }
+
+          const tdType = document.createElement('td');
+          tdType.innerHTML = isConfig
+            ? '<span class="nav-badge" style="background:#fef3c7; color:#b45309; font-size:11px; font-weight:600;">⚡ 仅配置 (无会话)</span>'
+            : '<span class="nav-badge" style="background:#e0f2fe; color:#0369a1; font-size:11px; font-weight:600;">📦 完整备份</span>';
 
           const tdSize = document.createElement('td');
           tdSize.textContent = s.sizeFormatted;
@@ -2611,32 +2785,50 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           btnDelete.addEventListener('click', () => deleteSnapshot(s.filename));
 
           tdAction.append(btnRestore, linkDownload, btnDelete);
-          tr.append(tdName, tdSize, tdTime, tdAction);
+          tr.append(tdName, tdType, tdSize, tdTime, tdAction);
           tbody.appendChild(tr);
         });
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">加载快照失败</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ef4444;">加载快照失败</td></tr>';
       }
     }
 
-    async function createSnapshot() {
-      const name = prompt('请输入快照备注名称 (如: my_custom_models):', '');
-      if (name === null) return;
+    function openCreateSnapshotModal() {
+      const input = document.getElementById('snapshotNoteInput');
+      if (input) input.value = '';
+      const defaultRadio = document.querySelector('input[name="snapshotType"][value="full"]');
+      if (defaultRadio) defaultRadio.checked = true;
+      document.getElementById('snapshotCreateModal').style.display = 'flex';
+    }
+
+    function closeCreateSnapshotModal() {
+      document.getElementById('snapshotCreateModal').style.display = 'none';
+    }
+
+    async function submitCreateSnapshot() {
+      const name = document.getElementById('snapshotNoteInput')?.value?.trim() || '';
+      const typeRadio = document.querySelector('input[name="snapshotType"]:checked');
+      const type = typeRadio ? typeRadio.value : 'full';
+
+      closeCreateSnapshotModal();
+
       const btn = document.getElementById('btnCreateSnapshot');
-      const origText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = '⏳ 正在异步打包备份...';
-      updateTaskBanner({ label: '创建新快照' });
+      const origText = btn ? btn.textContent : '+ 创建新快照';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ 正在异步打包备份...';
+      }
+      updateTaskBanner({ label: type === 'config' ? '创建仅配置快照(无会话)' : '创建完整快照' });
 
       try {
         const res = await fetch(`${adminBase}/api/snapshots/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
+          body: JSON.stringify({ name, type })
         });
         const data = await res.json();
         if (data.ok) {
-          alert('快照创建成功: ' + data.snapshot.filename);
+          alert('快照创建成功: ' + data.snapshot.filename + ` (${data.snapshot.typeLabel || '备份成功'})`);
           await loadSnapshots();
         } else {
           alert('快照创建失败: ' + (data.error || '未知错误'));
@@ -2644,8 +2836,10 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       } catch (err) {
         alert('网络请求异常: ' + err.message);
       } finally {
-        btn.disabled = false;
-        btn.textContent = origText;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = origText;
+        }
         updateTaskBanner(null);
         await loadSnapshots();
       }
@@ -2766,6 +2960,16 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       if (newIdle !== oldIdle) diffs.push(`空闲休眠时间: ${oldIdle}分钟 -> ${newIdle}分钟`);
       if (newEnableCdp !== oldEnableCdp) diffs.push(`CDP 远程调试: ${oldEnableCdp ? '开' : '关'} -> ${newEnableCdp ? '开' : '关'}`);
       if (newCdpPort !== oldCdpPort) diffs.push(`CDP 调试端口: ${oldCdpPort} -> ${newCdpPort}`);
+      const newAutoHeal = document.getElementById('editAutoHealPlugins')?.value !== 'false';
+      const oldAutoHeal = currentData.autoHealPlugins !== false;
+      if (newAutoHeal !== oldAutoHeal) {
+        diffs.push(`启动崩溃自愈与插件自动隔离: ${oldAutoHeal ? '开启' : '关闭'} -> ${newAutoHeal ? '开启' : '关闭'}`);
+      }
+      const newAutoHealMax = Math.max(1, Math.min(20, parseInt(document.getElementById('editAutoHealMaxPerBoot')?.value) || 5));
+      const oldAutoHealMax = currentData.autoHealMaxPerBoot || 5;
+      if (newAutoHealMax !== oldAutoHealMax) {
+        diffs.push(`单周期自愈隔离上限: ${oldAutoHealMax}个 -> ${newAutoHealMax}个`);
+      }
 
       if (diffs.length === 0) {
         return alert('未检测到任何参数变动');
@@ -2777,6 +2981,8 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         vncPath: newVnc,
         authToken: rawToken ? rawToken : undefined,
         clearAuthToken: clearAuth,
+        autoHealPlugins: newAutoHeal,
+        autoHealMaxPerBoot: newAutoHealMax,
         resolution: newRes,
         idleTimeoutMinutes: newIdle,
         enableCdp: newEnableCdp,
@@ -2853,6 +3059,47 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         alert('请求发送异常: ' + err.message);
         btn.disabled = false;
         btn.textContent = '确认更改并立即重启';
+      }
+    }
+
+    // ── 故障自愈隔离告警与详情交互 ──────────────────────────────
+    function showAutoIsolatedDetails() {
+      const container = document.getElementById('autoIsolatedListContainer');
+      const events = currentData?.autoIsolatedEvents || [];
+      if (events.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">暂无故障自愈隔离记录</div>';
+      } else {
+        container.innerHTML = events.map(ev => {
+          const timeStr = new Date(ev.time).toLocaleString();
+          return `
+            <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:8px; padding:12px 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:700; color:var(--text-main); font-size:13px;">拓展：${escapeHtml(ev.plugin)}</span>
+                <span style="font-size:11px; color:var(--text-muted);">${escapeHtml(timeStr)}</span>
+              </div>
+              <div style="font-size:12px; color:#b45309; margin-bottom:8px;">触发原因：${escapeHtml(ev.reason)}</div>
+              <div class="terminal" style="max-height:160px; overflow-y:auto; font-size:11px; padding:10px; background:#0f172a; color:#e2e8f0; border-radius:6px; white-space:pre-wrap; word-break:break-all;">${escapeHtml(ev.logSnippet || '暂无详细报错日志')}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      document.getElementById('autoIsolatedModal').style.display = 'flex';
+    }
+
+    function closeAutoIsolatedModal() {
+      document.getElementById('autoIsolatedModal').style.display = 'none';
+    }
+
+    async function dismissAutoIsolatedAlert(fromModal = false) {
+      try {
+        await fetch(`${adminBase}/api/dsh/auto-heal/clear`, { method: 'POST' });
+        if (fromModal) closeAutoIsolatedModal();
+        const alertBox = document.getElementById('autoIsolatedAlert');
+        if (alertBox) alertBox.style.display = 'none';
+        if (currentData) currentData.autoIsolatedEvents = [];
+        await loadPlugins();
+      } catch (err) {
+        console.warn('清空自愈告警失败:', err.message);
       }
     }
 

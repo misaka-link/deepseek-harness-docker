@@ -118,7 +118,100 @@ class DshManager {
     this.recentLogs = [];
     this.lastExitInfo = null;
     this.lastKnownVersion = '';
+    this.autoHealEnabled = true;
+    this.maxAutoHealPerBoot = 5;
+    this.autoHealCountInCurrentBoot = 0;
+    this.autoIsolatedEvents = [];
     try { fs.mkdirSync(this.versionsCacheDir, { recursive: true }); } catch {}
+  }
+
+  setAutoHeal(enabled, maxPerBoot = 5) {
+    this.autoHealEnabled = enabled !== false;
+    this.maxAutoHealPerBoot = Math.max(1, Math.min(50, Number(maxPerBoot) || 5));
+    console.log(`[dsh-manager] 启动崩溃自愈与插件自动隔离策略已更新: ${this.autoHealEnabled ? '已开启' : '已关闭'} (单周期上限: ${this.maxAutoHealPerBoot})`);
+  }
+
+  getAutoIsolatedEvents() {
+    return this.autoIsolatedEvents || [];
+  }
+
+  clearAutoIsolatedEvents() {
+    this.autoIsolatedEvents = [];
+  }
+
+  detectCrashingPlugin(recentLogs = []) {
+    const logText = (recentLogs || []).join('\n');
+    if (!logText.trim()) return null;
+
+    let pluginsList = [];
+    try {
+      const pm = require('./plugin-manager');
+      const res = pm.getPlugins();
+      if (res && Array.isArray(res.plugins)) {
+        pluginsList = res.plugins;
+      }
+    } catch (e) {
+      console.warn('[dsh-manager] 获取插件列表进行崩溃分析失败:', e.message);
+      return null;
+    }
+
+    // 严禁对系统核心组件进行隔离，仅针对非核心、启用状态的插件进行分析
+    const candidatePlugins = pluginsList.filter(p => !p.isCore && p.enabled && !p.isUninstalled);
+    if (candidatePlugins.length === 0) return null;
+
+    // 1. 深度扫描：Node.js 异常调用栈定位 (node_modules/<name>/... 或 imported from ...<name>)
+    for (const p of candidatePlugins) {
+      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const stackRegex = new RegExp(`(?:node_modules[\\\\/]${escaped}[\\\\/]|imported from.*${escaped})`, 'i');
+      if (stackRegex.test(logText)) {
+        return {
+          name: p.name,
+          reason: 'stack_trace_match',
+          matched: `调用堆栈直接定位到故障插件: ${p.name}`
+        };
+      }
+    }
+
+    // 2. 深度扫描：Cordis 加载器或 dsh-app-boot 报告的激活失败/依赖缺失
+    for (const p of candidatePlugins) {
+      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const short = p.name.replace(/^@.*\//, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const loaderRegex = new RegExp(`(?:entry|bundle|plugin):?\\s*(?:${escaped}|${short})\\s*(?:\\([^)]*\\))?:\\s*(?:failed|Error|Cannot find|syntax|exception)`, 'i');
+      if (loaderRegex.test(logText)) {
+        return {
+          name: p.name,
+          reason: 'loader_activation_failed',
+          matched: `Cordis 加载器报告拓展装载失败: ${p.name}`
+        };
+      }
+    }
+
+    // 3. 深度扫描：Cordis Patch 配置语法错误或冲突
+    for (const p of candidatePlugins) {
+      const short = p.name.replace(/^@.*\//, '');
+      if (logText.includes('patch') && (logText.includes(p.name) || logText.includes(short))) {
+        return {
+          name: p.name,
+          reason: 'patch_conflict',
+          matched: `Cordis 补丁配置解析冲突: ${p.name}`
+        };
+      }
+    }
+
+    // 4. 深度扫描：插件内部标签致命报错打印 (如 [dsh-xxx] Error)
+    for (const p of candidatePlugins) {
+      const short = p.name.replace(/^@.*\//, '');
+      const tag = `[${short}]`;
+      if (logText.includes(tag) && (logText.includes('Error') || logText.includes('Exception') || logText.includes('crash'))) {
+        return {
+          name: p.name,
+          reason: 'plugin_logger_error',
+          matched: `插件内部日志打印致命异常: ${tag}`
+        };
+      }
+    }
+
+    return null;
   }
 
   getStatus() {
@@ -133,7 +226,11 @@ class DshManager {
       startTime: this.startTime,
       cachedVersions: this.getCachedVersions(),
       lastExitInfo: this.lastExitInfo,
-      recentLogs: this.getRecentLogs(30)
+      recentLogs: this.getRecentLogs(30),
+      autoHealEnabled: this.autoHealEnabled,
+      autoHealMaxPerBoot: this.maxAutoHealPerBoot,
+      autoHealCountInCurrentBoot: this.autoHealCountInCurrentBoot,
+      autoIsolatedEvents: this.autoIsolatedEvents
     };
   }
 
@@ -412,12 +509,58 @@ class DshManager {
         console.log(ok ? '[dsh-manager] DSH 已就绪' : '[dsh-manager] DSH 启动超时或崩溃');
         if (ok) {
           this.recentCrashCount = 0;
+          this.autoHealCountInCurrentBoot = 0;
           this.startTime = Date.now();
           if (this.launchToken) {
             await this.exchangeSessionCookie(this.launchToken);
           }
+          return resolve({ ok: true });
         }
-        resolve({ ok });
+
+        // ==========================================================
+        // 【启动失败自愈与故障插件自动隔离】
+        // 限制：1. 开启了自愈功能 (autoHealEnabled)
+        //       2. 单次启动周期内累计隔离未超过上限 (上限: 3 个)
+        //       3. 未处于主动停止或升级安装状态
+        // ==========================================================
+        if (this.autoHealEnabled && !this.stopping && !this.installing) {
+          if (this.autoHealCountInCurrentBoot < this.maxAutoHealPerBoot) {
+            const detected = this.detectCrashingPlugin(this.recentLogs);
+            if (detected) {
+              this.autoHealCountInCurrentBoot++;
+              console.warn(`[dsh-manager] 🛡️ 【启动故障自愈触发 (${this.autoHealCountInCurrentBoot}/${this.maxAutoHealPerBoot})】检测到拓展「${detected.name}」引发 DSH 启动失败 (${detected.matched})！`);
+              console.log(`[dsh-manager] 正在自动隔离并停用拓展「${detected.name}」以恢复系统可用性...`);
+
+              try {
+                const pm = require('./plugin-manager');
+                pm.togglePlugin(detected.name, false);
+
+                const event = {
+                  id: 'heal-' + Date.now(),
+                  plugin: detected.name,
+                  reason: detected.matched,
+                  time: Date.now(),
+                  logSnippet: this.recentLogs.slice(-20).join('\n')
+                };
+                this.autoIsolatedEvents.unshift(event);
+                if (this.autoIsolatedEvents.length > 10) this.autoIsolatedEvents.pop();
+
+                console.log(`[dsh-manager] 拓展「${detected.name}」已自动停用并固化状态，立即重新拉起 DSH 核心...`);
+                await ensurePortReleased(DSH_PORT, 3000);
+                const healBootRes = await this.boot(onProbe);
+                return resolve(healBootRes);
+              } catch (healErr) {
+                console.error('[dsh-manager] 执行插件自动隔离失败:', healErr.message);
+              }
+            } else {
+              console.log('[dsh-manager] 未能从最近运行日志中定位到明确的第三方故障拓展，跳过自动隔离');
+            }
+          } else {
+            console.warn(`[dsh-manager] ⚠️ 当前启动周期内自动隔离拓展次数已达上限 (${this.maxAutoHealPerBoot} 个)，已停止自动隔离以防死锁`);
+          }
+        }
+
+        resolve({ ok: false });
       });
     });
   }

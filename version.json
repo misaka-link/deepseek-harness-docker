@@ -10,21 +10,17 @@
     "upstreamNpm": "https://www.npmjs.com/package/@deepseek-ai/dsh"
   },
   "latest": {
-    "version": "0.1.2",
+    "version": "0.1.3",
     "releaseDate": "2026-09-18",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.2",
-    "changelog": "优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.3",
+    "changelog": "新增配置快照仅备份配置选项、内置插件规范中文描述、插件持久化状态防复活与启动崩溃自愈自动隔离",
     "changelogList": [
-      "Web Admin 顶部栏双版本独立展示 (容器套件 vs DSH 核心)",
-      "新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮",
-      "新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)",
-      "版本号点击下拉弹出更新速览框，动态自适应展示更新内容清单",
-      "全面适配官方最新 @deepseek-ai/dsh@0.1.6-alpha.2 引擎",
-      "适配 Web 侧边栏插件管理页与 profile 插件动态启停",
-      "适配右侧边栏 Office 文档 (Word / Excel / PPT) 原生预览",
-      "适配会话回合结束文件变更卡片与逐文件 Diff 审阅",
-      "新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发",
-      "核心版本切换安全弹窗新增破坏性重大重构防呆阻断警告"
+      "配置快照与备份新增「仅备份配置(无对话内容)」选项，自动排除会话历史与媒体附件，体积轻巧便于迁移分享",
+      "内置插件 (@dsh-custom/*) 与官方核心组件功能介绍全面支持规范中文呈现",
+      "重构插件管理状态机，在 /root/.dsh/plugins-state.json 中持久化记录已禁用/卸载插件，彻底解决容器更新后插件强制复活问题",
+      "Web Admin 拓展管理新增已卸载预装插件展示与一键重新安装支持",
+      "新增 DSH 启动崩溃自愈与故障插件自动隔离功能 (实验性)，智能提取错误堆栈并自动停用引发崩溃的拓展",
+      "设置面板支持自定义单启动周期自愈隔离数量上限 (默认 5 个)，防止崩溃死锁"
     ],
     "dshChangelogList": [
       "新增 Web 侧边栏“插件管理页”，支持 profile 插件动态启停与热装卸",
@@ -35,6 +31,24 @@
     ]
   },
   "history": {
+    "0.1.2": {
+      "version": "0.1.2",
+      "releaseDate": "2026-09-18",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.2",
+      "changelog": "优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)",
+      "changelogList": [
+        "Web Admin 顶部栏双版本独立展示 (容器套件 vs DSH 核心)",
+        "新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮",
+        "新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)",
+        "版本号点击下拉弹出更新速览框，动态自适应展示更新内容清单",
+        "全面适配官方最新 @deepseek-ai/dsh@0.1.6-alpha.2 引擎",
+        "适配 Web 侧边栏插件管理页与 profile 插件动态启停",
+        "适配右侧边栏 Office 文档 (Word / Excel / PPT) 原生预览",
+        "适配会话回合结束文件变更卡片与逐文件 Diff 审阅",
+        "新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发",
+        "核心版本切换安全弹窗新增破坏性重大重构防呆阻断警告"
+      ]
+    },
     "0.1.1": {
       "version": "0.1.1",
       "releaseDate": "2026-09-15",

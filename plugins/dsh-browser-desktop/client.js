@@ -30,8 +30,9 @@ window.__ModuleLoader__.load({
       saved: zh ? '已保存并在后台生效' : 'Saved and applied in background'
     };
 
-    function BrowserDesktopCard() {
-      const [open, setOpen] = React.useState(false);
+    function BrowserDesktopCard(props = {}) {
+      const isSection = !!props.isSection;
+      const [open, setOpen] = React.useState(isSection ? true : false);
       const [saving, setSaving] = React.useState(false);
       const [dirty, setDirty] = React.useState(false);
       const [savedMsg, setSavedMsg] = React.useState(false);
@@ -134,14 +135,25 @@ window.__ModuleLoader__.load({
       };
 
       // 使用 DSH 原生 CSS 类名与规范
-      const cardClasses = 'YyYd_a_card' + (open ? ' YyYd_a_cardOpen' : '');
+      const cardClasses = isSection
+        ? 'browser-desktop-section-card'
+        : ('YyYd_a_card' + (open ? ' YyYd_a_cardOpen' : ''));
       const chevronClasses = 'YyYd_a_chevron' + (open ? ' YyYd_a_chevronOpen' : '');
 
       return React.createElement(
-        'li',
-        { className: cardClasses },
-        // 卡片折叠标题行 (与官方样式 100% 对齐)
-        React.createElement(
+        isSection ? 'div' : 'li',
+        {
+          className: cardClasses,
+          style: isSection ? {
+            background: 'var(--dsh-card-bg, #ffffff)',
+            border: '1px solid var(--dsh-border, #e2e8f0)',
+            borderRadius: '12px',
+            padding: '20px 24px',
+            listStyle: 'none'
+          } : undefined
+        },
+        // 卡片折叠标题行 (仅在老版本内嵌卡片模式下渲染折叠按钮)
+        !isSection ? React.createElement(
           'button',
           {
             type: 'button',
@@ -171,12 +183,12 @@ window.__ModuleLoader__.load({
             },
             React.createElement('path', { d: 'M3.5 5.25L7 8.75L10.5 5.25' })
           )
-        ),
+        ) : null,
 
-        // 展开后的表单区域
+        // 表单区域
         open ? React.createElement(
           'div',
-          { className: 'YyYd_a_body' },
+          { className: 'YyYd_a_body', style: isSection ? { padding: 0, marginTop: 0 } : undefined },
           // 字段 1: 虚拟分辨率
           React.createElement(
             'div',
@@ -426,9 +438,51 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function BrowserDesktopSection() {
+      return React.createElement(
+        'div',
+        { style: { padding: '24px 28px', maxWidth: '820px' } },
+        React.createElement('div', { style: { marginBottom: '20px', borderBottom: '1px solid var(--dsh-border, #e2e8f0)', paddingBottom: '14px' } },
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' } },
+            React.createElement('h2', { style: { fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--dsh-text, #0f172a)', display: 'flex', alignItems: 'center', gap: '8px' } },
+              React.createElement('span', null, '🖥️'),
+              labels.title
+            ),
+            React.createElement('span', {
+              style: {
+                fontSize: '12px',
+                fontWeight: 600,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: '#e0f2fe',
+                color: '#0284c7'
+              }
+            }, zh ? '内置容器套件组件' : 'Builtin Suite Component')
+          ),
+          React.createElement('p', { style: { fontSize: '13px', color: 'var(--dsh-text-muted, #64748b)', margin: 0, lineHeight: 1.5 } }, labels.description)
+        ),
+        React.createElement(BrowserDesktopCard, { isSection: true })
+      );
+    }
+
     function apply(ctx) {
       if (ctx.slots && typeof ctx.slots.inject === 'function') {
-        // 1. 注册设置中心插件配置卡片 (始终加载)
+        // 1. 现代 DSH 规范 (>= 0.1.5 / 0.1.6)：将“容器浏览器”注册为设置中心的独立一等公民 Section (settings.section)
+        // 与 dshmarket 和 dsh-thinking-effort 保持完全一致的注册范式
+        ctx.slots.inject('settings.section', () => {
+          return ctx.slots.register({
+            name: 'settings.section',
+            id: 'browser-desktop',
+            order: 45,
+            label: () => (zh ? '容器浏览器' : 'Container Browser')
+          }, BrowserDesktopSection);
+        });
+
+        // =========================================================================
+        // 【兼容老版本 DSH (<= 0.1.4 / 0.1.5) - 历史向下兼容】
+        // 说明：老版本 DSH 在“设置 -> 插件”菜单内通过 settings.plugin.item 插槽装载各插件的配置卡片。
+        // 若后续彻底移除对老版本 DSH 的支持，可直接安全删除以下整个代码块：
+        // =========================================================================
         ctx.slots.inject('settings.plugin.item', () => {
           return ctx.slots.register({
             name: 'settings.plugin.item',
@@ -436,6 +490,26 @@ window.__ModuleLoader__.load({
             order: 80
           }, BrowserDesktopCard);
         });
+
+        // 兼容支持 settingsScope 作用域插槽注入 (部分 0.1.5 次版本)
+        if (typeof ctx.inject === 'function') {
+          try {
+            ctx.inject(['settingsScope'], (scoped) => {
+              if (scoped && scoped.slots) {
+                scoped.slots.inject('settings.plugin.item', () => {
+                  return scoped.slots.register({
+                    name: 'settings.plugin.item',
+                    key: 'browser-desktop',
+                    order: 80
+                  }, BrowserDesktopCard);
+                });
+              }
+            });
+          } catch (e) {}
+        }
+        // =========================================================================
+        // 【兼容老版本 DSH 结束】
+        // =========================================================================
 
         // 2. 检查右侧边栏 Tab 开关状态 (默认关闭，用户在设置中开启后生效)
         const isSidebarTabEnabled = typeof localStorage !== 'undefined' && localStorage.getItem('dsh_desktop_enable_sidebar_tab') === 'true';

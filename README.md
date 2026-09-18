@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.2`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.3`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
 > 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.2`、`:0.1.6-alpha.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.2`、`:0.1.2-market`），精确锁定本容器套件自身的版本。
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.3`、`:0.1.3-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.2`<br>(`...:v0.1.2`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.2-market`<br>(`...:v0.1.2-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.3`<br>(`...:v0.1.3`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.3-market`<br>(`...:v0.1.3-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.2`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.3`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.2-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.3-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -168,6 +168,24 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.1.3
+- ⚡ **快照备份新增「仅备份配置 (无对话内容)」选项**：
+  - 新增独立的配置轻量快照模式，自动排除会话历史（`sessions/`）、多媒体附件（`attachments/`）与会话投影缓存；
+  - 归档体积极度轻巧，便于快速导出分享或多机迁移模型凭据与系统参数，杜绝隐私泄露风险；
+  - Web Admin 快照管理提供可视化模态框选项与类型徽标识别（`📦 完整备份` vs `⚡ 仅配置 (无会话)`）。
+- 🌐 **内置插件与核心组件全面支持规范中文介绍**：
+  - 内置插件（`@dsh-custom/dsh-browser-desktop`、`@dsh-custom/dsh-settings-config-path`）以及官方核心运行环境的简介全面汉化；
+  - 消除管理后台拓展列表英中混杂现象，提升直观中文阅读体验。
+- 🛡️ **插件禁用与卸载持久化状态机重构（彻底解决重启强制复活 Bug）**：
+  - 在持久化存储卷中引入独立状态清单 `/root/.dsh/plugins-state.json`，原子化记录已停用与已卸载插件；
+  - 改造容器启动装配脚本 `install-plugin.mjs`，容器更新或重启时优先遵循持久化偏好，绝不覆盖用户禁用决定；
+  - Web Admin 拓展管理新增已卸载预装插件列表呈现与「一键重新安装」功能支持。
+- 🚀 **新增 DSH 启动崩溃自愈与故障插件自动隔离系统 (实验性)**：
+  - 启动阶段多层扫描运行日志（Node 调用栈、Cordis Loader 报错、Patch 语法冲突与未捕获异常），精准定位引发崩溃的故障插件；
+  - 自动停用隔离故障插件并自愈重启，保障主 Web 服务与网关始终可用，内置系统核心白名单保护；
+  - 单次启动周期内硬性上限设定为 N 个，在 Web Admin 设置页面支持自定义数量上限（默认 5 个），杜绝崩溃死锁；
+  - Web Admin 顶层提供自愈警示横幅与日志回溯模态框，直观呈现崩溃现场堆栈与隔离记录。
 
 ### v0.1.2
 - 🎛️ **Web Admin 顶部栏双版本矩阵与多级安全预警系统 (落实 Issue #3)**：

@@ -72,21 +72,37 @@ async function testArchiveIntegrity(archivePath) {
 
 /**
  * 异步非阻塞创建配置快照
+ * @param {string|object} nameOrOpts - 快照备注名或参数对象 { name, type }
+ * @param {string} [backupType='full'] - 备份类型: 'full' (完整备份) 或 'config' (仅配置无会话)
  */
-async function createBackup(name = '') {
+async function createBackup(nameOrOpts = '', backupType = 'full') {
   if (activeTask) {
     throw new Error(`当前正在执行 ${activeTask.label} 操作，请稍候再试`);
   }
 
+  let name = '';
+  let type = 'full';
+  if (typeof nameOrOpts === 'object' && nameOrOpts !== null) {
+    name = nameOrOpts.name || '';
+    type = nameOrOpts.type || nameOrOpts.backupType || 'full';
+  } else {
+    name = nameOrOpts || '';
+    type = backupType || 'full';
+  }
+
+  const isConfigOnly = type === 'config';
   const safeName = sanitizeName(name);
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `dsh-snapshot-${ts}-${safeName}.tar.gz`;
+  const filename = isConfigOnly
+    ? `dsh-config-${ts}-${safeName}.tar.gz`
+    : `dsh-snapshot-${ts}-${safeName}.tar.gz`;
   const finalPath = path.join(SNAPSHOTS_DIR, filename);
   const tmpPath = path.join(SNAPSHOTS_DIR, `.${filename}.tmp`);
 
-  activeTask = { type: 'backup', label: '创建快照', startedAt: Date.now() };
+  const taskDesc = isConfigOnly ? '仅配置快照(无会话)' : '完整快照';
+  activeTask = { type: 'backup', label: `创建${taskDesc}`, startedAt: Date.now() };
 
-  console.log(`[backup-service] 开始异步创建快照: ${filename}...`);
+  console.log(`[backup-service] 开始异步创建${taskDesc}: ${filename}...`);
 
   try {
     // 排除庞大且不影响配置的临时与缓存目录，极大提升打包速度
@@ -102,6 +118,16 @@ async function createBackup(name = '') {
       '--exclude=.dsh/tmp',
       '--exclude=.dsh/gateway.config.json'
     ];
+
+    // 仅配置模式：完全排除所有对话会话历史、多媒体附件及会话投影缓存，仅保留配置、模型凭据与插件
+    if (isConfigOnly) {
+      tarArgs.push(
+        '--exclude=.dsh/sessions',
+        '--exclude=.dsh/attachments',
+        '--exclude=.dsh/storages/session_projcache',
+        '--exclude=.dsh/storages/session_projcache_archive_manager_v2'
+      );
+    }
 
     if (isMultiThread) {
       tarArgs.push('-I', 'pigz');
@@ -125,12 +151,14 @@ async function createBackup(name = '') {
 
     // 原子重命名
     fs.renameSync(tmpPath, finalPath);
-    console.log(`[backup-service] 快照创建成功: ${filename} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(`[backup-service] ${taskDesc}创建成功: ${filename} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
 
     return {
       ok: true,
       snapshot: {
         filename,
+        type: isConfigOnly ? 'config' : 'full',
+        typeLabel: isConfigOnly ? '仅配置 (无会话)' : '完整备份',
         sizeBytes: stat.size,
         sizeFormatted: `${(stat.size / 1024 / 1024).toFixed(2)} MB`,
         createdAt: stat.mtime.toISOString(),
@@ -139,7 +167,7 @@ async function createBackup(name = '') {
     };
   } catch (err) {
     try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch {}
-    console.error('[backup-service] 快照创建失败:', err.message);
+    console.error(`[backup-service] ${taskDesc}创建失败:`, err.message);
     throw err;
   } finally {
     activeTask = null;
@@ -387,8 +415,11 @@ function listBackups() {
       try {
         const filePath = path.join(SNAPSHOTS_DIR, filename);
         const stat = fs.statSync(filePath);
+        const isConfig = filename.startsWith('dsh-config-') || filename.includes('-config-') || filename.includes('_config_');
         return {
           filename,
+          type: isConfig ? 'config' : 'full',
+          typeLabel: isConfig ? '仅配置 (无会话)' : '完整备份',
           sizeBytes: stat.size,
           sizeFormatted: `${(stat.size / 1024 / 1024).toFixed(2)} MB`,
           createdAt: stat.mtime.toISOString()

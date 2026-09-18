@@ -58,6 +58,10 @@ if (persisted.authToken !== undefined) {
 if (persisted.desktop) {
   desktopManager.updateConfig(persisted.desktop);
 }
+// 启动崩溃自愈与故障插件自动隔离（默认开启，单次启动周期上限默认 5 个，允许用户自定义）
+const autoHealEnabled = persisted.autoHealPlugins !== false;
+const autoHealMaxPerBoot = Math.max(1, Math.min(50, Number(persisted.autoHealMaxPerBoot) || 5));
+dshManager.setAutoHeal(autoHealEnabled, autoHealMaxPerBoot);
 
 // ── 端口与动态路径配置 ───────────────────────────────────────
 const PROXY_PORT = Number(persisted.proxyPort || process.env.PROXY_PORT) || 3080;
@@ -315,7 +319,10 @@ async function handleAdminApi(req, res, pathname, query) {
         },
         authEnabled: isAuthEnabled(),
         authToken: isAuthEnabled() && getAuthToken() ? '******' : '',
-        hasAuthToken: Boolean(getAuthToken())
+        hasAuthToken: Boolean(getAuthToken()),
+        autoHealPlugins: dshManager.autoHealEnabled,
+        autoHealMaxPerBoot: dshManager.maxAutoHealPerBoot,
+        autoIsolatedEvents: dshManager.getAutoIsolatedEvents()
       });
     }
 
@@ -403,6 +410,11 @@ async function handleAdminApi(req, res, pathname, query) {
       return sendJson(res, r.ok ? 200 : 500, r);
     }
 
+    if (subPath === '/api/dsh/auto-heal/clear' && req.method === 'POST') {
+      dshManager.clearAutoIsolatedEvents();
+      return sendJson(res, 200, { ok: true });
+    }
+
     // 5. 桌面启停控制
     if (subPath === '/api/desktop/start' && req.method === 'POST') {
       const body = await readJsonBody(req);
@@ -435,7 +447,7 @@ async function handleAdminApi(req, res, pathname, query) {
     if (subPath === '/api/snapshots/create' && req.method === 'POST') {
       const body = await readJsonBody(req);
       try {
-        const r = await backupService.createBackup(body.name);
+        const r = await backupService.createBackup(body.name, body.type || body.backupType);
         return sendJson(res, 200, r);
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: err.message });
@@ -512,6 +524,17 @@ async function handleAdminApi(req, res, pathname, query) {
       }
     }
 
+    if (subPath === '/api/plugins/install' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      try {
+        if (!body || !body.name) throw new Error('缺少插件名称');
+        const r = pluginManager.installPlugin(body.name);
+        return sendJson(res, 200, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
+    }
+
     // 7. 保存网关与系统配置并立即重启
     if (subPath === '/api/config/save' && req.method === 'POST') {
       const body = await readJsonBody(req);
@@ -542,11 +565,17 @@ async function handleAdminApi(req, res, pathname, query) {
         updatedToken = String(body.authToken).trim();
       }
 
+      const autoHealPlugins = body.autoHealPlugins !== false;
+      const autoHealMaxPerBoot = Math.max(1, Math.min(50, Number(body.autoHealMaxPerBoot) || 5));
+      dshManager.setAutoHeal(autoHealPlugins, autoHealMaxPerBoot);
+
       const newCfg = {
         proxyPort: newPort,
         adminPath: newAdmin,
         vncPath: newVnc,
         authToken: updatedToken,
+        autoHealPlugins,
+        autoHealMaxPerBoot,
         desktop: {
           width,
           height,
