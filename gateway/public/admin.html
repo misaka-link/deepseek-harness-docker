@@ -1594,7 +1594,7 @@
       try {
         const res = await fetch(`${adminBase}/api/plugins/install`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify({ name })
         });
         const data = await res.json();
@@ -1614,7 +1614,7 @@
       try {
         const res = await fetch(`${adminBase}/api/plugins/toggle`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify({ name, enabled: enable })
         });
         const data = await res.json();
@@ -1633,7 +1633,7 @@
       try {
         const res = await fetch(`${adminBase}/api/plugins/uninstall`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify({ name })
         });
         const data = await res.json();
@@ -1651,7 +1651,7 @@
       btn.disabled = true;
       btn.textContent = '正在重启 DSH...';
       try {
-        const res = await fetch(`${adminBase}/api/dsh/restart`, { method: 'POST' });
+        const res = await fetch(`${adminBase}/api/dsh/restart`, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
         const data = await res.json();
         if (data.ok) {
           alert('🎉 DSH 服务重启就绪！拓展改动已生效。');
