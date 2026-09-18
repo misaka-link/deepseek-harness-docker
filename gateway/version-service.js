@@ -46,7 +46,7 @@ class VersionService {
         if (pkg.version) return pkg.version;
       }
     } catch {}
-    return '0.1.2';
+    return '0.1.3';
   }
 
   getLocalMeta() {
@@ -74,30 +74,28 @@ class VersionService {
       },
       latest: {
         version: this.getLocalProjectVersion(),
-        releaseDate: '2026-09-15',
-        releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1',
-        changelog: '优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)',
+        releaseDate: '2026-09-18',
+        releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.3',
+        changelog: '新增配置快照仅备份配置选项、内置插件规范中文描述、插件持久化状态防复活与启动崩溃自愈自动隔离',
         changelogList: [
-          'Web Admin 顶部栏双版本独立解耦展示 (容器套件 vs DSH 核心)',
-          '新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮',
-          '新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)',
-          '新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发',
-          '新增版本更新速览下拉弹框与破坏性版本切换红线防呆阻断'
+          '配置快照与备份新增「仅备份配置(无对话内容)」选项，自动排除会话历史与媒体附件，体积轻巧便于迁移分享',
+          '内置插件 (@dsh-custom/*) 与官方核心组件功能介绍全面支持规范中文呈现',
+          '重构插件管理状态机，在 /root/.dsh/plugins-state.json 中持久化记录已禁用/卸载插件，彻底解决容器更新后插件强制复活问题',
+          'Web Admin 拓展管理新增已卸载预装插件展示与一键重新安装支持',
+          '新增 DSH 启动崩溃自愈与故障插件自动隔离功能 (实验性)，智能提取错误堆栈并自动停用引发崩溃的拓展',
+          '设置面板支持自定义单启动周期自愈隔离数量上限 (默认 5 个)，防止崩溃死锁'
         ]
       },
       history: {
+        '0.1.2': {
+          version: '0.1.2',
+          releaseDate: '2026-09-18',
+          releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.2'
+        },
         '0.1.1': {
           version: '0.1.1',
           releaseDate: '2026-09-15',
-          releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1',
-          changelog: '优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)',
-          changelogList: [
-            'Web Admin 顶部栏双版本独立解耦展示 (容器套件 vs DSH 核心)',
-            '新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮',
-            '新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)',
-            '新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发',
-            '新增版本更新速览下拉弹框与破坏性版本切换红线防呆阻断'
-          ]
+          releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1'
         }
       },
       compatibility: {
@@ -133,21 +131,37 @@ class VersionService {
       return this.inFlightFetch;
     }
 
+    if (force) {
+      // 强制刷新时，异步触发 jsDelivr 缓存清理
+      try {
+        fetch('https://purge.jsdelivr.net/gh/misaka-link/deepseek-harness-docker@main/version.json').catch(() => {});
+      } catch {}
+    }
+
     this.inFlightFetch = (async () => {
-      // 多通道降级策略: jsdelivr CDN (免API限流、国内极速) -> github raw -> ghproxy
+      const ts = Date.now();
+      // 多通道降级策略: 实时 GitHub Raw -> ghproxy 镜像 -> jsDelivr CDN
       const endpoints = [
+        `https://raw.githubusercontent.com/misaka-link/deepseek-harness-docker/main/version.json?_=${ts}`,
+        `https://ghproxy.net/https://raw.githubusercontent.com/misaka-link/deepseek-harness-docker/main/version.json?_=${ts}`,
         'https://fastly.jsdelivr.net/gh/misaka-link/deepseek-harness-docker@main/version.json',
-        'https://raw.githubusercontent.com/misaka-link/deepseek-harness-docker/main/version.json',
-        'https://ghproxy.net/https://raw.githubusercontent.com/misaka-link/deepseek-harness-docker/main/version.json'
+        'https://cdn.jsdelivr.net/gh/misaka-link/deepseek-harness-docker@main/version.json'
       ];
+
+      const local = this.getLocalMeta();
 
       for (const url of endpoints) {
         try {
           const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
           if (resp.ok) {
             const data = await resp.json();
-            if (data && data.project && data.latest) {
-              const local = this.getLocalMeta();
+            if (data && data.project && data.latest && data.latest.version) {
+              // 防 CDN 脏缓存保护：若远端版本比本地已知最新版本还旧，判定为 CDN 历史缓存，跳过并尝试下一个通道
+              if (compareSemver(data.latest.version, local.latest?.version || '0.0.0') < 0) {
+                console.warn(`[version-service] 通道 ${url} 返回陈旧版本 (v${data.latest.version} < 本地已知 v${local.latest?.version})，跳过该通道`);
+                continue;
+              }
+
               if (!data.latest.changelogList && local.latest?.changelogList) {
                 data.latest.changelogList = local.latest.changelogList;
               }
@@ -168,7 +182,6 @@ class VersionService {
       }
 
       // 所有远端通道未连通时，优雅回退本地元数据
-      const local = this.getLocalMeta();
       this.cachedMeta = local;
       this.lastFetched = Date.now();
       return local;
