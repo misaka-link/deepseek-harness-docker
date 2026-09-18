@@ -3,11 +3,14 @@ const crypto = require('crypto');
 let AUTH_TOKEN = (process.env.AUTH_TOKEN || process.env.ACCESS_CODE || '').trim();
 const COOKIE_NAME = 'dsh_auth_session';
 const COOKIE_MAX_AGE = Number(process.env.COOKIE_MAX_AGE) || 30 * 24 * 3600; // 30 days
-let SIGNING_SECRET = process.env.SESSION_SECRET || (AUTH_TOKEN ? crypto.createHmac('sha256', 'dsh-session-salt-v1').update(AUTH_TOKEN).digest('hex') : crypto.randomBytes(32).toString('hex'));
+// SIGNING_SECRET must never be derived deterministically from AUTH_TOKEN, since
+// AUTH_TOKEN may be known/guessable, which would let an attacker recompute the
+// signing secret and forge valid session cookies (CWE-330). Always fall back to
+// a securely generated random secret when SESSION_SECRET is not configured.
+let SIGNING_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 
 function updateAuthToken(newToken) {
   AUTH_TOKEN = (newToken !== undefined ? String(newToken) : '').trim();
-  SIGNING_SECRET = AUTH_TOKEN ? crypto.createHmac('sha256', 'dsh-session-salt-v1').update(AUTH_TOKEN).digest('hex') : crypto.randomBytes(32).toString('hex');
   console.log('[auth] 认证口令已更新, 状态:', isAuthEnabled() ? '已启用认证' : '已禁用认证 (无感直通)');
 }
 
