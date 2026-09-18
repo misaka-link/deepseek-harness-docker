@@ -30,8 +30,11 @@
 
 ### 拓展与插件生态 (Plugins & Management)
 - 🌐 **内置插件与核心组件全面支持规范中文介绍**：
-  - 内置插件（`@dsh-custom/dsh-browser-desktop`、`@dsh-custom/dsh-settings-config-path`）以及官方核心运行环境的简介全面规范为中文；
+  - 内置插件（`@dsh-custom/dsh-browser-desktop`）以及官方核心运行环境的简介全面规范为中文；
   - 彻底消除管理后台拓展列表中英文混杂现象，提升直观中文阅读与管理体验。
+- 🧹 **全面下线已废弃无用的 `@dsh-custom/dsh-settings-config-path` 插件**：
+  - 鉴于 `scripts/patch-dsh-client.mjs` 早已在 React 组件底层彻底消除不可点击的「打开配置文件」按钮（`return null`），原有仅包含一条隐藏 CSS 样式的占位插件已成 100% 冗余空气代码；
+  - 彻底移除该插件源码、建立的软链接与 bundles 依赖，并在 `install-plugin.mjs` 中加入对历史数据卷的自动平滑清理迁移，精简 DSH 启动加载耗时与插件列表。
 - 🛡️ **重构插件禁用与卸载持久化状态机 (彻底根治重启强制复活 Bug)**：
   - 在持久化存储卷中建立独立状态清单 `/root/.dsh/plugins-state.json`，原子化记录已停用与已卸载插件；
   - 改造容器启动装配脚本 `install-plugin.mjs`，容器更新镜像或重启时优先遵循用户持久化偏好，绝不强行将已停用或已卸载的插件塞回 `bundles`；

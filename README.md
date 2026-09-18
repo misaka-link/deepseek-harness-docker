@@ -175,8 +175,9 @@ docker compose -f docker-compose.market.yml up -d
   - 归档体积极度轻巧，便于快速导出分享或多机迁移模型凭据与系统参数，杜绝隐私泄露风险；
   - Web Admin 快照管理提供可视化模态框选项与类型徽标识别（`📦 完整备份` vs `⚡ 仅配置 (无会话)`）。
 - 🌐 **内置插件与核心组件全面支持规范中文介绍**：
-  - 内置插件（`@dsh-custom/dsh-browser-desktop`、`@dsh-custom/dsh-settings-config-path`）以及官方核心运行环境的简介全面汉化；
-  - 消除管理后台拓展列表英中混杂现象，提升直观中文阅读体验。
+  - 内置插件（`@dsh-custom/dsh-browser-desktop`）以及官方核心运行环境的简介全面汉化；
+  - 消除管理后台拓展列表英中混杂现象，提升直观中文阅读体验；
+  - 彻底下线已无实际意义的 `@dsh-custom/dsh-settings-config-path` 冗余插件，精简加载链路。
 - 🛡️ **插件禁用与卸载持久化状态机重构（彻底解决重启强制复活 Bug）**：
   - 在持久化存储卷中引入独立状态清单 `/root/.dsh/plugins-state.json`，原子化记录已停用与已卸载插件；
   - 改造容器启动装配脚本 `install-plugin.mjs`，容器更新或重启时优先遵循持久化偏好，绝不覆盖用户禁用决定；

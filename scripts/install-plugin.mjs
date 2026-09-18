@@ -247,63 +247,33 @@ try {
   console.warn('[install-plugin] 初始化默认工作区失败:', e.message);
 }
 
-// 5. 自动注册 dsh-settings-config-path 插件到 Web Profile (尊重用户持久化偏好)
-const pathPluginSource = '/app/plugins/dsh-settings-config-path';
-const pathPluginTargetLink = path.join(linkDir, 'dsh-settings-config-path');
-const configPathPluginName = '@dsh-custom/dsh-settings-config-path';
-const isConfigPathUninstalled = pluginState.uninstalled.includes(configPathPluginName);
-const isConfigPathDisabled = pluginState.disabled.includes(configPathPluginName);
+// 5. 自动清理已废弃下线的历史内置插件 (如已无实际意义的 @dsh-custom/dsh-settings-config-path)
+try {
+  const legacyLink = path.join(linkDir, 'dsh-settings-config-path');
+  if (fs.existsSync(legacyLink) || fs.lstatSync(legacyLink).isSymbolicLink()) {
+    fs.unlinkSync(legacyLink);
+    console.log('[install-plugin] 成功移除已废弃插件软链: dsh-settings-config-path');
+  }
+} catch {}
 
-if (isConfigPathUninstalled) {
-  console.log('[install-plugin] 用户已明确卸载 dsh-settings-config-path，跳过装配');
+if (fs.existsSync(pkgPath)) {
   try {
-    if (fs.existsSync(pathPluginTargetLink) || fs.lstatSync(pathPluginTargetLink).isSymbolicLink()) fs.unlinkSync(pathPluginTargetLink);
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    let changed = false;
+    const legacyPkgName = '@dsh-custom/dsh-settings-config-path';
+    if (pkg.dependencies && pkg.dependencies[legacyPkgName]) {
+      delete pkg.dependencies[legacyPkgName];
+      changed = true;
+    }
+    if (pkg.dsh?.profile?.bundles?.includes(legacyPkgName)) {
+      pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== legacyPkgName);
+      changed = true;
+    }
+    if (changed) {
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+      console.log('[install-plugin] 成功从 package.json 依赖与 bundles 中清理已下线插件 @dsh-custom/dsh-settings-config-path');
+    }
   } catch {}
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      let ch = false;
-      if (pkg.dependencies && pkg.dependencies[configPathPluginName]) {
-        delete pkg.dependencies[configPathPluginName];
-        ch = true;
-      }
-      if (pkg.dsh?.profile?.bundles?.includes(configPathPluginName)) {
-        pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== configPathPluginName);
-        ch = true;
-      }
-      if (ch) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    } catch {}
-  }
-} else if (fs.existsSync(pathPluginSource)) {
-  try {
-    if (fs.existsSync(pathPluginTargetLink) || fs.lstatSync(pathPluginTargetLink).isSymbolicLink()) fs.unlinkSync(pathPluginTargetLink);
-    fs.symlinkSync(pathPluginSource, pathPluginTargetLink);
-    console.log('[install-plugin] 建立 dsh-settings-config-path 软链接成功');
-  } catch (e) {}
-
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      pkg.dependencies = pkg.dependencies || {};
-      pkg.dependencies[configPathPluginName] = 'link:' + pathPluginSource;
-      pkg.dsh = pkg.dsh || { profile: {} };
-      pkg.dsh.profile = pkg.dsh.profile || {};
-      pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
-
-      if (isConfigPathDisabled) {
-        if (pkg.dsh.profile.bundles.includes(configPathPluginName)) {
-          pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== configPathPluginName);
-        }
-        console.log('[install-plugin] 用户已显式禁用 dsh-settings-config-path，保持停用状态 (不加入 bundles)');
-      } else {
-        if (!pkg.dsh.profile.bundles.includes(configPathPluginName)) {
-          pkg.dsh.profile.bundles.push(configPathPluginName);
-        }
-        console.log('[install-plugin] 注册 dsh-settings-config-path 到 package.json 成功');
-      }
-      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    } catch (e) {}
-  }
 }
 
 // 6. 自动识别并装配已预装的 Market 插件 (从 plugins.market.list 动态同步，并完全尊重用户禁用/卸载偏好)

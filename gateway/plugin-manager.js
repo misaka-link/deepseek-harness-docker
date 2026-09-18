@@ -20,7 +20,6 @@ const PLUGIN_DESCRIPTIONS_ZH = {
   '@deepseek-ai/dsh-experimental-agent-team-profile': '官方 Agent Teams 多智能体协作实验性套件',
   '@deepseek-ai/dsh-experimental-agent-team-web-profile': '官方 Agent Teams Web 端多智能体协作交互界面',
   '@dsh-custom/dsh-browser-desktop': '容器 Chromium 图形浏览器与 noVNC 桌面集成插件，支持 AI 自主浏览网页、多标签管理与实时无损截图',
-  '@dsh-custom/dsh-settings-config-path': '配置文件路径展示插件，消除 Web 界面不可点击的「打开配置」按钮并展示真实配置路径',
   'dshmarket': 'DSH 可视化插件市场：在界面内直接浏览、搜索并一键安装/管理社区拓展插件',
   '@hytime/dsh-thinking-effort': '为 DSH 的第三方模型补充可配置的思考强度档位，并支持设置子 Agent 默认思考强度',
   'dsh-client-auto-continue': 'DSH Web 客户端自动继续插件：遇网络波动或异常中断时自动发送本地化续写提示'
