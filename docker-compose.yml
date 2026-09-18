@@ -19,6 +19,7 @@ services:
       - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1}
 
       # --- 以下参数均已在容器和网关内置默认值，默认注释保持简洁，按需启用：---
+      # - SESSION_SECRET=${SESSION_SECRET:-}  # 自定义 Session 签名密钥 (默认自动生成并持久化至数据卷)
       # - ADMIN_PATH=/admin                  # 自定义管理面板访问路径 (默认 /admin)
       # - VNC_PATH=/vnc                      # 自定义桌面 VNC 访问路径 (默认 /vnc)
       # - DSH_WORKSPACE=/workspace           # 默认工作区目录

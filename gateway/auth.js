@@ -1,13 +1,53 @@
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 let AUTH_TOKEN = (process.env.AUTH_TOKEN || process.env.ACCESS_CODE || '').trim();
 const COOKIE_NAME = 'dsh_auth_session';
 const COOKIE_MAX_AGE = Number(process.env.COOKIE_MAX_AGE) || 30 * 24 * 3600; // 30 days
-let SIGNING_SECRET = process.env.SESSION_SECRET || (AUTH_TOKEN ? crypto.createHmac('sha256', 'dsh-session-salt-v1').update(AUTH_TOKEN).digest('hex') : crypto.randomBytes(32).toString('hex'));
+
+// 初始化签名密钥：优先环境变量 -> 其次持久化存储 -> 首次生成 256 位高强度安全随机数并持久化 (CWE-330)
+function initSigningSecret() {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
+    return process.env.SESSION_SECRET.trim();
+  }
+
+  const secretFile = process.env.SESSION_SECRET_FILE || path.join(process.env.DSH_DIR || '/root/.dsh', '.session_secret');
+  try {
+    if (fs.existsSync(secretFile)) {
+      const stored = fs.readFileSync(secretFile, 'utf8').trim();
+      if (stored.length >= 32) {
+        return stored;
+      }
+    }
+  } catch (e) {
+    console.warn('[auth] 读取持久化 session_secret 失败:', e.message);
+  }
+
+  // 生成密码学安全的 256 位真随机密钥，彻底解决 CWE-330 可预测密钥问题
+  const generated = crypto.randomBytes(32).toString('hex');
+  try {
+    const secretDir = path.dirname(secretFile);
+    if (!fs.existsSync(secretDir)) {
+      fs.mkdirSync(secretDir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(secretFile, generated, { encoding: 'utf8', mode: 0o600 });
+    console.log('[auth] 已初始化并持久化安全 Session 签名密钥至:', secretFile);
+  } catch (e) {
+    console.warn('[auth] 持久化 session_secret 失败，将临时保存在内存中:', e.message);
+  }
+
+  return generated;
+}
+
+let SIGNING_SECRET = initSigningSecret();
+
+function getSigningSecret() {
+  return SIGNING_SECRET;
+}
 
 function updateAuthToken(newToken) {
   AUTH_TOKEN = (newToken !== undefined ? String(newToken) : '').trim();
-  SIGNING_SECRET = AUTH_TOKEN ? crypto.createHmac('sha256', 'dsh-session-salt-v1').update(AUTH_TOKEN).digest('hex') : crypto.randomBytes(32).toString('hex');
   console.log('[auth] 认证口令已更新, 状态:', isAuthEnabled() ? '已启用认证' : '已禁用认证 (无感直通)');
 }
 
@@ -173,5 +213,6 @@ module.exports = {
   recordAuthAttempt,
   updateAuthToken,
   getAuthToken,
+  getSigningSecret,
   COOKIE_NAME
 };

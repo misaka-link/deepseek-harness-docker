@@ -360,6 +360,68 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // 注入右侧边栏 Tab 标签宽度保护样式 (防止文字被关闭按钮截断)
+    if (typeof document !== 'undefined' && !document.getElementById('dsh-browser-desktop-tab-css')) {
+      const style = document.createElement('style');
+      style.id = 'dsh-browser-desktop-tab-css';
+      style.textContent = `
+        [data-dockkit-tab]:has([data-dsh-desktop-tab-title]) {
+          min-width: 125px !important;
+        }
+        [data-dockkit-tab]:has([data-dsh-desktop-tab-title]) [data-dockkit-tab-title] {
+          overflow: visible !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // 右侧边栏专用 Tab 标题组件 (精致 14px 矢量显示器图标 + 完美防截断)
+    function VncDesktopTabTitle() {
+      const titleRef = React.useRef(null);
+
+      React.useLayoutEffect(() => {
+        const el = titleRef.current;
+        if (!el) return;
+        const chip = el.closest('[data-dockkit-tab], [data-dockkit-float-grip]');
+        if (chip) {
+          chip.style.minWidth = '125px';
+        }
+      }, []);
+
+      return React.createElement(
+        'span',
+        {
+          ref: titleRef,
+          'data-dsh-desktop-tab-title': 'true',
+          style: {
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            whiteSpace: 'nowrap',
+            fontSize: '13px',
+            lineHeight: '1',
+            flexShrink: 0
+          }
+        },
+        React.createElement('svg', {
+          width: 14,
+          height: 14,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: '2',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          style: { flexShrink: 0, opacity: 0.85 }
+        },
+          React.createElement('rect', { x: '2', y: '3', width: '20', height: '14', rx: '2' }),
+          React.createElement('line', { x1: '8', y1: '21', x2: '16', y2: '21' }),
+          React.createElement('line', { x1: '12', y1: '17', x2: '12', y2: '21' })
+        ),
+        React.createElement('span', { style: { whiteSpace: 'nowrap' } }, zh ? '容器桌面' : 'Desktop')
+      );
+    }
+
     // 右侧边栏专用内嵌 VNC 容器组件 (当开关开启且上游环境支持 SidebarRight 时渲染)
     function VncDesktopSidebarPane() {
       const storedVncPath = typeof localStorage !== 'undefined' ? (localStorage.getItem('dsh_desktop_vnc_path') || '/vnc') : '/vnc';
@@ -552,10 +614,7 @@ window.__ModuleLoader__.load({
                   return scopedCtx.slots.register({
                     name: 'sidebar.right.pane.tab.title',
                     key: key
-                  }, () => React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px' } },
-                    React.createElement('span', null, '🖥️'),
-                    React.createElement('span', null, zh ? '容器桌面' : 'Desktop')
-                  ));
+                  }, VncDesktopTabTitle);
                 });
 
                 scopedCtx.slots.inject('sidebar.right.pane.tab', () => {
