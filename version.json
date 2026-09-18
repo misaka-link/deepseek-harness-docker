@@ -13,8 +13,10 @@
     "version": "0.1.3",
     "releaseDate": "2026-09-18",
     "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.3",
-    "changelog": "新增配置快照仅备份配置选项、内置插件规范中文描述、插件持久化状态防复活与启动崩溃自愈自动隔离",
+    "changelog": "CWE-330安全签名密钥持久化、右侧边栏桌面UI优化、配置轻量快照、内置插件中文规范、插件防复活与启动崩溃自愈隔离",
     "changelogList": [
+      "消除 CWE-330 会话签名密钥可预测性漏洞，自动生成 256 位强随机密钥并持久化至数据卷 (/root/.dsh/.session_secret)，容器重启会话无感保持",
+      "优化右侧边栏「容器桌面」Tab 样式与宽度保护 (min-width: 125px)，换用精致 14px 矢量显示器图标杜绝文字截断",
       "配置快照与备份新增「仅备份配置(无对话内容)」选项，自动排除会话历史与媒体附件，体积轻巧便于迁移分享",
       "内置插件 (@dsh-custom/*) 与官方核心组件功能介绍全面支持规范中文呈现",
       "重构插件管理状态机，在 /root/.dsh/plugins-state.json 中持久化记录已禁用/卸载插件，彻底解决容器更新后插件强制复活问题",

@@ -6,6 +6,23 @@
 
 ## [v0.1.3] - 2026-09-18
 
+### 安全与鉴权加固 (Security & CWE-330)
+- 🔒 **根除 CWE-330 会话签名密钥可预测性漏洞 (消除 PR #4 安全隐患)**：
+  - 彻底断开 Session Cookie 签名密钥（`SIGNING_SECRET`）与用户口令（`AUTH_TOKEN`）的确定性 HMAC 衍生与固定开源盐值，阻断攻击者通过弱口令在离线状态下逆向推导密钥并伪造会话 Cookie；
+  - 升级为多级高安全初始化机制：优先读取环境变量 `SESSION_SECRET` $\rightarrow$ 其次读取持久化数据卷文件 `/root/.dsh/.session_secret` $\rightarrow$ 首次自动生成 256 位密码学安全伪随机密钥（`crypto.randomBytes(32)`），并以 `0600` 严格权限写入数据卷持久化保存；
+  - 完美兼顾高强度密码学安全性与容器/网关热重启会话不丢失（无需重复登录）的用户体验；口令修改时自动即时失效旧 Cookie。
+
+### 桌面交互与侧边栏优化 (Desktop UI & DockKit Polish)
+- 🖥️ **右侧边栏「容器桌面」Tab 样式优化与标题防截断**：
+  - 重构右侧边栏桌面 Tab 标题组件，注入 `min-width: 125px` 标签宽度保护，彻底解决因 DockKit 标签关闭按钮遮挡导致的“容器桌面”字样截断问题；
+  - 替换原生 Emoji 图标为精致的 14px 矢量显示器 SVG 图标，视觉风格与 DSH 原生侧边栏高度统一。
+
+### 容灾与核心自愈增强 (Self-Healing & Core Enhancements)
+- 🛠️ **DSH 核心崩溃自愈与 Cordis Loader 错误探测增强**：
+  - 针对 Cordis Loader 报错形式与带括号格式的插件崩溃特征强化正则表达式精准捕获，保障主进程自愈更稳健；
+- 🌐 **版本与元数据检测通道优先级优化**：
+  - 优先获取 GitHub Raw 实时版本元数据，有效避免 Anycast CDN 缓存带来的更新延迟。
+
 ### 快照与备份升级 (Snapshots & Backup)
 - ⚡ **新增「仅备份配置 (无对话内容)」选项**：
   - 新增专为配置共享、多机迁移与隐私保护打造的轻量快照模式，自动排除会话历史记录（`sessions/`）、多媒体附件（`attachments/`）以及会话投影缓存文件；
