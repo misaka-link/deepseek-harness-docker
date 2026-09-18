@@ -227,7 +227,16 @@ class DshManager {
     }
 
     const current = this.getCurrentVersion();
-    const latest = distTags.latest || (Array.isArray(versions) && versions.length > 0 ? versions[versions.length - 1] : '');
+    // 优先选取真正的官方最新发布版本 (alpha / next / latest 预发布与稳定新版，或版本列表最高 semver，对齐 build.sh)
+    let latest = distTags.alpha || distTags.next || distTags.latest;
+    if (Array.isArray(versions) && versions.length > 0) {
+      const sorted = [...versions].sort(compareSemver);
+      const newestInList = sorted[sorted.length - 1];
+      if (!latest || (newestInList && compareSemver(newestInList, latest) > 0)) {
+        latest = newestInList;
+      }
+    }
+    if (!latest) latest = '0.1.6-alpha.2';
     const isUpToDate = Boolean(current && latest && compareSemver(current, latest) >= 0);
 
     return {

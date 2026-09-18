@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.1`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.2`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
 > 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.2`、`:0.1.6-alpha.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.1`、`:0.1.1-market`），精确锁定本容器套件自身的版本。
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.2`、`:0.1.2-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -18,15 +18,15 @@
 
 本项目核心特色在于内置了功能完备、极简美观的 Web 管理控制台（访问 `/admin/` 即可进入）：
 
-| 1. DSH 核心版本状态看板 (三栏 Hero Grid) | 2. 版本热切换实时进度指示与流式日志 |
+| 1. DSH 核心版本状态看板与顶栏直达 | 2. 顶栏版本更新速览与 DSH 适配芯片 |
 | :---: | :---: |
-| ![后台核心版本看板](doc/06-admin-tab-dsh.png) | ![切换版本实时进度](doc/remote-test-progress-live.png) |
-| 实时呈现当前核心版本、运行状态、端口/PID，动态探测官方 upstream 最新发布与快照保障指标 | 多阶段进度实时追踪（快照备份 → 安装编译 → 软链重建 → 就绪探针），带百分比与流式日志 |
+| ![后台核心版本看板](doc/06-admin-tab-dsh.png) | ![顶栏版本更新速览](doc/preview-remote-admin-dropdown.png) |
+| 实时呈现当前核心版本、运行状态、端口/PID，动态探测官方最新发布，顶栏常驻官方与本项目 GitHub 直达入口 | 点击顶栏版本徽章弹出更新速览卡片框，自适应展示版本更新内容清单与官方 DSH 引擎适配支持范围芯片 |
 
-| 3. 安全备份与版本防呆预警模态弹窗 | 4. 扩展与插件市场可视化管理 |
+| 3. 宽屏双栏版本与更新控制中心 | 4. 安全备份与版本防呆预警模态弹窗 |
 | :---: | :---: |
-| ![安全备份确认弹窗](doc/remote-test-confirm-modal.png) | ![插件管理](doc/07-admin-tab-plugins.png) |
-| 切换前自动触发秒级快照备份，包含版本差异比对、官方 V3 会话格式不可逆降级保护告警 | 内置插件市场，支持一键安装、启用/卸载社区与官方扩展插件，自动处理依赖与软链接 |
+| ![版本与更新控制中心](doc/remote-test-version-hub.png) | ![安全备份确认弹窗](doc/remote-test-confirm-modal.png) |
+| 左右双栏宽屏栅格排版，左侧整合套件/核心双版本状态与 DSH 适配矩阵，右侧通栏呈现完整更新要点，超长内容自适应滚动 | 切换前自动触发秒级快照备份，包含版本差异比对、官方 V3 会话格式不可逆降级保护告警与破坏性重构防呆阻断 |
 
 | 5. Chromium 浏览器与虚拟桌面控制 | 6. 配置快照与一键备份还原 |
 | :---: | :---: |
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.1`<br>(`...:v0.1.1`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.1-market`<br>(`...:v0.1.1-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.2`<br>(`...:v0.1.2`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.2-market`<br>(`...:v0.1.2-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.1`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.2`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.1-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.2-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐

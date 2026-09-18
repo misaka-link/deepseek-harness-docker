@@ -10,10 +10,49 @@
     "upstreamNpm": "https://www.npmjs.com/package/@deepseek-ai/dsh"
   },
   "latest": {
-    "version": "0.1.1",
-    "releaseDate": "2026-09-15",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1",
-    "changelog": "优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)"
+    "version": "0.1.2",
+    "releaseDate": "2026-09-18",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.2",
+    "changelog": "优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)",
+    "changelogList": [
+      "Web Admin 顶部栏双版本独立展示 (容器套件 vs DSH 核心)",
+      "新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮",
+      "新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)",
+      "版本号点击下拉弹出更新速览框，动态自适应展示更新内容清单",
+      "全面适配官方最新 @deepseek-ai/dsh@0.1.6-alpha.2 引擎",
+      "适配 Web 侧边栏插件管理页与 profile 插件动态启停",
+      "适配右侧边栏 Office 文档 (Word / Excel / PPT) 原生预览",
+      "适配会话回合结束文件变更卡片与逐文件 Diff 审阅",
+      "新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发",
+      "核心版本切换安全弹窗新增破坏性重大重构防呆阻断警告"
+    ],
+    "dshChangelogList": [
+      "新增 Web 侧边栏“插件管理页”，支持 profile 插件动态启停与热装卸",
+      "新增右侧边栏 Office 文档 (.docx / .xlsx / .pptx) 原生 WASM 高清预览",
+      "新增会话回合文件改动审阅卡片与 Review Tab 逐文件代码对比",
+      "支持右侧边栏沙箱浏览器 (ui-sidebar-browser) 与会话流预览",
+      "对齐原生 DeepSeek-V41-Flash 与 DeepSeek-V4-Pro 最新模型支持"
+    ]
+  },
+  "history": {
+    "0.1.1": {
+      "version": "0.1.1",
+      "releaseDate": "2026-09-15",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1",
+      "changelog": "优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)",
+      "changelogList": [
+        "Web Admin 顶部栏双版本独立展示 (容器套件 vs DSH 核心)",
+        "新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮",
+        "新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)",
+        "版本号点击下拉弹出更新速览框，动态自适应展示更新内容清单",
+        "全面适配官方最新 @deepseek-ai/dsh@0.1.6-alpha.2 引擎",
+        "适配 Web 侧边栏插件管理页与 profile 插件动态启停",
+        "适配右侧边栏 Office 文档 (Word / Excel / PPT) 原生预览",
+        "适配会话回合结束文件变更卡片与逐文件 Diff 审阅",
+        "新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发",
+        "核心版本切换安全弹窗新增破坏性重大重构防呆阻断警告"
+      ]
+    }
   },
   "compatibility": {
     "recommendedDsh": "0.1.6-alpha.2",

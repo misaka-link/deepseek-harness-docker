@@ -46,7 +46,7 @@ class VersionService {
         if (pkg.version) return pkg.version;
       }
     } catch {}
-    return '0.1.1';
+    return '0.1.2';
   }
 
   getLocalMeta() {
@@ -74,9 +74,31 @@ class VersionService {
       },
       latest: {
         version: this.getLocalProjectVersion(),
-        releaseDate: '2026-09-06',
-        releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases',
-        changelog: 'Web Admin 顶栏双版本展示、Issue #3 快速跳转与多级安全预警系统'
+        releaseDate: '2026-09-15',
+        releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1',
+        changelog: '优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)',
+        changelogList: [
+          'Web Admin 顶部栏双版本独立解耦展示 (容器套件 vs DSH 核心)',
+          '新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮',
+          '新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)',
+          '新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发',
+          '新增版本更新速览下拉弹框与破坏性版本切换红线防呆阻断'
+        ]
+      },
+      history: {
+        '0.1.1': {
+          version: '0.1.1',
+          releaseDate: '2026-09-15',
+          releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.1',
+          changelog: '优化 Web Admin 顶部栏，增加双版本清晰矩阵、Issue #3 快速跳转直达与多级安全预警 (正常/一般/警告/不再兼容)',
+          changelogList: [
+            'Web Admin 顶部栏双版本独立解耦展示 (容器套件 vs DSH 核心)',
+            '新增 Issue #3 官方 DSH 仓库与本项目常驻快速跳转直达按钮',
+            '新增 5 级安全态势预警色彩矩阵 (正常/新版/警告/严重危险/离线)',
+            '新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发',
+            '新增版本更新速览下拉弹框与破坏性版本切换红线防呆阻断'
+          ]
+        }
       },
       compatibility: {
         recommendedDsh: '0.1.6-alpha.2',
@@ -125,6 +147,16 @@ class VersionService {
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.project && data.latest) {
+              const local = this.getLocalMeta();
+              if (!data.latest.changelogList && local.latest?.changelogList) {
+                data.latest.changelogList = local.latest.changelogList;
+              }
+              if (!data.latest.dshChangelogList && local.latest?.dshChangelogList) {
+                data.latest.dshChangelogList = local.latest.dshChangelogList;
+              }
+              if (!data.history && local.history) {
+                data.history = local.history;
+              }
               this.cachedMeta = data;
               this.lastFetched = Date.now();
               return data;
@@ -249,6 +281,16 @@ class VersionService {
       overallLevel = 'info';
     }
 
+    // 依据是否有新版，动态提供对应版本的更新内容说明与清单
+    const currentHist = meta.history?.[currentProjectVer];
+    const updateTitle = hasProjectUpdate
+      ? `新版本 (v${latestProjectVer}) 更新内容`
+      : `当前版本 (v${currentProjectVer}) 更新内容`;
+    const activeReleaseDate = (hasProjectUpdate ? meta.latest?.releaseDate : (currentHist?.releaseDate || meta.latest?.releaseDate)) || '';
+    const activeReleaseUrl = (hasProjectUpdate ? meta.latest?.releaseUrl : (currentHist?.releaseUrl || meta.latest?.releaseUrl)) || meta.repo?.projectReleases || 'https://github.com/misaka-link/deepseek-harness-docker/releases';
+    const activeChangelog = (hasProjectUpdate ? meta.latest?.changelog : (currentHist?.changelog || meta.latest?.changelog)) || '';
+    const activeChangelogList = (hasProjectUpdate ? meta.latest?.changelogList : (currentHist?.changelogList || meta.latest?.changelogList)) || [activeChangelog || '功能优化与安全增强'];
+
     return {
       ok: true,
       project: {
@@ -256,9 +298,11 @@ class VersionService {
         latest: latestProjectVer,
         hasUpdate: hasProjectUpdate,
         level: projectLevel,
-        releaseDate: meta.latest?.releaseDate || '',
-        releaseUrl: meta.latest?.releaseUrl || `${meta.repo?.projectReleases || 'https://github.com/misaka-link/deepseek-harness-docker/releases'}`,
-        changelog: meta.latest?.changelog || '',
+        updateTitle,
+        releaseDate: activeReleaseDate,
+        releaseUrl: activeReleaseUrl,
+        changelog: activeChangelog,
+        changelogList: activeChangelogList,
         projectUrl: meta.repo?.projectUrl || 'https://github.com/misaka-link/deepseek-harness-docker',
         projectReleases: meta.repo?.projectReleases || 'https://github.com/misaka-link/deepseek-harness-docker/releases'
       },
@@ -269,6 +313,13 @@ class VersionService {
         isAdapted: isDshAdapted,
         level: dshLevel,
         notice: dshNotice,
+        changelogList: meta.latest?.dshChangelogList || [
+          '新增 Web 侧边栏“插件管理页”，支持 profile 插件动态启停与热装卸',
+          '新增右侧边栏 Office 文档 (.docx / .xlsx / .pptx) 原生 WASM 高清预览',
+          '新增会话回合文件改动审阅卡片与 Review Tab 逐文件代码对比',
+          '支持右侧边栏沙箱浏览器 (ui-sidebar-browser) 与会话流预览',
+          '对齐原生 DeepSeek-V41-Flash 与 DeepSeek-V4-Pro 最新模型支持'
+        ],
         upstreamRepo: meta.repo?.upstreamRepo || 'https://github.com/deepseek-ai/deepseek-harness',
         upstreamReleases: meta.repo?.upstreamReleases || 'https://github.com/deepseek-ai/deepseek-harness/releases',
         upstreamNpm: meta.repo?.upstreamNpm || 'https://www.npmjs.com/package/@deepseek-ai/dsh'

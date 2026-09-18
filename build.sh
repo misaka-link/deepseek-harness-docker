@@ -7,7 +7,7 @@ set -e
 #   ./build.sh --market -> 构建带预装插件清单的镜像 (deepseek-harness-docker:latest-market 及额外标签)
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.1.1"
+PROJ_VER="0.1.2"
 NODE_IMAGE="${NODE_IMAGE:-node:24-trixie}"
 NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 DSH_ALPHA=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"alpha":"[^"]*"' | cut -d'"' -f4 || true)
