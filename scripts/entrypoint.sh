@@ -44,6 +44,15 @@ echo "========================================================"
 mkdir -p "${DSH_WORKSPACE}" "/root/.dsh" "/root/.dsh-snapshots" "${CHROME_USER_DATA_DIR}" "/tmp/dsh-desktop"
 touch "${DSH_WEB_LOG}"
 
+# 1.0 自动配置 npm 与 pnpm 镜像源加速 (默认 npmmirror，海外可传 NPM_REGISTRY 覆盖)
+NPM_REG="${NPM_REGISTRY:-https://registry.npmmirror.com}"
+npm config set registry "${NPM_REG}" 2>/dev/null || true
+which pnpm >/dev/null 2>&1 && pnpm config set registry "${NPM_REG}" 2>/dev/null || true
+
+# 1.01 确保 node-pty 的 spawn-helper 具备可执行权限
+find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/dev/null || true
+find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true
+
 # 1.1 修复 .dsh 目录与凭据文件的严格权限 (DSH 凭据服务强制校验 mode 600，拒绝 777/644 等跨权限读取崩溃)
 if [ -d "/root/.dsh" ]; then
   chmod 700 /root/.dsh 2>/dev/null || true

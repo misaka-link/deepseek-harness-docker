@@ -855,7 +855,23 @@
           </div>
         </div>
 
-        <div class="terminal" id="installTerminal">[日志] 管理面板已连接，就绪中...</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; margin-top:14px;">
+          <div style="font-weight:700; font-size:13px; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+            <span>🖥️ DSH 核心服务实时运行日志</span>
+            <span class="status-badge" id="terminalLiveBadge" style="font-size:11px; padding:2px 8px;">
+              <span class="dot"></span> 监听中
+            </span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="fetchDshLogs(true)" title="立即刷新 DSH 运行日志">
+              🔄 刷新日志
+            </button>
+            <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="clearTerminal()" title="清空终端屏幕">
+              清屏
+            </button>
+          </div>
+        </div>
+        <div class="terminal" id="installTerminal" style="height:280px; overflow-y:auto; font-family:monospace; font-size:12px; line-height:1.5; background:#0f172a; color:#e2e8f0; border-radius:var(--radius-md); padding:14px; white-space:pre-wrap; word-break:break-all;">[日志] 正在连接 DSH 核心运行日志流...</div>
       </div>
     </section>
 
@@ -1859,6 +1875,60 @@
       input.type = input.type === 'password' ? 'text' : 'password';
     }
 
+    let autoScrollTerminal = true;
+
+    async function fetchDshLogs(force = false) {
+      const term = document.getElementById('installTerminal');
+      const badge = document.getElementById('terminalLiveBadge');
+      if (!term) return;
+
+      // 如果正在执行版本切换流式日志安装，暂停常规日志覆盖
+      const wrap = document.getElementById('dshInstallProgressWrap');
+      if (wrap && wrap.style.display !== 'none' && !force) return;
+
+      try {
+        const res = await fetch(`${adminBase}/api/dsh/logs?lines=150`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !data.ok) return;
+
+        if (badge) {
+          if (data.running) {
+            badge.className = data.ready ? 'status-badge status-running' : 'status-badge status-stopped';
+            badge.innerHTML = `<span class="dot"></span> ${data.ready ? '运行就绪 (PID: ' + data.pid + ')' : '启动就绪中...'}`;
+          } else {
+            badge.className = 'status-badge status-stopped';
+            badge.innerHTML = `<span class="dot"></span> 未运行${data.exitInfo ? ' (异常退出码: ' + data.exitInfo.code + ')' : ''}`;
+          }
+        }
+
+        const logs = data.recentLogs || [];
+        let headerBanner = `[系统环境与状态概要]
+----------------------------------------------------------------------
+DSH 核心版本 : v${currentVersion || '0.1.6-alpha.2'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
+服务监听端口 : 3080 (内部核心端口: 3079)
+进程运行状态 : PID ${data.pid || '--'} | 状态: ${data.running ? 'Active' : 'Stopped'}${data.manualStopped ? ' (已手动停止)' : ''}
+----------------------------------------------------------------------\n`;
+
+        if (data.exitInfo && !data.running) {
+          headerBanner += `⚠️ [启动异常告警] DSH 核心进程已退出！\n退出码: ${data.exitInfo.code} | 信号: ${data.exitInfo.sig || '无'} | 时间: ${new Date(data.exitInfo.time).toLocaleTimeString()}\n若频繁退出，请检查上方日志错误或恢复配置快照。\n----------------------------------------------------------------------\n`;
+        }
+
+        const fullLogText = headerBanner + (logs.length > 0 ? logs.join('\n') : '[暂无日志输出，等待进程就绪...]');
+        term.textContent = fullLogText;
+        if (autoScrollTerminal) {
+          term.scrollTop = term.scrollHeight;
+        }
+      } catch (err) {
+        // 静默保护
+      }
+    }
+
+    function clearTerminal() {
+      const term = document.getElementById('installTerminal');
+      if (term) term.textContent = '[屏幕已清空，等待新日志输出...]';
+    }
+
     function appendLog(msg) {
       const term = document.getElementById('installTerminal');
       if (!term) return;
@@ -2792,8 +2862,10 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
     loadSnapshots();
     loadPlugins();
     fetchVersionCheck();
+    fetchDshLogs();
     setInterval(loadStatus, 8000);
     setInterval(fetchVersionCheck, 60000);
+    setInterval(fetchDshLogs, 3000);
   </script>
 </body>
 </html>

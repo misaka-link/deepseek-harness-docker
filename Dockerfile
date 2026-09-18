@@ -260,13 +260,16 @@ RUN if [ -n "$DSH_VERSION" ]; then \
       TARGET_PKG="@deepseek-ai/dsh"; \
     fi; \
     echo "===> 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG}..." \
-    && npm install -g pnpm "${TARGET_PKG}" \
+    && npm config set allow-scripts all --location=global 2>/dev/null || true \
+    && npm install -g --ignore-scripts=false pnpm "${TARGET_PKG}" \
     && for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \
          pkg_name=$(basename "$d"); \
          if [ "$pkg_name" != "dsh" ] && [ ! -e "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name" ]; then \
            ln -s "$d" "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name"; \
          fi; \
-       done
+       done \
+    && find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/dev/null || true \
+    && find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true
 
 # 3.1 按需预装社区插件清单 (默认关闭 PREINSTALL_PLUGINS=0；设为 1 时自动安装 plugins.market.list)
 ARG PREINSTALL_PLUGINS=0
@@ -299,7 +302,9 @@ COPY plugins/ /app/plugins/
 # 6. 安装网关依赖并赋予脚本执行权限
 RUN cd /app/gateway && npm install --omit=dev \
     && chmod +x /app/scripts/entrypoint.sh /app/scripts/chromium-docker \
-    && ln -s /app/scripts/chromium-docker /usr/local/bin/chromium-docker
+    && ln -s /app/scripts/chromium-docker /usr/local/bin/chromium-docker \
+    && npm config set registry https://registry.npmmirror.com 2>/dev/null || true \
+    && which pnpm >/dev/null 2>&1 && pnpm config set registry https://registry.npmmirror.com 2>/dev/null || true
 
 # 7. 配置工作目录与挂载卷声明
 WORKDIR /workspace

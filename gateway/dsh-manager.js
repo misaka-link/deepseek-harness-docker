@@ -131,8 +131,24 @@ class DshManager {
       manualStopped: !!this.manualStopped,
       pid: running && this.proc ? this.proc.pid : null,
       startTime: this.startTime,
-      cachedVersions: this.getCachedVersions()
+      cachedVersions: this.getCachedVersions(),
+      lastExitInfo: this.lastExitInfo,
+      recentLogs: this.getRecentLogs(30)
     };
+  }
+
+  getRecentLogs(count = 150) {
+    if (this.recentLogs && this.recentLogs.length > 0) {
+      return this.recentLogs.slice(-count);
+    }
+    try {
+      if (fs.existsSync(DSH_WEB_LOG)) {
+        const content = fs.readFileSync(DSH_WEB_LOG, 'utf8');
+        const lines = content.split('\n').filter(Boolean);
+        return lines.slice(-count);
+      }
+    } catch {}
+    return [];
   }
 
   getCachedVersions() {
@@ -292,7 +308,10 @@ class DshManager {
       const env = {
         ...process.env,
         DSH_PORT: String(DSH_PORT),
-        PROXY_PORT: String(process.env.PROXY_PORT || 3080)
+        PROXY_PORT: String(process.env.PROXY_PORT || 3080),
+        NPM_CONFIG_REGISTRY: this.registry,
+        NPM_REGISTRY: this.registry,
+        PNPM_REGISTRY: this.registry
       };
       // 彻底剥离 NODE_ENV=production，恢复纯净开发环境，避免工作区 install 跳过 devDependencies
       delete env.NODE_ENV;

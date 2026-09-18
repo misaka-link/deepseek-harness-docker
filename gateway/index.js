@@ -101,11 +101,43 @@ const vncProxy = httpProxy.createProxyServer({
 dshProxy.on('error', (err, req, res) => {
   console.warn('[dsh-proxy] 上游连接等待中 (DSH 启动/停止阶段):', err.message);
   if (res && typeof res.writeHead === 'function' && !res.headersSent) {
-    const errorMsg = dshManager.manualStopped
-      ? 'DeepSeek Harness 服务当前处于手动停止状态。如需使用，请前往管理面板手动点击【启动 DSH】。'
-      : 'DeepSeek Harness 正在启动就绪中，请稍候数秒后刷新';
-    res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ ok: false, error: errorMsg }));
+    let errorMsg = 'DeepSeek Harness 正在启动就绪中，请稍候数秒后刷新';
+    if (dshManager.manualStopped) {
+      errorMsg = 'DeepSeek Harness 服务当前处于手动停止状态。如需使用，请前往管理面板手动点击【启动 DSH】。';
+    } else if (dshManager.lastExitInfo && !dshManager.proc) {
+      errorMsg = `DeepSeek Harness 启动异常退出 (代码: ${dshManager.lastExitInfo.code || -1})。请前往 /admin/ 查看详细日志排查。`;
+    }
+
+    const isHtml = (req.headers.accept || '').includes('text/html');
+    if (isHtml) {
+      res.writeHead(502, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content="5" />
+  <title>DeepSeek Harness - 启动就绪中</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #f8fafc; color: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; max-width: 480px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08); text-align: center; }
+    h2 { font-size: 18px; margin-bottom: 12px; color: #1677ff; }
+    p { font-size: 13px; color: #64748b; line-height: 1.6; margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 8px 16px; border-radius: 8px; background: #0f172a; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>⚡ DeepSeek Harness 启动就绪中</h2>
+    <p>${errorMsg}<br/>页面将在 5 秒后自动刷新检测...</p>
+    <a href="/admin/" class="btn">前往管理控制台查看实时日志 ↗</a>
+  </div>
+</body>
+</html>`);
+    } else {
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: errorMsg, exitInfo: dshManager.lastExitInfo }));
+    }
   }
 });
 
@@ -305,6 +337,20 @@ async function handleAdminApi(req, res, pathname, query) {
         }
       }
       return sendJson(res, 200, data);
+    }
+
+    // 2.1 DSH 实时日志与崩溃信息获取
+    if (subPath === '/api/dsh/logs' && req.method === 'GET') {
+      const count = Math.min(Number(query.get('lines')) || 100, 300);
+      return sendJson(res, 200, {
+        ok: true,
+        running: dshManager.proc !== null && dshManager.proc.exitCode === null,
+        ready: dshManager.ready,
+        pid: dshManager.proc ? dshManager.proc.pid : null,
+        manualStopped: !!dshManager.manualStopped,
+        exitInfo: dshManager.lastExitInfo,
+        recentLogs: dshManager.getRecentLogs(count)
+      });
     }
 
     // 3. 安装/切换 DSH 版本 (支持实时 SSE 流式推送详细日志)
