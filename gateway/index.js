@@ -767,7 +767,7 @@ async function handleAdminApi(req, res, pathname, query) {
       }
       // 口令强度校验：拒绝弱口令（与初始化向导同一套规则）
       if (updatedToken && updatedToken !== getAuthToken() && isWeakPassword(updatedToken)) {
-        return sendJson(res, 400, { ok: false, error: '访问口令过弱：长度至少 8 位，且不要使用 admin / password 等常见弱口令' });
+        return sendJson(res, 400, { ok: false, error: '访问口令过弱：长度至少 6 位，且不要使用 admin / password 等常见弱口令' });
       }
 
       const autoHealPlugins = body.autoHealPlugins !== false;
@@ -933,7 +933,7 @@ function handleSetupSubmit(req, res) {
       const confirm = typeof data.confirm === 'string' ? data.confirm : '';
       if (!pwd || !confirm) return sendJson(res, 400, { ok: false, error: '请填写口令并二次确认' });
       if (pwd !== confirm) return sendJson(res, 400, { ok: false, error: '两次输入的口令不一致' });
-      if (isWeakPassword(pwd)) return sendJson(res, 400, { ok: false, error: '口令过弱：长度至少 8 位，且不要使用常见弱口令' });
+      if (isWeakPassword(pwd)) return sendJson(res, 400, { ok: false, error: '口令过弱：长度至少 6 位，且不要使用常见弱口令' });
 
       // 合并写回，避免覆盖 desktop/paths 等其它持久化字段
       const cfg = loadPersistedConfig();

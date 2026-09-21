@@ -33,10 +33,10 @@ auth.updateAuthToken('');
 ok(auth.isSetupRequired() === true, '清除后重新需要初始化');
 
 console.log('\n=== D. 口令强度校验 ===');
-for (const p of ['admin', 'Admin', 'password', '12345678', 'qwertyuiop', 'short', '', '   ', 'deepseek', 'letmein']) {
+for (const p of ['admin', 'Admin', 'password', '123456', '12345678', 'qwertyuiop', 'short', '', '   ', 'deepseek', 'letmein', '111111']) {
   ok(auth.isWeakPassword(p) === true, `弱口令被拒: ${JSON.stringify(p)}`);
 }
-for (const p of ['Str0ng-Pass!', 'my-secret-2026', 'aB3$xyz9', 'notweak123', '非常安全的口令2026']) {
+for (const p of ['Str0ng-Pass!', 'my-secret-2026', 'aB3$xyz9', 'notweak123', '非常安全的口令2026', 'aB3$x9', 'pass6!']) {
   ok(auth.isWeakPassword(p) === false, `强口令通过: ${JSON.stringify(p)}`);
 }
 ok(auth.isWeakPassword(null) === true, 'null 视为弱口令');

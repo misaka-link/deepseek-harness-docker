@@ -120,16 +120,16 @@ function isSetupRequired() {
 
 // 常见弱口令黑名单（仅作最低限度拦截，配合前端提示）
 const WEAK_PASSWORDS = new Set([
-  'admin', 'administrator', 'password', 'passw0rd', '12345678', '123456789',
-  '1234567890', 'qwertyuiop', '11111111', '00000000', 'deepseek', 'admin123',
-  'root', 'letmein', 'changeme'
+  'admin', 'administrator', 'password', 'passw0rd', '123456', '12345678', '123456789',
+  '1234567890', 'qwertyuiop', '111111', '11111111', '000000', '00000000', '888888', '88888888',
+  '666666', 'deepseek', 'admin123', 'root', 'letmein', 'changeme'
 ]);
 
-/** 口令是否过弱（长度 < 8 或命中常见弱口令） */
+/** 口令是否过弱（长度 < 6 或命中常见弱口令） */
 function isWeakPassword(pwd) {
   if (typeof pwd !== 'string') return true;
   const p = pwd.trim();
-  if (p.length < 8 || p.length > 256) return true;
+  if (p.length < 6 || p.length > 256) return true;
   return WEAK_PASSWORDS.has(p.toLowerCase());
 }
 

@@ -101,8 +101,8 @@
     <div class="alert alert-ok" id="okBox"></div>
 
     <div class="rules">
-      · 长度至少 <strong>8 位</strong>，建议混合字母、数字与符号<br />
-      · 不要使用 <code>admin</code> / <code>password</code> / <code>12345678</code> 等弱口令<br />
+      · 长度至少 <strong>6 位</strong>，建议混合字母、数字与符号<br />
+      · 不要使用 <code>admin</code> / <code>password</code> / <code>123456</code> 等弱口令<br />
       · 口令会以 <code>0600</code> 权限持久化保存，容器重启后依然有效
     </div>
 
@@ -121,8 +121,8 @@
   </div>
 
   <script>
-    const MIN_LEN = 8;
-    const WEAK = ['admin', 'password', '12345678', '123456789', 'qwertyuiop', '11111111', '00000000', 'deepseek'];
+    const MIN_LEN = 6;
+    const WEAK = ['admin', 'password', '123456', '12345678', '123456789', 'qwertyuiop', '111111', '11111111', '000000', '00000000', '888888', '666666', 'deepseek'];
     const pwd = document.getElementById('pwd');
     const pwd2 = document.getElementById('pwd2');
     const matchHint = document.getElementById('matchHint');
