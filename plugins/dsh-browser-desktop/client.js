@@ -9,370 +9,273 @@ window.__ModuleLoader__.load({
       title: zh ? '容器浏览器' : 'Container Browser',
       description: zh ? '控制容器内 Chromium 图形浏览器、虚拟分辨率、CDP 调试与空闲休眠策略。' : 'Controls container Chromium browser, virtual resolution, CDP debugging, and idle sleep policy.',
       resolution: zh ? '虚拟桌面分辨率' : 'Virtual Resolution',
-      resolutionHint: zh ? 'X11 虚拟显示器与浏览器分辨率（默认 1920x1080 1080p，AI 调用时亦可自适应调整）' : 'Virtual resolution (default 1920x1080, AI can also select per tool call).',
       screenshotQuality: zh ? 'AI 截图工具默认画质' : 'Default Screenshot Quality',
-      screenshotQualityHint: zh ? 'AI 调用截图工具时的默认画质策略（高画质无损原图 / 中画质体积平衡 / 低画质高压缩）' : 'Default quality for AI screenshot tool (high/medium/low).',
       idleTimeout: zh ? '空闲休眠时间（分钟）' : 'Idle Sleep Timeout (Minutes)',
-      idleTimeoutHint: zh ? '无操作自动休眠以节约 CPU/内存资源，设为 0 则不休眠' : 'Automatically stops desktop when idle to save CPU/RAM. Set 0 to disable.',
       enableCdp: zh ? 'CDP 远程调试' : 'CDP Remote Debugging',
-      enableCdpHint: zh ? '是否开启 Chromium DevTools 远程调试（AI 自动化任务必须开启）' : 'Whether to enable Chromium DevTools remote debugging (required for AI tools).',
-      cdpPort: zh ? 'CDP 调试端口' : 'CDP Debug Port',
-      cdpPortHint: zh ? '远程调试监听端口，默认 9222' : 'Remote debugging port, default 9222.',
-      vncPath: zh ? 'VNC 访问相对路径' : 'VNC Access Path',
-      vncPathHint: zh ? 'noVNC 桌面相对访问路径，默认 /vnc' : 'Relative access path for noVNC desktop, default /vnc.',
       enableSidebarTab: zh ? '在右侧边栏嵌入桌面 Tab (实验性)' : 'Embed Desktop in Right Sidebar (Experimental)',
-      enableSidebarTabHint: zh ? '在 Web 界面右侧边栏 (Right Sidebar) 中直接内嵌容器 Chromium 桌面 Tab，可在对话同时并排操作浏览器（默认关闭）' : 'Embed the container Chromium desktop directly in the right sidebar (disabled by default).',
-      openDesktop: zh ? '在新标签页打开桌面 (VNC)' : 'Open VNC in New Window',
-      openInSidebar: zh ? '在右侧边栏展开桌面' : 'Open in Sidebar',
-      discard: zh ? '放弃修改' : 'Discard',
-      save: zh ? '保存' : 'Save',
-      saving: zh ? '保存中…' : 'Saving…',
-      saved: zh ? '已保存并在后台生效' : 'Saved and applied in background'
+      enabled: zh ? '启用容器浏览器' : 'Enable Container Browser',
     };
+
+    // ── 只读状态卡：配置权威已统一到 Admin「浏览器与桌面控制」页 ──────
+    // 本卡片只展示当前状态并提供跳转，不再提供任何配置写入入口，
+    // 避免与 Admin 形成第二个写入点（消除配置多源）。
+    let desktopStatusData = null;
+    let adminPath = '/admin';
+
+    // VNC 路径是可变更的：Admin 改路径后，【已渲染】的侧边栏 iframe 必须跟着重建，
+    // 否则会继续请求旧路径（表现为"必须手动刷新页面"）。这里用一个轻量事件总线
+    // 广播变更，配合 localStorage 的 storage 事件实现跨标签页同步。
+    const VNC_PATH_KEY = 'dsh_desktop_vnc_path';
+    const VNC_PATH_EVENT = 'dsh-desktop-vnc-path-changed';
+
+    function getStoredVncPath() {
+      try {
+        return (typeof localStorage !== 'undefined' && localStorage.getItem(VNC_PATH_KEY)) || '/vnc';
+      } catch (e) { return '/vnc'; }
+    }
+
+    function setStoredVncPath(p) {
+      if (!p || typeof localStorage === 'undefined') return;
+      try {
+        if (localStorage.getItem(VNC_PATH_KEY) === p) return;
+        localStorage.setItem(VNC_PATH_KEY, p);
+        window.dispatchEvent(new CustomEvent(VNC_PATH_EVENT, { detail: p }));
+      } catch (e) { /* 忽略隐私模式等 localStorage 异常 */ }
+    }
+
+    function subscribeVncPath(cb) {
+      const onCustom = (e) => cb((e && e.detail) || getStoredVncPath());
+      const onStorage = (e) => { if (!e || e.key === VNC_PATH_KEY) cb(getStoredVncPath()); };
+      window.addEventListener(VNC_PATH_EVENT, onCustom);
+      window.addEventListener('storage', onStorage);
+      return () => {
+        window.removeEventListener(VNC_PATH_EVENT, onCustom);
+        window.removeEventListener('storage', onStorage);
+      };
+    }
+
+    // P13：加超时，避免网关重启时请求悬挂
+    async function loadDesktopStatus() {
+      try {
+        const r = await fetch('/__api/desktop/status', { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return null;
+        const data = await r.json();
+        desktopStatusData = data?.desktop || null;
+        if (data?.paths?.admin) adminPath = data.paths.admin;
+        if (data?.paths?.vnc) setStoredVncPath(data.paths.vnc);
+        return data;
+      } catch (e) { return null; }
+    }
+
+    // P13：轮询专用 —— 上一次请求未完成则跳过本次（防请求堆积、状态乱序）
+    let desktopPollInFlight = false;
+    function pollDesktopStatus() {
+      if (desktopPollInFlight) return Promise.resolve(null);
+      desktopPollInFlight = true;
+      return loadDesktopStatus().finally(() => { desktopPollInFlight = false; });
+    }
+
+    function desktopStateText(d) {
+      if (!d) return zh ? '未知' : 'Unknown';
+      if (d.enabled === false) return zh ? '已彻底停用' : 'Disabled';
+      return d.running ? (zh ? '运行中' : 'Running') : (zh ? '已停止 / 休眠中' : 'Stopped');
+    }
 
     function BrowserDesktopCard(props = {}) {
       const isSection = !!props.isSection;
       const [open, setOpen] = React.useState(isSection ? true : false);
-      const [saving, setSaving] = React.useState(false);
-      const [dirty, setDirty] = React.useState(false);
-      const [savedMsg, setSavedMsg] = React.useState(false);
-
-      const [form, setForm] = React.useState({
-        resolution: '1920x1080',
-        screenshotQuality: 'high',
-        idleTimeoutMinutes: 30,
-        enableCdp: true,
-        cdpPort: 9222,
-        vncPath: '/vnc',
-        enableSidebarTab: false
-      });
-      const [initialForm, setInitialForm] = React.useState(null);
+      const [status, setStatus] = React.useState(desktopStatusData);
+      const [vncBase, setVncBase] = React.useState(getStoredVncPath());
 
       React.useEffect(() => {
-        const storedSidebarTab = typeof localStorage !== 'undefined' && localStorage.getItem('dsh_desktop_enable_sidebar_tab') === 'true';
-        fetch('/__api/desktop/status')
-          .then(r => r.ok ? r.json() : fetch('/admin/api/status').then(r2 => r2.json()))
-          .then(data => {
-            if (data && data.desktop) {
-              const loaded = {
-                resolution: (data.desktop.width && data.desktop.height) ? (data.desktop.width + 'x' + data.desktop.height) : '1920x1080',
-                screenshotQuality: 'high',
-                idleTimeoutMinutes: data.desktop.idleTimeoutMinutes !== undefined ? data.desktop.idleTimeoutMinutes : 30,
-                enableCdp: data.desktop.enableCdp !== undefined ? data.desktop.enableCdp : true,
-                cdpPort: data.desktop.cdpPort || 9222,
-                vncPath: data.paths?.vnc || '/vnc',
-                enableSidebarTab: data.desktop.enableSidebarTab !== undefined ? !!data.desktop.enableSidebarTab : storedSidebarTab
-              };
-              if (typeof localStorage !== 'undefined' && data.paths?.vnc) {
-                localStorage.setItem('dsh_desktop_vnc_path', data.paths.vnc);
-              }
-              setForm(loaded);
-              setInitialForm(loaded);
-            }
-          })
-          .catch(() => {});
+        let alive = true;
+        const tick = () => {
+          // 失败/被跳过的轮询保持上一次状态，避免卡片在网关重启期间闪成"--"
+          pollDesktopStatus().then(d => { if (alive && d) setStatus(d); });
+        };
+        tick();
+        const t = setInterval(tick, 8000);
+        return () => { alive = false; clearInterval(t); };
       }, []);
 
-      const updateField = (key, val) => {
-        setForm(prev => {
-          const next = { ...prev, [key]: val };
-          setDirty(JSON.stringify(next) !== JSON.stringify(initialForm));
-          return next;
-        });
+      // VNC 路径变更（Admin 改路径）后，卡片里的跳转链接随之更新
+      React.useEffect(() => subscribeVncPath(setVncBase), []);
+
+      const d = status?.desktop || null;
+      const rows = [
+        [labels.enabled, desktopStateText(d), d && d.enabled === false ? '#ef4444' : (d && d.running ? '#22c55e' : null)],
+        [labels.resolution, d ? `${d.width} x ${d.height}` : '--'],
+        [labels.idleTimeout, d ? (d.idleTimeoutMinutes === 0 ? (zh ? '始终保持' : 'Always on') : `${d.idleTimeoutMinutes} ${zh ? '分钟' : 'min'}`) : '--'],
+        [labels.enableCdp, d ? (d.enableCdp ? `${zh ? '已启用' : 'On'} (:${d.cdpPort})` : (zh ? '已关闭' : 'Off')) : '--'],
+        [labels.screenshotQuality, d ? String(d.screenshotQuality || 'high') : '--'],
+        [labels.enableSidebarTab, d ? (d.enableSidebarTab ? (zh ? '已开启' : 'On') : (zh ? '已关闭' : 'Off')) : '--']
+      ];
+
+      const body = React.createElement(
+        'div',
+        { style: { display: 'grid', gap: '9px' } },
+        React.createElement('p', {
+          style: { margin: '0 0 2px', fontSize: '12px', lineHeight: 1.7, color: 'var(--dsw-alias-label-secondary, #64748b)' }
+        }, zh
+          ? '为避免同一配置出现多个写入点，本插件不再提供重复的配置项：分辨率 / 空闲休眠 / CDP / 截图默认值 / 侧边栏 Tab 统一由管理后台「浏览器与桌面控制」页管理（唯一权威），保存后即时持久化生效。'
+          : 'To keep a single source of truth, this plugin no longer duplicates configuration: resolution, idle timeout, CDP, screenshot defaults and the sidebar tab are managed solely in the Admin "Browser & Desktop" page.'),
+        ...rows.map(([k, v, color]) => React.createElement(
+          'div',
+          { key: k, style: { display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13px' } },
+          React.createElement('span', { style: { color: 'var(--dsw-alias-label-secondary, #64748b)' } }, k),
+          React.createElement('strong', { style: { color: color || 'var(--dsw-alias-label-primary, #0f172a)' } }, v)
+        )),
+        React.createElement(
+          'div',
+          { style: { display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '4px' } },
+          React.createElement('a', {
+            href: `${adminPath}/`,
+            target: '_blank',
+            rel: 'noreferrer',
+            style: { fontSize: '13px', color: 'var(--dsw-alias-link, #4176e6)', textDecoration: 'none' }
+          }, zh ? '前往管理后台配置 ↗' : 'Configure in Admin ↗'),
+          React.createElement('a', {
+            href: `${vncBase.replace(/\/+$/, '')}/`,
+            target: '_blank',
+            rel: 'noreferrer',
+            style: { fontSize: '13px', color: 'var(--dsw-alias-link, #4176e6)', textDecoration: 'none' }
+          }, zh ? '在新窗口打开桌面 ↗' : 'Open desktop ↗')
+        )
+      );
+
+      // P16：全部改为自有命名空间 + 内联样式，不再复用上游私有类名（如 .YyYd_a_card），
+      // 上游一改名我们的卡片就会失去样式；内联样式则在任何 DSH 版本下都成立。
+      const cardStyle = isSection ? {
+        background: 'var(--dsw-alias-bg-layer-2, #ffffff)',
+        border: '1px solid var(--dsw-alias-border-l3, #e2e8f0)',
+        borderRadius: '12px',
+        padding: '20px 24px',
+        listStyle: 'none'
+      } : {
+        background: 'var(--dsw-alias-bg-layer-2, #ffffff)',
+        border: '1px solid var(--dsw-alias-border-l3, #e2e8f0)',
+        borderRadius: '10px',
+        margin: '6px 0',
+        overflow: 'hidden',
+        listStyle: 'none'
       };
-
-      const handleDiscard = (e) => {
-        e.stopPropagation();
-        if (initialForm) {
-          setForm(initialForm);
-          setDirty(false);
-        }
-      };
-
-      const handleSave = async (e) => {
-        e.stopPropagation();
-        setSaving(true);
-        try {
-          const parts = form.resolution.split('x');
-          const width = parseInt(parts[0]) || 1440;
-          const height = parseInt(parts[1]) || 900;
-          
-          const startPayload = {
-            width,
-            height,
-            durationMinutes: form.idleTimeoutMinutes,
-            idleTimeoutMinutes: form.idleTimeoutMinutes,
-            enableCdp: form.enableCdp,
-            cdpPort: form.cdpPort,
-            enableSidebarTab: form.enableSidebarTab
-          };
-          const startRes = await fetch('/__api/desktop/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(startPayload)
-          });
-          if (!startRes.ok) {
-            await fetch('/admin/api/desktop/start', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(startPayload)
-            });
-          }
-
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('dsh_desktop_enable_sidebar_tab', String(form.enableSidebarTab));
-          }
-
-          setInitialForm(form);
-          setDirty(false);
-          setSavedMsg(true);
-          setTimeout(() => setSavedMsg(false), 2500);
-        } catch (err) {
-          alert('保存失败: ' + err.message);
-        } finally {
-          setSaving(false);
-        }
-      };
-
-      // 使用 DSH 原生 CSS 类名与规范
-      const cardClasses = isSection
-        ? 'browser-desktop-section-card'
-        : ('YyYd_a_card' + (open ? ' YyYd_a_cardOpen' : ''));
-      const chevronClasses = 'YyYd_a_chevron' + (open ? ' YyYd_a_chevronOpen' : '');
 
       return React.createElement(
         isSection ? 'div' : 'li',
-        {
-          className: cardClasses,
-          style: isSection ? {
-            background: 'var(--dsh-card-bg, #ffffff)',
-            border: '1px solid var(--dsh-border, #e2e8f0)',
-            borderRadius: '12px',
-            padding: '20px 24px',
-            listStyle: 'none'
-          } : undefined
-        },
-        // 卡片折叠标题行 (仅在老版本内嵌卡片模式下渲染折叠按钮)
+        { className: isSection ? 'dsbd-section-card' : 'dsbd-card', style: cardStyle },
         !isSection ? React.createElement(
           'button',
           {
             type: 'button',
-            className: 'YyYd_a_header',
+            className: 'dsbd-card-header',
             'aria-expanded': open,
-            onClick: () => setOpen(!open)
+            onClick: () => setOpen(!open),
+            style: {
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: '10px', width: '100%', padding: '12px 14px',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              textAlign: 'left', font: 'inherit',
+              color: 'var(--dsw-alias-label-primary, #0f172a)'
+            }
           },
           React.createElement(
             'span',
-            { className: 'YyYd_a_headText' },
-            React.createElement('span', { className: 'YyYd_a_name' }, labels.title),
-            React.createElement('span', { className: 'YyYd_a_description' }, labels.description)
+            { className: 'dsbd-card-head-text', style: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 } },
+            React.createElement('span', { className: 'dsbd-card-name', style: { fontSize: '13.5px', fontWeight: 700 } }, labels.title),
+            React.createElement('span', { className: 'dsbd-card-desc', style: { fontSize: '12px', color: 'var(--dsw-alias-label-secondary, #64748b)' } }, labels.description)
           ),
-          dirty ? React.createElement('span', { className: 'YyYd_a_pending' }, zh ? '未保存' : 'Unsaved') : null,
           React.createElement(
             'svg',
             {
-              className: chevronClasses,
-              width: '14',
-              height: '14',
-              viewBox: '0 0 14 14',
-              fill: 'none',
-              stroke: 'currentColor',
-              strokeWidth: '1.5',
-              strokeLinecap: 'round',
-              strokeLinejoin: 'round'
+              className: 'dsbd-card-chevron',
+              width: '14', height: '14', viewBox: '0 0 14 14', fill: 'none',
+              stroke: 'currentColor', strokeWidth: '1.5', strokeLinecap: 'round', strokeLinejoin: 'round',
+              style: { flexShrink: 0, transition: 'transform .15s ease', transform: open ? 'rotate(180deg)' : 'none' }
             },
             React.createElement('path', { d: 'M3.5 5.25L7 8.75L10.5 5.25' })
           )
         ) : null,
-
-        // 表单区域
         open ? React.createElement(
           'div',
-          { className: 'YyYd_a_body', style: isSection ? { padding: 0, marginTop: 0 } : undefined },
-          // 字段 1: 虚拟分辨率
-          React.createElement(
-            'div',
-            { className: 'At1oFq_field' },
-            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.resolution)),
-            React.createElement(
-              'select',
-              {
-                className: 'At1oFq_input',
-                value: form.resolution,
-                onChange: e => updateField('resolution', e.target.value)
-              },
-              React.createElement('option', { value: '1920x1080' }, '1920 x 1080 (1080p 全高清 默认推荐)'),
-              React.createElement('option', { value: '1440x900' }, '1440 x 900 (宽屏均衡)'),
-              React.createElement('option', { value: '1280x720' }, '1280 x 720 (720p 节能小屏)'),
-              React.createElement('option', { value: '2560x1440' }, '2560 x 1440 (2K 超清)')
-            ),
-            React.createElement('p', { className: 'At1oFq_hint' }, labels.resolutionHint)
-          ),
-
-          // 字段 1.5: 截图工具默认画质
-          React.createElement(
-            'div',
-            { className: 'At1oFq_field' },
-            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.screenshotQuality)),
-            React.createElement(
-              'select',
-              {
-                className: 'At1oFq_input',
-                value: form.screenshotQuality || 'high',
-                onChange: e => updateField('screenshotQuality', e.target.value)
-              },
-              React.createElement('option', { value: 'high' }, zh ? '高画质 (无损 PNG 原图，默认)' : 'High (Lossless PNG)'),
-              React.createElement('option', { value: 'medium' }, zh ? '中画质 (压缩 JPEG 80% 质量，兼顾清晰与体积)' : 'Medium (Balanced JPEG 80%)'),
-              React.createElement('option', { value: 'low' }, zh ? '低画质 (压缩 JPEG 40% 质量，极致小体积)' : 'Low (Compact JPEG 40%)')
-            ),
-            React.createElement('p', { className: 'At1oFq_hint' }, labels.screenshotQualityHint)
-          ),
-
-          // 字段 2: 空闲休眠时间
-          React.createElement(
-            'div',
-            { className: 'At1oFq_field' },
-            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.idleTimeout)),
-            React.createElement(
-              'select',
-              {
-                className: 'At1oFq_input',
-                value: String(form.idleTimeoutMinutes),
-                onChange: e => updateField('idleTimeoutMinutes', parseInt(e.target.value))
-              },
-              React.createElement('option', { value: '30' }, '30 分钟无操作休眠'),
-              React.createElement('option', { value: '60' }, '60 分钟'),
-              React.createElement('option', { value: '10' }, '10 分钟'),
-              React.createElement('option', { value: '0' }, '0 (始终保持，不休眠)')
-            ),
-            React.createElement('p', { className: 'At1oFq_hint' }, labels.idleTimeoutHint)
-          ),
-
-          // 字段 3: 是否启用 CDP 远程调试
-          React.createElement(
-            'div',
-            { className: 'At1oFq_field' },
-            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.enableCdp)),
-            React.createElement(
-              'select',
-              {
-                className: 'At1oFq_input',
-                value: form.enableCdp ? 'true' : 'false',
-                onChange: e => updateField('enableCdp', e.target.value === 'true')
-              },
-              React.createElement('option', { value: 'true' }, zh ? '开启 (AI 工具调用必须)' : 'Enabled'),
-              React.createElement('option', { value: 'false' }, zh ? '关闭' : 'Disabled')
-            ),
-            React.createElement('p', { className: 'At1oFq_hint' }, labels.enableCdpHint)
-          ),
-
-          // 字段 4: CDP 调试端口
-          React.createElement(
-            'div',
-            { className: 'At1oFq_field' },
-            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.cdpPort)),
-            React.createElement('input', {
-              className: 'At1oFq_input',
-              type: 'number',
-              value: form.cdpPort,
-              onChange: e => updateField('cdpPort', parseInt(e.target.value) || 9222)
-            }),
-            React.createElement('p', { className: 'At1oFq_hint' }, labels.cdpPortHint)
-          ),
-
-          // 字段 5: 是否在 Web 右侧边栏嵌入桌面 Tab (实验性，默认关闭)
-          React.createElement(
-            'div',
-            { className: 'At1oFq_field' },
-            React.createElement('div', { className: 'At1oFq_head' }, React.createElement('label', { className: 'At1oFq_label' }, labels.enableSidebarTab)),
-            React.createElement(
-              'select',
-              {
-                className: 'At1oFq_input',
-                value: form.enableSidebarTab ? 'true' : 'false',
-                onChange: e => updateField('enableSidebarTab', e.target.value === 'true')
-              },
-              React.createElement('option', { value: 'false' }, zh ? '关闭 (默认，点击在新窗口全屏打开)' : 'Disabled (Default, opens in new window)'),
-              React.createElement('option', { value: 'true' }, zh ? '开启 (在 Web 右侧边栏中内嵌桌面 Tab)' : 'Enabled (Embed desktop tab in right sidebar)')
-            ),
-            React.createElement('p', { className: 'At1oFq_hint' }, labels.enableSidebarTabHint)
-          ),
-
-          // 底部操作栏 (与官方 PluginCard footer 100% 对齐)
-          React.createElement(
-            'div',
-            { className: 'YyYd_a_footer' },
-            savedMsg ? React.createElement('p', { style: { minWidth: 0, color: 'var(--dsw-alias-brand-primary, #1677ff)', flex: 1, margin: 0, fontSize: '12px' } }, '✓ ' + labels.saved) : null,
-            React.createElement(
-              'a',
-              {
-                href: form.vncPath + '/',
-                target: '_blank',
-                rel: 'noreferrer',
-                style: {
-                  marginRight: 'auto',
-                  fontSize: '13px',
-                  color: 'var(--dsw-alias-brand-primary, #1677ff)',
-                  textDecoration: 'none'
-                }
-              },
-              labels.openDesktop + ' ↗'
-            ),
-            (form.enableSidebarTab && typeof window !== 'undefined') ? React.createElement(
-              'button',
-              {
-                type: 'button',
-                className: 'YyYd_a_discard',
-                style: { marginRight: '8px', cursor: 'pointer' },
-                onClick: (e) => {
-                  e.stopPropagation();
-                  if (typeof window.__DSH_OPEN_SIDEBAR_TAB__ === 'function') {
-                    window.__DSH_OPEN_SIDEBAR_TAB__('vnc-desktop');
-                  } else {
-                    alert(zh ? '右侧边栏未就绪，请先保存并刷新页面' : 'Sidebar not ready, please save and refresh');
-                  }
-                }
-              },
-              labels.openInSidebar
-            ) : null,
-            React.createElement(
-              'button',
-              {
-                type: 'button',
-                className: 'YyYd_a_discard',
-                disabled: !dirty || saving,
-                onClick: handleDiscard
-              },
-              labels.discard
-            ),
-            React.createElement(
-              'button',
-              {
-                type: 'button',
-                className: 'YyYd_a_save',
-                disabled: !dirty || saving,
-                onClick: handleSave
-              },
-              saving ? labels.saving : labels.save
-            )
-          )
+          { className: 'dsbd-card-body', style: isSection ? { padding: 0, marginTop: 0 } : { padding: '0 14px 14px' } },
+          body
         ) : null
       );
     }
 
-    // 注入右侧边栏 Tab 标签宽度保护样式 (防止文字被关闭按钮截断)
-    if (typeof document !== 'undefined' && !document.getElementById('dsh-browser-desktop-tab-css')) {
-      const style = document.createElement('style');
-      style.id = 'dsh-browser-desktop-tab-css';
-      style.textContent = `
-        [data-dockkit-tab]:has([data-dsh-desktop-tab-title]) {
-          min-width: 125px !important;
+    // 注入右侧边栏样式：
+    // 1) Tab 标签宽度保护 (防止文字被关闭按钮截断)
+    // 2) 桌面面板顶部栏配色 —— 全部使用 DSH 真实主题令牌 (--dsw-alias-*)，
+    //    浅色/深色主题下都有足够对比度。注意：
+    //    · 不存在 --dsw-alias-bg-subtle / --dsw-alias-fg-muted，误用会落到深色兜底，
+    //      在浅色主题下形成"深色栏 + 深色/近黑文字"的隐形问题；
+    //    · --dsw-alias-brand-primary 是"黑白对比色"(浅色#0f1115 / 深色#f9fafb)，
+    //      不是品牌蓝，不能拿来当链接色，链接应使用 --dsw-alias-link。
+    if (typeof document !== 'undefined') {
+      const STYLE_ID = 'dsh-browser-desktop-tab-css';
+      // P16：不再使用 :has 选择器 + 上游私有类名（上游一改名或旧浏览器不支持该选择器即失效）。
+      // Tab 宽度与防截断改由 VncDesktopTabTitle 的 useLayoutEffect 直接写内联样式完成。
+      const CSS = `
+        .dshDesktopBar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+          padding: 6px 12px;
+          font-size: 12px;
+          background: var(--dsw-alias-bg-layer-2, #252526);
+          border-bottom: 1px solid var(--dsw-alias-border-l3, rgba(128, 128, 128, 0.3));
+          color: var(--dsw-alias-label-secondary, #a1a1aa);
         }
-        [data-dockkit-tab]:has([data-dsh-desktop-tab-title]) [data-dockkit-tab-title] {
-          overflow: visible !important;
+        .dshDesktopBarTitle {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 500;
+          color: var(--dsw-alias-label-primary, #e5e5e5);
+        }
+        .dshDesktopBarActions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .dshDesktopBarBtn {
+          padding: 0;
+          border: none;
+          background: none;
+          font: inherit;
+          cursor: pointer;
+          color: var(--dsw-alias-label-secondary, #a1a1aa);
+        }
+        .dshDesktopBarBtn:hover {
+          color: var(--dsw-alias-label-primary, #e5e5e5);
+        }
+        .dshDesktopBarBtn:focus-visible {
+          outline: 1px solid var(--dsw-alias-link, #4176e6);
+          outline-offset: 2px;
+          border-radius: 3px;
+        }
+        .dshDesktopBarLink {
+          color: var(--dsw-alias-link, #4176e6);
+          text-decoration: none;
+        }
+        .dshDesktopBarLink:hover {
+          text-decoration: underline;
+        }
+        .dshDesktopBarLink:focus-visible {
+          outline: 1px solid var(--dsw-alias-link, #4176e6);
+          outline-offset: 2px;
+          border-radius: 3px;
         }
       `;
-      document.head.appendChild(style);
+      let styleEl = document.getElementById(STYLE_ID);
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = STYLE_ID;
+        document.head.appendChild(styleEl);
+      }
+      // 内容变化时同步更新，避免热更新/重复执行时沿用旧样式
+      if (styleEl.textContent !== CSS) styleEl.textContent = CSS;
     }
 
     // 右侧边栏专用 Tab 标题组件 (精致 14px 矢量显示器图标 + 完美防截断)
@@ -382,9 +285,11 @@ window.__ModuleLoader__.load({
       React.useLayoutEffect(() => {
         const el = titleRef.current;
         if (!el) return;
+        // P16：直接给上游 Tab 容器写内联样式（不依赖 :has 选择器）
         const chip = el.closest('[data-dockkit-tab], [data-dockkit-float-grip]');
         if (chip) {
           chip.style.minWidth = '125px';
+          chip.style.overflow = 'visible';
         }
       }, []);
 
@@ -424,7 +329,9 @@ window.__ModuleLoader__.load({
 
     // 右侧边栏专用内嵌 VNC 容器组件 (当开关开启且上游环境支持 SidebarRight 时渲染)
     function VncDesktopSidebarPane() {
-      const storedVncPath = typeof localStorage !== 'undefined' ? (localStorage.getItem('dsh_desktop_vnc_path') || '/vnc') : '/vnc';
+      // 订阅 VNC 路径：Admin 改路径后无需刷新页面，iframe 自动切到新地址重建
+      const [storedVncPath, setVncPath] = React.useState(getStoredVncPath());
+      React.useEffect(() => subscribeVncPath(setVncPath), []);
       const vncUrl = `${storedVncPath.replace(/\/+$/, '')}/?autoconnect=1&resize=scale`;
       const [reloadKey, setReloadKey] = React.useState(1);
 
@@ -443,33 +350,21 @@ window.__ModuleLoader__.load({
         },
         React.createElement(
           'div',
-          {
-            style: {
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '6px 12px',
-              background: 'var(--dsw-alias-bg-subtle, #252526)',
-              borderBottom: '1px solid var(--dsw-alias-border, #333)',
-              fontSize: '12px',
-              color: 'var(--dsw-alias-fg-muted, #aaa)',
-              flexShrink: 0
-            }
-          },
+          { className: 'dshDesktopBar' },
           React.createElement(
             'span',
-            { style: { fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '6px' } },
+            { className: 'dshDesktopBarTitle' },
             '🖥️',
             zh ? 'Chromium 容器桌面' : 'Chromium Container Desktop'
           ),
           React.createElement(
             'div',
-            { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
+            { className: 'dshDesktopBarActions' },
             React.createElement(
               'button',
               {
                 type: 'button',
-                style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '12px', padding: 0 },
+                className: 'dshDesktopBarBtn',
                 onClick: () => setReloadKey(k => k + 1)
               },
               zh ? '刷新画面' : 'Refresh'
@@ -477,10 +372,10 @@ window.__ModuleLoader__.load({
             React.createElement(
               'a',
               {
-                href: '/vnc/',
+                href: `${storedVncPath.replace(/\/+$/, '')}/`,
                 target: '_blank',
                 rel: 'noreferrer',
-                style: { color: 'var(--dsw-alias-brand-primary, #1677ff)', textDecoration: 'none' }
+                className: 'dshDesktopBarLink'
               },
               (zh ? '新窗口全屏' : 'Open in Tab') + ' ↗'
             )
@@ -504,9 +399,9 @@ window.__ModuleLoader__.load({
       return React.createElement(
         'div',
         { style: { padding: '24px 28px', maxWidth: '820px' } },
-        React.createElement('div', { style: { marginBottom: '20px', borderBottom: '1px solid var(--dsh-border, #e2e8f0)', paddingBottom: '14px' } },
+        React.createElement('div', { style: { marginBottom: '20px', borderBottom: '1px solid var(--dsw-alias-border-l3, #e2e8f0)', paddingBottom: '14px' } },
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' } },
-            React.createElement('h2', { style: { fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--dsh-text, #0f172a)', display: 'flex', alignItems: 'center', gap: '8px' } },
+            React.createElement('h2', { style: { fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--dsw-alias-label-primary, #0f172a)', display: 'flex', alignItems: 'center', gap: '8px' } },
               React.createElement('span', null, '🖥️'),
               labels.title
             ),
@@ -516,18 +411,19 @@ window.__ModuleLoader__.load({
                 fontWeight: 600,
                 padding: '2px 8px',
                 borderRadius: '12px',
-                background: '#e0f2fe',
-                color: '#0284c7'
+                background: 'var(--dsw-alias-state-business-tertiary, #e0f2fe)',
+                color: 'var(--dsw-alias-state-business-primary, #0284c7)'
               }
             }, zh ? '内置容器套件组件' : 'Builtin Suite Component')
           ),
-          React.createElement('p', { style: { fontSize: '13px', color: 'var(--dsh-text-muted, #64748b)', margin: 0, lineHeight: 1.5 } }, labels.description)
+          React.createElement('p', { style: { fontSize: '13px', color: 'var(--dsw-alias-label-secondary, #64748b)', margin: 0, lineHeight: 1.5 } }, labels.description)
         ),
         React.createElement(BrowserDesktopCard, { isSection: true })
       );
     }
 
     function apply(ctx) {
+      // 配置权威已统一到 Admin「浏览器与桌面控制」页：客户端不再读写 DSH 设置命名空间。
       if (ctx.slots && typeof ctx.slots.inject === 'function') {
         // 1. 现代 DSH 规范 (>= 0.1.5 / 0.1.6)：将“容器浏览器”注册为设置中心的独立一等公民 Section (settings.section)
         // 与 dshmarket 和 dsh-thinking-effort 保持完全一致的注册范式
@@ -553,43 +449,28 @@ window.__ModuleLoader__.load({
           }, BrowserDesktopCard);
         });
 
-        // 兼容支持 settingsScope 作用域插槽注入 (部分 0.1.5 次版本)
-        if (typeof ctx.inject === 'function') {
-          try {
-            ctx.inject(['settingsScope'], (scoped) => {
-              if (scoped && scoped.slots) {
-                scoped.slots.inject('settings.plugin.item', () => {
-                  return scoped.slots.register({
-                    name: 'settings.plugin.item',
-                    key: 'browser-desktop',
-                    order: 80
-                  }, BrowserDesktopCard);
-                });
-              }
-            });
-          } catch (e) {}
-        }
         // =========================================================================
         // 【兼容老版本 DSH 结束】
         // =========================================================================
 
-        // 2. 检查右侧边栏 Tab 开关状态 (默认关闭，用户在设置中开启后生效)
-        const isSidebarTabEnabled = typeof localStorage !== 'undefined' && localStorage.getItem('dsh_desktop_enable_sidebar_tab') === 'true';
-
-        if (isSidebarTabEnabled && typeof ctx.inject === 'function') {
-          try {
-            ctx.inject(['sidebarRightTabs', 'sidebarRight'], (scopedCtx) => {
-              window.__DSH_SIDEBAR_RIGHT__ = scopedCtx.sidebarRight;
-              window.__DSH_OPEN_SIDEBAR_TAB__ = (kind) => {
-                try {
-                  if (typeof scopedCtx.sidebarRight?.openTab === 'function') {
-                    scopedCtx.sidebarRight.openTab({ kind });
-                  }
-                } catch (err) {
-                  console.warn('[dsh-browser-desktop] 呼出右侧边栏 Tab 失败:', err);
-                }
-              };
-
+        // 2. 右侧边栏 Tab：权威来自网关（Admin「浏览器与桌面控制」页的「右侧边栏桌面 Tab」）
+        const injectSidebarTab = (scopedCtx) => {
+          window.__DSH_SIDEBAR_RIGHT__ = scopedCtx.sidebarRight;
+          window.__DSH_OPEN_SIDEBAR_TAB__ = (kind) => {
+            try {
+              if (typeof scopedCtx.sidebarRight?.openTab === 'function') {
+                scopedCtx.sidebarRight.openTab({ kind });
+              }
+            } catch (err) {
+              console.warn('[dsh-browser-desktop] 呼出右侧边栏 Tab 失败:', err);
+            }
+          };
+          // P13：返回清理函数 —— Cordis 会在依赖失效/插件卸载时调用它回收全局键，
+          // 否则插件被卸载后 window 上会残留指向已销毁 ctx 的引用。
+          const cleanupGlobals = () => {
+            try { delete window.__DSH_SIDEBAR_RIGHT__; } catch {}
+            try { delete window.__DSH_OPEN_SIDEBAR_TAB__; } catch {}
+          };
               const DESKTOP_ID = '@dsh-custom/dsh-browser-desktop';
               const DESKTOP_KIND = 'vnc-desktop';
 
@@ -624,10 +505,19 @@ window.__ModuleLoader__.load({
                   }, VncDesktopSidebarPane);
                 });
               }
-            });
-          } catch (err) {
-            console.warn('[dsh-browser-desktop] 条件注入右侧边栏依赖失败 (优雅降级):', err.message);
-          }
+          return cleanupGlobals;
+        };
+        if (typeof ctx.inject === 'function') {
+          loadDesktopStatus()
+            .then((data) => {
+              if (!data?.desktop?.enableSidebarTab) return;
+              try {
+                ctx.inject(['sidebarRightTabs', 'sidebarRight'], (scopedCtx) => injectSidebarTab(scopedCtx));
+              } catch (err) {
+                console.warn('[dsh-browser-desktop] 条件注入右侧边栏依赖失败 (优雅降级):', err.message);
+              }
+            })
+            .catch(() => {});
         }
       }
     }

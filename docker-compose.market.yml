@@ -5,12 +5,16 @@ services:
     restart: unless-stopped
     ports:
       # 仅暴露单个统一端口（包含 DSH Web、管理面板与 VNC 桌面，共享同一套认证）
-      - "3080:3080"
+      # M13：跟随 .env 的 PROXY_PORT（默认 3080），避免改了口令/端口后宿主映射静默失配
+      - "${PROXY_PORT:-3080}:${PROXY_PORT:-3080}"
     environment:
-      # 访问认证码（必须通过此认证码才可访问 DSH Web、管理后台和 VNC 桌面；留空则禁用认证）
-      - AUTH_TOKEN=${AUTH_TOKEN:-admin}
-      # 统一对外访问端口
-      - PROXY_PORT=3080
+      # 访问认证码（必须通过此认证码才可访问 DSH Web、管理后台和 VNC 桌面）
+      # 留空时：首次访问会自动引导到「初始化访问口令」页面，设置后才能使用（不再有免密直通模式）
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      # 统一对外访问端口（M13：跟随 .env；显式 env 优先于数据卷中的持久化配置）
+      - PROXY_PORT=${PROXY_PORT:-3080}
+      # 运行根目录（M11：非 root 部署时设为 /home/dsh）
+      - DSH_HOME=${DSH_HOME:-/root}
 
       # 出站网络代理（可选：DSH 0.1.5-rc.1 原生遵循环境变量代理）
       - HTTP_PROXY=${HTTP_PROXY:-}
@@ -24,8 +28,28 @@ services:
       # - DSH_WORKSPACE=/workspace           # 默认工作区目录
       # - DSH_DESKTOP_ENABLED=1              # 是否启用内置 Chromium 图形桌面 (1: 开启, 0: 关闭)
       # - DSH_IDLE_TIMEOUT_MINUTES=30        # 浏览器桌面空闲休眠时间 (分钟，0为不休眠始终保持)
-      # - DSH_DESKTOP_WIDTH=1440             # 虚拟桌面宽度分辨率
-      # - DSH_DESKTOP_HEIGHT=900             # 虚拟桌面高度分辨率
+      # - DSH_DESKTOP_WIDTH=1920             # 虚拟桌面宽度分辨率
+      # - DSH_DESKTOP_HEIGHT=1080            # 虚拟桌面高度分辨率
+
+    # ── M11 容器加固 ─────────────────────────────────────────────
+    # 1) 禁止提权（setuid/setgid 二进制无法获得新权限）
+    security_opt:
+      - no-new-privileges:true
+    # 2) 丢弃全部 Linux capabilities，仅回补 root 运行必需的最小集合
+    #    （入口脚本要修正数据卷属主/权限、创建并管理子进程）
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+      - KILL
+    # 3) 【可选】以非 root 运行（更彻底）：取消下面两行注释，并把 volumes 换成
+    #    /home/dsh/.dsh 等路径（宿主目录需 chown 1001:1001）；此时可删除上面的 cap_add 段。
+    # user: "1001:1001"
+    # environment 里追加: - DSH_HOME=/home/dsh
     volumes:
       # 1. DSH 系统与配置目录（存储插件、预设、配置文件与会话历史）
       - ./data/dsh:/root/.dsh

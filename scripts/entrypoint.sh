@@ -5,15 +5,23 @@ export DSH_WORKSPACE="${DSH_WORKSPACE:-/workspace}"
 export PROXY_PORT="${PROXY_PORT:-3080}"
 export DSH_PORT="${DSH_PORT:-3079}"
 export VNC_PORT="${VNC_PORT:-6080}"
-export ADMIN_PATH="${ADMIN_PATH:-/admin}"
-export VNC_PATH="${VNC_PATH:-/vnc}"
+# M13：ADMIN_PATH / VNC_PATH 只有在【显式设置】时才导出为环境变量；
+# 未设置时不注入默认值，从而让管理后台写入的持久化配置继续生效（env 显式设置才优先）。
+if [ -n "${ADMIN_PATH:-}" ]; then export ADMIN_PATH; fi
+if [ -n "${VNC_PATH:-}" ]; then export VNC_PATH; fi
 export NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 export DSH_DESKTOP_ENABLED="${DSH_DESKTOP_ENABLED:-1}"
 export DSH_DESKTOP_WIDTH="${DSH_DESKTOP_WIDTH:-1920}"
 export DSH_DESKTOP_HEIGHT="${DSH_DESKTOP_HEIGHT:-1080}"
 export DSH_DESKTOP_DEPTH="${DSH_DESKTOP_DEPTH:-24}"
-export CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-/root/.config/chromium}"
-export DSH_WEB_LOG="/tmp/dsh-web.log"
+# M11：运行根目录可迁移（非 root 部署时设为 /home/<user>），默认 /root
+export DSH_HOME="${DSH_HOME:-/root}"
+export DSH_DIR="${DSH_HOME}/.dsh"
+export DSH_SNAPSHOT_DIR="${DSH_SNAPSHOT_DIR:-${DSH_HOME}/.dsh-snapshots}"
+export CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-${DSH_HOME}/.config/chromium}"
+# 轻微项：DSH 日志落数据卷（便于排障与留存），并做简单的体积轮转
+export DSH_WEB_LOG="${DSH_WEB_LOG:-${DSH_HOME:-/root}/.dsh/logs/dsh-web.log}"
+export DSH_WEB_LOG_MAX_BYTES="${DSH_WEB_LOG_MAX_BYTES:-10485760}"
 export NODE_OPTIONS="${NODE_OPTIONS} --no-deprecation"
 export NODE_PATH="/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules:/usr/local/lib/node_modules:${NODE_PATH}"
 
@@ -41,7 +49,14 @@ echo "    启动 DeepSeek Harness"
 echo "========================================================"
 
 # 1. 确保必要目录就绪
-mkdir -p "${DSH_WORKSPACE}" "/root/.dsh" "/root/.dsh-snapshots" "${CHROME_USER_DATA_DIR}" "/tmp/dsh-desktop"
+mkdir -p "${DSH_WORKSPACE}" "${DSH_DIR}" "${DSH_SNAPSHOT_DIR}" "${CHROME_USER_DATA_DIR}" "/tmp/dsh-desktop"
+mkdir -p "$(dirname "${DSH_WEB_LOG}")" 2>/dev/null || true
+if [ -f "${DSH_WEB_LOG}" ]; then
+  _log_size=$(wc -c < "${DSH_WEB_LOG}" 2>/dev/null || echo 0)
+  if [ "${_log_size:-0}" -gt "${DSH_WEB_LOG_MAX_BYTES}" ]; then
+    mv -f "${DSH_WEB_LOG}" "${DSH_WEB_LOG}.1" 2>/dev/null || true
+  fi
+fi
 touch "${DSH_WEB_LOG}"
 
 # 1.0 自动配置 npm 与 pnpm 镜像源加速 (默认 npmmirror，海外可传 NPM_REGISTRY 覆盖)
@@ -54,33 +69,33 @@ find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/d
 find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true
 
 # 1.1 修复 .dsh 目录与凭据文件的严格权限 (DSH 凭据服务强制校验 mode 600，拒绝 777/644 等跨权限读取崩溃)
-if [ -d "/root/.dsh" ]; then
-  chmod 700 /root/.dsh 2>/dev/null || true
-  find /root/.dsh -name "*credentials*.yaml" -o -name "*credentials*.yml" 2>/dev/null | while read -r f; do
+if [ -d "${DSH_DIR}" ]; then
+  chmod 700 "${DSH_DIR}" 2>/dev/null || true
+  find "${DSH_DIR}" -name "*credentials*.yaml" -o -name "*credentials*.yml" 2>/dev/null | while read -r f; do
     chmod 600 "$f" || true
   done
 fi
 
 # 1.2 预设已确认内测声明与插件市场安全重启配置，防止弹窗阻塞与守护管理器双重启冲突
-if [ ! -f "/root/.dsh/settings.yaml" ]; then
-  cat <<'EOF' > /root/.dsh/settings.yaml
+if [ ! -f "${DSH_DIR}/settings.yaml" ]; then
+  cat <<'EOF' > "${DSH_DIR}/settings.yaml"
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
 dsh-market:
   allowRestart: false
 EOF
 else
-  if ! grep -q "welcomeNoticeVersion" "/root/.dsh/settings.yaml" 2>/dev/null; then
+  if ! grep -q "welcomeNoticeVersion" "${DSH_DIR}/settings.yaml" 2>/dev/null; then
     printf '
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
-' >> /root/.dsh/settings.yaml
+' >> "${DSH_DIR}/settings.yaml"
   fi
-  if ! grep -q "dsh-market:" "/root/.dsh/settings.yaml" 2>/dev/null; then
+  if ! grep -q "dsh-market:" "${DSH_DIR}/settings.yaml" 2>/dev/null; then
     printf '
 dsh-market:
   allowRestart: false
-' >> /root/.dsh/settings.yaml
+' >> "${DSH_DIR}/settings.yaml"
   fi
 fi
 
@@ -90,19 +105,44 @@ if [ -f "/app/scripts/install-plugin.mjs" ]; then
   node /app/scripts/install-plugin.mjs || true
 fi
 
-# 3. 运行客户端与服务端回环持久化补丁
+# 3. 运行客户端与服务端回环持久化补丁（必需补丁未命中会以非零码退出，这里显著告警但不阻断启动）
 if [ -f "/app/scripts/patch-dsh-client.mjs" ]; then
   echo "[entrypoint] 执行 DSH 客户端回环与宿主设置持久化补丁..."
-  node /app/scripts/patch-dsh-client.mjs || true
+  if ! node /app/scripts/patch-dsh-client.mjs; then
+    echo "[entrypoint] ⚠️⚠️⚠️ 必需补丁未生效（详见上方 [FATAL] 行）！"
+    echo "[entrypoint] ⚠️ 服务仍会继续启动，但鉴权放行 / 回环 host 模式 / 插件包 404 自愈等补丁可能缺失；"
+    echo "[entrypoint] ⚠️ 请尽快更新镜像，或同步修正 scripts/patch-dsh-client.mjs 的补丁锚点。"
+  fi
 fi
 
-# 4. 启动统一网关守护循环 (支持管理面板在线热重启网关，局部注入 NODE_ENV=production 防止全局环境污染用户工作区)
+# 4. 启动统一网关守护循环
+#    - 支持管理面板在线热重启网关（局部注入 NODE_ENV=production）
+#    - 指数退避（1s→2s→…→30s）；连续 10 次失败则退出容器，交由编排层/用户介入
+attempt=0
+backoff=1
 while true; do
   echo "[entrypoint] 启动网关..."
+  start_ts=$(date +%s)
   NODE_ENV=production node /app/gateway/index.js &
   child_pid=$!
-  wait "$child_pid" || true
+  code=0
+  wait "$child_pid" || code=$?
   child_pid=""
-  echo "[entrypoint] 网关进程已退出，将在 1 秒后自动重启就绪..."
-  sleep 1
+  ran=$(( $(date +%s) - start_ts ))
+
+  # 稳定运行超过 60s 视为一次成功启动：重置退避计数
+  if [ "$ran" -ge 60 ]; then
+    attempt=0
+    backoff=1
+  fi
+
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 10 ]; then
+    echo "[entrypoint] ❌ 网关已连续退出 ${attempt} 次（最近退出码 ${code}，运行 ${ran}s），放弃重启并退出容器"
+    exit 1
+  fi
+  echo "[entrypoint] 网关进程已退出 (code=${code}，运行 ${ran}s)，${backoff}s 后重启（第 ${attempt} 次）..."
+  sleep "$backoff"
+  backoff=$(( backoff * 2 ))
+  [ "$backoff" -gt 30 ] && backoff=30
 done

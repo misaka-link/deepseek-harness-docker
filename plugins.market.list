@@ -5,10 +5,19 @@
 # 将自动将本列表中的插件预装进镜像 (镜像名 deepseek-harness-docker:latest-market)。
 # ========================================================
 
+# 版本策略：
+#   - 写【精确版本】(如 foo@1.2.3)：可复现构建，升级时手动改版本号；
+#   - 写 @latest（或裸包名）：每次构建都拉取当时最新版。
+#     注意：Docker 层缓存会复用旧版本，写 @latest 时必须配合缓存刷新
+#     （Dockerfile 的 MARKET_REFRESH build-arg，CI 每次传唯一 run_id），
+#     否则 plugins.market.list 内容没变时这一层根本不会重新执行。
+# 本清单中的预装插件均有意跟随 @latest：更新频繁，预装版需始终最新。
+# 若某个插件改回精确版本，请同步更新 version.json#supply.marketPlugins。
+
 # 1. DSH 社区应用市场插件
 # 项目地址: https://github.com/dsh-market/dsh-market
-dshmarket
+dshmarket@latest
 
 # 2. 思考强度调节插件
 # 项目地址: https://github.com/hytime/dsh-thinking-effort#readme
-@hytime/dsh-thinking-effort
+@hytime/dsh-thinking-effort@latest

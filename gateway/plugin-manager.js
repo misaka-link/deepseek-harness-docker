@@ -1,12 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const PROFILE_DIR = '/root/.dsh/profiles/web';
+// M11：DSH_HOME 可迁移（非 root 部署），默认 /root
+const DSH_HOME = process.env.DSH_HOME || '/root';
+const PROFILE_DIR = path.join(DSH_HOME, '.dsh/profiles/web');
 const PKG_PATH = path.join(PROFILE_DIR, 'package.json');
 const PATCH_PATH = path.join(PROFILE_DIR, 'cordis.patch.yml');
 const MOD_DIR = path.join(PROFILE_DIR, 'node_modules');
-const PLUGINS_DATA_DIR = '/root/.dsh/plugins';
-const PLUGIN_STATE_FILE = '/root/.dsh/plugins-state.json';
+const PLUGINS_DATA_DIR = path.join(DSH_HOME, '.dsh/plugins');
+const PLUGIN_STATE_FILE = path.join(DSH_HOME, '.dsh/plugins-state.json');
 
 const CORE_PACKAGES = new Set([
   '@deepseek-ai/dsh-base',
@@ -40,6 +42,13 @@ function readPluginState() {
   return { disabled: [], uninstalled: [] };
 }
 
+// 原子写：先写临时文件再 rename，避免进程被杀 / 磁盘满时留下截断的 JSON/YAML（那会让 DSH 起不来）
+function atomicWrite(filePath, content) {
+  const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, content, 'utf8');
+  fs.renameSync(tmp, filePath);
+}
+
 function writePluginState(state) {
   try {
     fs.mkdirSync(path.dirname(PLUGIN_STATE_FILE), { recursive: true });
@@ -48,7 +57,7 @@ function writePluginState(state) {
       uninstalled: Array.from(new Set(state.uninstalled || [])),
       updatedAt: new Date().toISOString()
     };
-    fs.writeFileSync(PLUGIN_STATE_FILE, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    atomicWrite(PLUGIN_STATE_FILE, JSON.stringify(payload, null, 2) + '\n');
     return true;
   } catch (err) {
     console.error('[plugin-manager] 写入 plugins-state.json 失败:', err.message);
@@ -70,12 +79,40 @@ function readPackageJson() {
 function writePackageJson(pkg) {
   try {
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
-    fs.writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+    atomicWrite(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n');
     return true;
   } catch (err) {
     console.error('[plugin-manager] 写入 package.json 失败:', err.message);
     throw new Error('写入 package.json 失败: ' + err.message);
   }
+}
+
+/**
+ * 按"条目"粒度删除 cordis.patch.yml 中命中的条目。
+ * YAML 顶层是 `- ` 开头的数组条目，条目内续行都带缩进。
+ * 旧实现用跨行正则 `- (?:id|insert):[\s\S]*?<name>[\s\S]*?(?=- |$)`，
+ * 会跨条目贪婪匹配，可能连带删掉无关条目/注释（名称里的 `.` 也未转义）。
+ */
+function removePatchEntries(content, matcher) {
+  const lines = content.split('\n');
+  const out = [];
+  let i = 0;
+  let removed = 0;
+  while (i < lines.length) {
+    if (/^-\s/.test(lines[i])) {
+      let j = i + 1;
+      // 条目续行：缩进行，或条目之间的空行
+      while (j < lines.length && !/^-\s/.test(lines[j]) && (lines[j].trim() === '' || /^\s/.test(lines[j]))) j++;
+      const block = lines.slice(i, j);
+      if (matcher(block.join('\n'))) { removed++; i = j; continue; }
+      out.push(...block);
+      i = j;
+      continue;
+    }
+    out.push(lines[i]);
+    i++;
+  }
+  return { text: out.join('\n'), removed };
 }
 
 function cleanPatchForPlugin(pluginName) {
@@ -86,23 +123,22 @@ function cleanPatchForPlugin(pluginName) {
 
     // 若禁用的插件是 dsh-git-worktree，清理其禁用的 ui-workspace 补丁
     if (pluginName.includes('worktree')) {
-      if (content.includes('ui-workspace')) {
-        content = content.replace(/- id:\s*ui-workspace[\s\S]*?(?=- |$)/g, '');
-        changed = true;
-      }
+      const r = removePatchEntries(content, (block) => /\bid:\s*ui-workspace\b/.test(block));
+      if (r.removed > 0) { content = r.text; changed = true; }
     }
 
-    // 清理该插件自身的 insert 条目
+    // 清理提到该插件名的条目（按条目整体删除，不做跨行正则）
     if (content.includes(pluginName)) {
-      const reg = new RegExp(`- (?:id|insert):[\\s\\S]*?${pluginName}[\\s\\S]*?(?=- |$)`, 'g');
-      content = content.replace(reg, '');
-      changed = true;
+      const esc = pluginName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(esc);
+      const r = removePatchEntries(content, (block) => re.test(block));
+      if (r.removed > 0) { content = r.text; changed = true; }
     }
 
     content = content.trim();
     if (!content || content === '') content = '[]';
     if (changed) {
-      fs.writeFileSync(PATCH_PATH, content + '\n', 'utf8');
+      atomicWrite(PATCH_PATH, content + '\n');
       console.log(`[plugin-manager] 已自动清理 cordis.patch.yml 中关于 ${pluginName} 的补丁条目`);
     }
   } catch (err) {
@@ -266,6 +302,7 @@ function togglePlugin(name, enable) {
   }
 
   const pkg = readPackageJson();
+  const pkgSnapshot = JSON.stringify(pkg, null, 2) + '\n'; // 供状态写失败时回滚
   pkg.dsh = pkg.dsh || {};
   pkg.dsh.profile = pkg.dsh.profile || {};
   pkg.dsh.profile.bundles = Array.isArray(pkg.dsh.profile.bundles) ? pkg.dsh.profile.bundles : [];
@@ -294,10 +331,15 @@ function togglePlugin(name, enable) {
   }
 
   writePackageJson(pkg);
-  writePluginState({
+  const stateOk = writePluginState({
     disabled: Array.from(disabledSet),
     uninstalled: Array.from(uninstalledSet)
   });
+  if (!stateOk) {
+    // 状态文件写失败：回滚 package.json，避免内存/磁盘分叉（被禁用的插件重启后"复活"）
+    try { atomicWrite(PKG_PATH, pkgSnapshot); } catch {}
+    throw new Error('插件状态持久化失败（已回滚 package.json），请检查数据卷权限与磁盘空间');
+  }
 
   console.log(`[plugin-manager] 插件 ${name} 已持久化${enable ? '启用' : '禁用'}`);
 
@@ -442,5 +484,6 @@ module.exports = {
   installPlugin,
   readPluginState,
   writePluginState,
+  removePatchEntries,
   PLUGIN_DESCRIPTIONS_ZH
 };

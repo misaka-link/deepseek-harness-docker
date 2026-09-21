@@ -45,7 +45,7 @@ function scanTokenOnce() {
     if (latest) {
       state.token = latest;
       state.source = 'log';
-      try { fs.writeFileSync(TOKEN_FILE_AUTO, latest); } catch {}
+      try { fs.writeFileSync(TOKEN_FILE_AUTO, latest, { mode: 0o600 }); fs.chmodSync(TOKEN_FILE_AUTO, 0o600); } catch {}
       return latest;
     }
   }
@@ -70,7 +70,8 @@ async function ensureUpstreamCookie(dshOrigin = 'http://127.0.0.1:3079') {
     const res = await fetch(targetUrl, {
       method: 'GET',
       headers: { 'Host': '127.0.0.1:3079' },
-      redirect: 'manual'
+      redirect: 'manual',
+      signal: AbortSignal.timeout(5000)
     });
 
     const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
@@ -81,7 +82,8 @@ async function ensureUpstreamCookie(dshOrigin = 'http://127.0.0.1:3079') {
       if (sc && sc.includes('dsh-auth-')) {
         const cookiePair = sc.split(';')[0].trim();
         state.upstreamCookie = cookiePair;
-        console.log(`[token-crawler] 成功换取 DSH 上游会话 Cookie: ${cookiePair.slice(0, 25)}...`);
+        // 轻微项：日志只记录 Cookie 名与长度，绝不回显其内容片段
+        console.log(`[token-crawler] 成功换取 DSH 上游会话 Cookie: ${cookiePair.split('=')[0]} (len=${cookiePair.length})`);
         return cookiePair;
       }
     }

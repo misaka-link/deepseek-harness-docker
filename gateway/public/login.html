@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8fafc" />
   <title>DeepSeek Harness - 访问验证</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
@@ -23,6 +24,9 @@
       --shadow-card: 0 20px 30px -10px rgba(15, 23, 42, 0.08), 0 10px 15px -3px rgba(15, 23, 42, 0.04);
       --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
+
+    /* 移动端基线：禁止 iOS 横屏文字自动膨胀 */
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
     * {
       box-sizing: border-box;
@@ -148,7 +152,8 @@
       padding: 0 14px 0 42px;
       border: 1.5px solid var(--card-border);
       border-radius: var(--radius-input);
-      font-size: 15px;
+      /* ≥16px：避免 iOS Safari 聚焦输入框时自动放大整个页面 */
+      font-size: 16px;
       color: var(--text-main);
       background: #ffffff;
       outline: none;
@@ -242,6 +247,29 @@
       border-radius: 20px;
       font-weight: 500;
       color: #475569;
+    }
+
+    /* ===== 移动端适配 ===== */
+    @media (max-width: 520px) {
+      body { padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+      .auth-card { padding: 26px 20px; border-radius: 14px; }
+      .brand-title { font-size: 20px; }
+      .footer-text { margin-top: 18px; }
+    }
+
+    @media (max-width: 360px) {
+      body { padding: 12px 10px calc(12px + env(safe-area-inset-bottom, 0px)); }
+      .auth-card { padding: 22px 15px; }
+      .brand-logo { width: 40px; height: 40px; margin-bottom: 10px; }
+      .brand-title { font-size: 18px; }
+    }
+
+    /* 横屏 / 矮屏：垂直居中会把内容顶出视口，改为顶部对齐并压缩留白 */
+    @media (max-height: 620px) {
+      body { justify-content: flex-start; }
+      .auth-card { padding-top: 22px; padding-bottom: 22px; }
+      .brand-header { margin-bottom: 18px; }
+      .brand-logo { width: 36px; height: 36px; margin-bottom: 8px; }
     }
   </style>
 </head>
@@ -339,7 +367,8 @@
         const res = await fetch('/__auth/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token })
+          body: JSON.stringify({ token }),
+          signal: AbortSignal.timeout(15000)
         });
 
         const data = await res.json();

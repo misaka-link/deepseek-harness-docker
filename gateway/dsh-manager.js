@@ -7,13 +7,20 @@ const DSH_PORT = Number(process.env.DSH_PORT) || 3079;
 const DSH_WORKSPACE = process.env.DSH_WORKSPACE || '/workspace';
 const DSH_WEB_LOG = process.env.DSH_WEB_LOG || '/tmp/dsh-web.log';
 const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
-const DSH_DIR = '/root/.dsh';
+const DSH_DIR = path.join(process.env.DSH_HOME || '/root', '.dsh');
 const backupService = require('./backup-service');
+const { isValidVersion, resolveWithinDir } = require('./dsh-version');
 
 try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
 try { fs.mkdirSync(DSH_WORKSPACE, { recursive: true }); } catch {}
 
 function killPortProcess(port) {
+  // 安全阀：绝不清理网关自己的端口（若 DSH_PORT 被误配成 PROXY_PORT，fuser -k 会杀掉网关自身）
+  const proxyPort = Number(process.env.PROXY_PORT) || 3080;
+  if (Number(port) === proxyPort) {
+    console.warn(`[dsh-manager] 跳过端口清理：目标端口 ${port} 与网关端口相同，避免误杀自身`);
+    return;
+  }
   try {
     spawnSync('fuser', ['-k', '-9', `${port}/tcp`], { stdio: 'ignore' });
   } catch {}
@@ -21,13 +28,14 @@ function killPortProcess(port) {
     const res = spawnSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8' });
     if (res.status === 0 && res.stdout) {
       for (const line of res.stdout.split('\n')) {
-        if (/dsh\s+web|dsh-market-restart/i.test(line)) {
-          const m = line.trim().match(/^(\d+)/);
-          if (m) {
-            const pid = Number(m[1]);
-            if (pid !== process.pid) {
-              try { process.kill(pid, 'SIGKILL'); } catch {}
-            }
+        // 收敛匹配：仅处理"本 DSH 端口上的 dsh web 服务进程"，避免误伤其它同名命令
+        if (!/dsh\s+web(\s|$)/.test(line)) continue;
+        if (!line.includes(String(port))) continue;
+        const m = line.trim().match(/^(\d+)/);
+        if (m) {
+          const pid = Number(m[1]);
+          if (pid !== process.pid) {
+            try { process.kill(pid, 'SIGKILL'); } catch {}
           }
         }
       }
@@ -111,7 +119,6 @@ class DshManager {
     this.upstreamCookie = '';
     this.versionsCacheDir = '/app/.dsh-versions-cache';
     this.restartTimer = null;
-    this.recentCrashCount = 0;
     this.lastCrashTime = 0;
     this.manualStopped = false;
     this.startTime = 0;
@@ -122,7 +129,35 @@ class DshManager {
     this.maxAutoHealPerBoot = 5;
     this.autoHealCountInCurrentBoot = 0;
     this.autoIsolatedEvents = [];
+    // 生命周期操作串行队列：boot/stop/restart 依次执行，杜绝并发启动与守护自愈互相打架
+    this._opChain = Promise.resolve();
+    // 崩溃时间窗口（M4）：只按"最近一段时间内的崩溃次数"熔断，而不是被一次就绪清零
+    this.crashWindow = [];
     try { fs.mkdirSync(this.versionsCacheDir, { recursive: true }); } catch {}
+  }
+
+  // 把生命周期操作串行化：前序操作无论成功失败都不阻塞后续操作
+  _enqueue(task) {
+    const run = this._opChain.then(task, task);
+    // 看门狗（最后一道保险）：任务若 180s 内仍未 settle（内部 Promise 泄漏等），
+    // 记录告警并放行后续操作，避免整个生命周期队列被永久卡死。
+    let timer = null;
+    const guarded = Promise.race([
+      run,
+      new Promise((resolve) => {
+        timer = setTimeout(() => {
+          console.warn('[dsh-manager] ⚠️ 生命周期操作超过 180s 未返回，放行后续操作（看门狗触发）');
+          resolve({ ok: false, error: 'operation_timeout' });
+        }, 180000);
+        if (timer.unref) timer.unref();
+      })
+    ]);
+    // 关键：操作一旦 settle 就清掉计时器。原实现从不清除 → 即使操作早已成功，
+    // 进程在启动 180s 后仍会打印"看门狗触发"的假告警（远程实测到的就是这种假告警）。
+    const clear = () => { if (timer) clearTimeout(timer); };
+    guarded.then(clear, clear);
+    this._opChain = guarded.then(() => {}, () => {});
+    return guarded;
   }
 
   setAutoHeal(enabled, maxPerBoot = 5) {
@@ -236,11 +271,15 @@ class DshManager {
       }
     }
 
-    // 5. 深度扫描：Cordis Patch 配置语法错误或冲突
+    // 5. Cordis Patch 配置冲突：必须是"结构化"的解析报错，且与插件名在**同一行**出现。
+    //    旧实现只要全文同时出现 "patch" 与插件名就命中，极易误伤（例如本项目的补丁脚本日志）。
     for (const p of candidatePlugins) {
       if (p.isCore) continue;
-      const short = p.name.replace(/^@.*\//, '');
-      if (logText.includes('patch') && (logText.includes(p.name) || logText.includes(short))) {
+      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const names = esc(p.name) + '|' + esc(p.name.replace(/^@.*\//, ''));
+      const reA = new RegExp('(patch|yaml|yml)[^\\n]*?(parse|syntax|invalid|conflict|error)[^\\n]*?(?:' + names + ')', 'i');
+      const reB = new RegExp('(?:' + names + ')[^\\n]*?(patch|yaml|yml)[^\\n]*?(parse|syntax|invalid|conflict|error)', 'i');
+      if (reA.test(logText) || reB.test(logText)) {
         return {
           name: p.name,
           reason: 'patch_conflict',
@@ -249,16 +288,18 @@ class DshManager {
       }
     }
 
-    // 6. 深度扫描：插件内部标签致命报错打印 (如 [dsh-xxx] Error)
+    // 6. 插件自身标签的致命报错：要求**同一行**同时出现标签与错误标记。
+    //    旧实现是"全文任意位置同时出现"，别的插件报错也会误伤本插件。
     for (const p of candidatePlugins) {
       if (p.isCore) continue;
       const short = p.name.replace(/^@.*\//, '');
-      const tag = `[${short}]`;
-      if (logText.includes(tag) && (logText.includes('Error') || logText.includes('Exception') || logText.includes('crash'))) {
+      const tagEsc = ('[' + short + ']').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(tagEsc + '[^\\n]*?(Error|Exception|FATAL|crash|failed)', 'i');
+      if (re.test(logText)) {
         return {
           name: p.name,
           reason: 'plugin_logger_error',
-          matched: `插件内部日志打印致命异常: ${tag}`
+          matched: `插件内部日志打印致命异常: [${short}]`
         };
       }
     }
@@ -423,10 +464,38 @@ class DshManager {
     return this.registry;
   }
 
+  // 对外入口：串行化后执行真正的启动逻辑
   boot(onProbe) {
-    return new Promise(async resolve => {
+    return this._enqueue(() => this._bootInternal(onProbe));
+  }
+
+  _bootInternal(onProbe) {
+    // 反模式修复：`new Promise(async executor)` 里抛出的异常会成为未处理 rejection，
+    // Promise 永不 settle（进而卡死串行队列）。改为同步 executor + 异步实现函数。
+    return new Promise((resolve) => {
+      // 注意：不能用 .then(resolve) 采用实现函数的"返回值"——实现函数是异步的，
+      // 它自己会在就绪/失败时调用 resolve，而其函数体可能在嵌套 then 链完成前就先返回，
+      // 若采用返回值会把 Promise 提前以 undefined 结算。这里只用 catch 兜住实现函数抛出的异常。
+      Promise.resolve()
+        .then(() => this._bootInternalImpl(onProbe, resolve))
+        .catch((err) => {
+          console.error('[dsh-manager] 启动流程异常（已兜底 resolve）:', (err && err.message) || err);
+          resolve({ ok: false, error: (err && err.message) || String(err) });
+        });
+    });
+  }
+
+  async _bootInternalImpl(onProbe, resolve) {
       this.manualStopped = false;
-      if (this.proc) return resolve({ ok: true, alreadyRunning: true });
+      // 只有"进程确实还活着"才算已在运行；否则清理僵尸引用，避免误判后永不真正拉起
+      if (this.proc && this.proc.exitCode === null && !this.proc.killed) {
+        return resolve({ ok: true, alreadyRunning: true });
+      }
+      if (this.proc) {
+        console.warn('[dsh-manager] 检测到已退出的进程引用（僵尸），清理后继续启动');
+        this.proc = null;
+        this.ready = false;
+      }
       this.stopping = false;
       if (this.restartTimer) {
         clearTimeout(this.restartTimer);
@@ -454,13 +523,22 @@ class DshManager {
       this.ready = false;
 
       const logStream = fs.createWriteStream(DSH_WEB_LOG, { flags: 'a' });
+      // 日志落盘失败（磁盘满/权限）不得让网关进程崩溃
+      logStream.on('error', (e) => console.warn('[dsh-manager] DSH 日志写入失败(已忽略):', e.message));
       const env = {
         ...process.env,
         DSH_PORT: String(DSH_PORT),
         PROXY_PORT: String(process.env.PROXY_PORT || 3080),
         NPM_CONFIG_REGISTRY: this.registry,
         NPM_REGISTRY: this.registry,
-        PNPM_REGISTRY: this.registry
+        PNPM_REGISTRY: this.registry,
+        // DSH 的语义是「$DSH_HOME 本身就是 harness home」（profile 位于 $DSH_HOME/profiles/<name>，
+        // 见 @deepseek-ai/dsh-home-paths 的 resolveDshHome），而本项目其余代码一律把 harness home
+        // 视为 $DSH_HOME/.dsh（即 DSH_DIR）。若直接把容器级 DSH_HOME（默认 /root）透传给子进程，
+        // DSH 会去读 /root/profiles/web（只有 dsh-base + dsh-web-app 两个官方 bundle），
+        // 于是安装到 /root/.dsh/profiles/web 的预装/自定义插件（dshmarket 市场、浏览器桌面、
+        // 思考强度等）永远不会被加载。这里显式把子进程的 DSH_HOME 收敛到 DSH_DIR，与全项目对齐。
+        DSH_HOME: DSH_DIR
       };
       // 彻底剥离 NODE_ENV=production，恢复纯净开发环境，避免工作区 install 跳过 devDependencies
       delete env.NODE_ENV;
@@ -473,15 +551,21 @@ class DshManager {
 
       this.proc = p;
 
-      p.stdout.on('data', d => {
-        logStream.write(d);
-        process.stdout.write(d);
+      // 日志脱敏：DSH 启动时会把访问令牌明文打印到 stdout（`dsh web: ...?token=xxx`），
+      // 在落盘 / 转发 / Admin 回溯视图之前统一抹掉，避免明文凭据长期堆积在日志里。
+      const redactLog = (d) => String(Buffer.isBuffer(d) ? d.toString('utf8') : d)
+        .replace(/([?&]token=)[A-Za-z0-9._~-]+/gi, '$1<redacted>');
 
-        // 收集最近日志用于崩溃根因排查
+      p.stdout.on('data', d => {
+        const safe = redactLog(d);
+        logStream.write(safe);
+        process.stdout.write(safe);
+
+        // 收集最近日志用于崩溃根因排查（同样脱敏，避免令牌进入 Admin 回溯视图）
         const str = d.toString('utf8');
         const lines = str.split('\n').filter(Boolean);
         for (const l of lines) {
-          this.recentLogs.push(l);
+          this.recentLogs.push(redactLog(l));
           if (this.recentLogs.length > 80) this.recentLogs.shift();
         }
 
@@ -496,13 +580,14 @@ class DshManager {
         }
       });
       p.stderr.on('data', d => {
-        logStream.write(d);
-        process.stderr.write(d);
+        const safe = redactLog(d);
+        logStream.write(safe);
+        process.stderr.write(safe);
 
         const str = d.toString('utf8');
         const lines = str.split('\n').filter(Boolean);
         for (const l of lines) {
-          this.recentLogs.push(l);
+          this.recentLogs.push(redactLog(l));
           if (this.recentLogs.length > 80) this.recentLogs.shift();
         }
       });
@@ -520,6 +605,9 @@ class DshManager {
         if (code !== 0 && code !== null) {
           this.lastExitInfo = { code, sig, time: Date.now(), logs: this.recentLogs.slice(-20) };
         }
+        // 先记录"退出前是否已就绪"：下面会把 ready 置 false，
+        // 若直接判断 this.ready 会导致崩溃重启/熔断分支永远不可达（旧实现的隐藏 bug）。
+        const wasReady = this.ready;
         if (this.proc === p) {
           this.proc = null;
           this.ready = false;
@@ -531,26 +619,33 @@ class DshManager {
         }
         // 若在启动就绪探活期间即发生异常退出，由下方 waitReady 统一负责故障诊断、插件自动隔离与净化重启；
         // 此处仅针对曾经成功就绪、但在后续运行中意外崩溃的情况执行带指数退避的守护重启，杜绝双重拉起与竞争
-        if (!this.ready) {
+        if (!wasReady) {
           return;
         }
-        // 若非主动调用 stop()，自动执行守护拉起 (带频次熔断保护)
+        // 若非主动调用 stop()，自动执行守护拉起（带"滑动窗口"熔断保护）
+        // 关键：不能再用"一次就绪成功就清零"——坏插件最典型的形态就是"就绪后立刻崩溃"，
+        // 那样每轮计数都回到 1，退避与熔断永不触发，形成无上限重启风暴。
         if (!this.stopping && !this.installing) {
           const now = Date.now();
-          if (now - this.lastCrashTime < 6000) {
-            this.recentCrashCount = (this.recentCrashCount || 0) + 1;
-          } else {
-            this.recentCrashCount = 1;
-          }
-          this.lastCrashTime = now;
+          const CRASH_WINDOW_MS = 120000; // 2 分钟滑动窗口
+          const MAX_CRASHES = 5;
 
-          if (this.recentCrashCount > 5) {
-            console.error('[dsh-manager] 警告: DSH 频繁崩溃 (>5次)，已暂停自动拉起以保护系统。请在管理后台检查配置或恢复快照。');
+          // 曾稳定运行超过一个窗口 → 视为健康历史，清空窗口
+          if (this.startTime && now - this.startTime > CRASH_WINDOW_MS) {
+            this.crashWindow = [];
+          }
+          this.crashWindow = (this.crashWindow || []).filter(t => now - t < CRASH_WINDOW_MS);
+          this.crashWindow.push(now);
+          this.lastCrashTime = now;
+          const crashes = this.crashWindow.length;
+
+          if (crashes > MAX_CRASHES) {
+            console.error(`[dsh-manager] 警告: DSH 在 ${CRASH_WINDOW_MS / 1000}s 内已崩溃 ${crashes} 次（>${MAX_CRASHES}），已暂停自动拉起以保护系统。请在管理后台检查配置或恢复快照。`);
             return;
           }
 
-          const delay = Math.min(1000 * Math.pow(1.5, this.recentCrashCount - 1), 10000);
-          console.log(`[dsh-manager] DSH 进程退出，守护管理器将在 ${(delay / 1000).toFixed(1)} 秒后自动重新拉起 DSH...`);
+          const delay = Math.min(1000 * Math.pow(1.5, crashes - 1), 10000);
+          console.log(`[dsh-manager] DSH 进程退出，守护管理器将在 ${(delay / 1000).toFixed(1)} 秒后自动重新拉起 DSH（窗口内第 ${crashes} 次）...`);
           clearTimeout(this.restartTimer);
           this.restartTimer = setTimeout(() => {
             if (!this.stopping && !this.installing && !this.proc) {
@@ -561,11 +656,13 @@ class DshManager {
       });
 
       // 等待真正就绪（杜绝外部假冒就绪）
+      // 注意：外层是 new Promise(async executor)，回调里任何抛出都会让该 Promise 永不 settle
+      // （这是旧实现的真实死锁来源——会把串行队列一起卡死）。这里显式 try/catch + catch 兜底。
       this.waitReady(60000, onProbe).then(async ok => {
+       try {
         this.ready = ok;
         console.log(ok ? '[dsh-manager] DSH 已就绪' : '[dsh-manager] DSH 启动超时或崩溃');
         if (ok) {
-          this.recentCrashCount = 0;
           this.autoHealCountInCurrentBoot = 0;
           this.startTime = Date.now();
           if (this.launchToken) {
@@ -604,7 +701,7 @@ class DshManager {
 
                 console.log(`[dsh-manager] 拓展「${detected.name}」已自动停用并固化状态，立即重新拉起 DSH 核心...`);
                 await ensurePortReleased(DSH_PORT, 3000);
-                const healBootRes = await this.boot(onProbe);
+                const healBootRes = await this._bootInternal(onProbe);
                 return resolve(healBootRes);
               } catch (healErr) {
                 console.error('[dsh-manager] 执行插件自动隔离失败:', healErr.message);
@@ -618,18 +715,29 @@ class DshManager {
         }
 
         resolve({ ok: false });
+       } catch (e) {
+        console.error('[dsh-manager] 启动后就绪处理异常（已兜底 resolve）:', (e && e.message) || e);
+        resolve({ ok: false, error: (e && e.message) || String(e) });
+       }
+      }).catch(err => {
+        console.error('[dsh-manager] waitReady 异常（已兜底 resolve）:', (err && err.message) || err);
+        resolve({ ok: false, error: (err && err.message) || String(err) });
       });
-    });
   }
 
+  // 对外入口：串行化后执行真正的停止逻辑
   stop() {
+    return this._enqueue(() => this._stopInternal());
+  }
+
+  _stopInternal() {
     return new Promise(resolve => {
       this.stopping = true;
       if (this.restartTimer) {
         clearTimeout(this.restartTimer);
         this.restartTimer = null;
       }
-      this.recentCrashCount = 0;
+      this.crashWindow = [];
 
       const p = this.proc;
       this.proc = null;
@@ -644,30 +752,46 @@ class DshManager {
       }
 
       console.log('[dsh-manager] 停止 DSH 进程...');
+      let settled = false;
+      const done = (extra = {}) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        clearTimeout(hardTimer);
+        this.stopping = false;
+        resolve({ ok: true, ...extra });
+      };
+
       const timer = setTimeout(() => {
         try { p.kill('SIGKILL'); } catch {}
         killPortProcess(DSH_PORT);
       }, 4000);
 
+      // 兜底：极端情况下进程杀不掉/exit 事件丢失时也必须返回，避免调用方（含串行队列）永久挂起
+      const hardTimer = setTimeout(() => {
+        console.warn('[dsh-manager] 停止 DSH 超时（9s），强制返回');
+        done({ forced: true });
+      }, 9000);
+
       p.once('exit', async () => {
-        clearTimeout(timer);
-        this.stopping = false;
-        await ensurePortReleased(DSH_PORT, 2500);
-        resolve({ ok: true });
+        try { await ensurePortReleased(DSH_PORT, 2500); } catch {}
+        done();
       });
 
       try {
         p.kill('SIGTERM');
       } catch {
-        this.stopping = false;
-        resolve({ ok: true });
+        done();
       }
     });
   }
 
+  // 重启 = 同一个队列任务内先停后起，避免中间被其它操作插入
   async restart(onProbe) {
-    await this.stop();
-    return this.boot(onProbe);
+    return this._enqueue(async () => {
+      await this._stopInternal();
+      return this._bootInternal(onProbe);
+    });
   }
 
   async exchangeSessionCookie(token = this.launchToken) {
@@ -677,7 +801,8 @@ class DshManager {
       const res = await fetch(targetUrl, {
         method: 'GET',
         headers: { 'Host': `127.0.0.1:${DSH_PORT}` },
-        redirect: 'manual'
+        redirect: 'manual',
+        signal: AbortSignal.timeout(5000)
       });
 
       const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
@@ -713,7 +838,8 @@ class DshManager {
         return false;
       }
       try {
-        const res = await fetch(`http://127.0.0.1:${DSH_PORT}/`);
+        // 必须带超时：若端口被"连上但不响应"的进程占住，无超时的 fetch 会让整个探活循环永久挂起
+        const res = await fetch(`http://127.0.0.1:${DSH_PORT}/`, { signal: AbortSignal.timeout(3000) });
         if (res.status < 500 && this.proc && this.proc.exitCode === null) {
           return true;
         }
@@ -727,7 +853,19 @@ class DshManager {
     return false;
   }
 
+  /** 版本号是否合法（供 Admin API 入口复用同一套校验） */
+  isValidVersion(value) {
+    return isValidVersion(value);
+  }
+
   async installVersion(version, onProgress, onLog) {
+    // 入口强校验：版本号必须是合法 semver，杜绝 `../` 目录穿越与 npm 说明符注入
+    const normalizedVersion = typeof version === 'string' ? version.trim() : '';
+    if (!isValidVersion(normalizedVersion)) {
+      return { ok: false, error: `版本号格式不合法: ${String(version).slice(0, 64)}` };
+    }
+    version = normalizedVersion;
+
     if (this.installing) return { ok: false, error: '已有安装任务正在进行中' };
     this.installing = true;
     this.installLog = [];
@@ -784,7 +922,14 @@ class DshManager {
       // === 阶段 2/5: 本地安全快照存档 (保障随时秒级熔断回滚) ===
       emitProgress({ step: 2, total: 5, percent: 25, label: '备份当前稳定版本快照', mode: 'install' });
       log(`=== [阶段 2/5] 本地安全快照存档 (保障秒级熔断回滚) ===`);
-      const prevBackup = path.join(this.versionsCacheDir, previousVersion);
+      // 纵深防御：即便 previousVersion 来自 package.json，也强制落在缓存目录内
+      let prevBackup;
+      try {
+        prevBackup = resolveWithinDir(this.versionsCacheDir, previousVersion);
+      } catch (e) {
+        log(`⚠️ 跳过本地快照（当前版本号不合法）: ${e.message}`);
+        prevBackup = path.join(this.versionsCacheDir, '.invalid-' + Date.now());
+      }
       if (!fs.existsSync(prevBackup) && fs.existsSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json')) {
         log(`正在对当前稳定版本 ${previousVersion} 生成本地秒级快照存档...`);
         spawnSync('mkdir', ['-p', prevBackup]);
@@ -799,7 +944,7 @@ class DshManager {
       // === 阶段 3/5: 部署目标核心版本 ===
       emitProgress({ step: 3, total: 5, percent: 40, label: '获取目标版本核心包', mode: 'install' });
       log(`=== [阶段 3/5] 部署目标核心版本 @deepseek-ai/dsh@${version} ===`);
-      const targetCached = path.join(this.versionsCacheDir, version);
+      const targetCached = resolveWithinDir(this.versionsCacheDir, version);
       if (fs.existsSync(path.join(targetCached, 'package.json'))) {
         log(`⚡ [秒级加速] 命中本地版本高速快照缓存，正在秒级部署 ${version}...`);
         spawnSync('rm', ['-rf', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
@@ -915,6 +1060,8 @@ class DshManager {
       log(`======================================================================`);
 
       this.installing = false;
+      // M5：切换成功后必须让版本缓存失效，否则 getStatus().version 与"回滚目标"都会停留在旧值
+      this.lastKnownVersion = '';
       return { ok: true, version: currentVer };
 
     } catch (err) {
@@ -944,7 +1091,7 @@ class DshManager {
       });
 
       try {
-        const prevCached = path.join(this.versionsCacheDir, previousVersion);
+        const prevCached = resolveWithinDir(this.versionsCacheDir, previousVersion);
         if (fs.existsSync(path.join(prevCached, 'package.json'))) {
           log(`[回滚 1/3] ⚡ 从本地快照中秒级还原稳定核心 ${previousVersion}...`);
           spawnSync('rm', ['-rf', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
@@ -1016,6 +1163,7 @@ class DshManager {
         log(`======================================================================`);
 
         this.installing = false;
+        this.lastKnownVersion = ''; // 回滚后同样让版本缓存失效
         return {
           ok: false,
           error: `目标版本 ${version} 启动失败: ${err.message}，系统已自动安全回滚至稳定版本 ${previousVersion}`,

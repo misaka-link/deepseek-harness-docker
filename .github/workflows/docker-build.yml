@@ -4,15 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.1.3)'
+        description: 'Project version tag (e.g. 0.1.4)'
         required: false
-        default: '0.1.3'
+        default: '0.1.4'
   push:
     branches:
       - main
     tags:
       - 'v*'
-      - '[0-9]+.[0-9]+.[0-9]+*'
+      # GitHub 的 tag 过滤是 glob 而非正则：`+` 是字面量，旧写法 '[0-9]+.[0-9]+.[0-9]+*' 永不匹配
+      - '[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: read
@@ -27,7 +28,8 @@ jobs:
       project_version: ${{ steps.version_detector.outputs.project_version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        # 供应链安全：固定到 commit SHA（tag 可被移动）
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 2
 
@@ -87,13 +89,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -108,13 +110,12 @@ jobs:
           LATEST_TAG="${{ matrix.latest_tag }}"
           PROJ_VER="${{ needs.check-version.outputs.project_version }}"
 
-          # 探测内置的官方 DeepSeek Harness 核心版本号 (优先 alpha，其次 next / latest，与 build.sh 保持绝对一致)
-          DSH_ALPHA=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"alpha":"[^"]*"' | cut -d'"' -f4 || true)
-          DSH_NEXT=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh | grep -o '"next":"[^"]*"' | cut -d'"' -f4 || true)
-          DSH_LATEST=$(curl -s https://registry.npmjs.org/@deepseek-ai/dsh/latest | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || true)
-          DSH_VERSION="${DSH_ALPHA:-${DSH_NEXT:-$DSH_LATEST}}"
+          # M10：内置 DSH 版本以 version.json#supply 为唯一来源（不再每次动态探测 registry，
+          # 否则同一份代码在不同时间会构建出不同内容的镜像）
+          DSH_VERSION=$(node -e "process.stdout.write(require('./version.json').supply.dshVersion||'')")
           if [ -z "$DSH_VERSION" ]; then
-            DSH_VERSION="0.1.6-alpha.2"
+            echo "错误: version.json#supply.dshVersion 未设置" >&2
+            exit 1
           fi
           echo "dsh_version=${DSH_VERSION}" >> $GITHUB_OUTPUT
           echo "Detected built-in DSH Version: ${DSH_VERSION}"
@@ -141,20 +142,68 @@ jobs:
           echo "Generated tags: ${TAGS}"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           platforms: linux/amd64
-          provenance: false
-          sbom: false
+          # M10：生成 SLSA provenance 与 SBOM（供应链可追溯）
+          provenance: mode=max
+          sbom: true
+          # 每次构建唯一，强制 Dockerfile 预装层缓存失效，
+          # 让 plugins.market.list 里的 dshmarket@latest 真正拉到当次构建的最新版
           build-args: |
             NODE_IMAGE=node:24-trixie
             NOVNC_ASSET_REVISION=1.6.0
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
             DSH_VERSION=${{ steps.docker_meta.outputs.dsh_version }}
+            MARKET_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             USE_CHINA_MIRROR=0
           tags: ${{ steps.docker_meta.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+
+  smoke-test:
+    name: Smoke Test (${{ matrix.variant }})
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: base
+            tag: latest
+          - variant: market
+            tag: latest-market
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # M10：镜像发布后做最小冒烟测试 —— 起容器、等健康检查、验证 /healthz 与插件加载
+      - name: Smoke test container
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/deepseek-harness-docker:${{ matrix.tag }}"
+          docker pull "$IMAGE"
+          docker run -d --name dsh-smoke -p 18080:3080 \
+            -e AUTH_TOKEN=smoke-test-token-0123456789 \
+            -e PROXY_PORT=3080 "$IMAGE"
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18080/healthz >/tmp/healthz.json 2>/dev/null; then ok=1; break; fi
+            sleep 5
+          done
+          echo "--- /healthz ---"; cat /tmp/healthz.json || true; echo
+          docker logs dsh-smoke | tail -40 || true
+          docker rm -f dsh-smoke >/dev/null 2>&1 || true
+          [ "$ok" = "1" ] || { echo "冒烟测试失败: /healthz 未就绪"; exit 1; }
+          grep -q '"ok":true' /tmp/healthz.json
+          echo "冒烟测试通过"

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8fafc" />
+  <title>DeepSeek Harness - 初始化访问口令</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at 50% 15%, #f1f5f9 0%, #f8fafc 50%, #e2e8f0 100%);
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #679efe;
+      --primary-hover: #5686fe;
+      --primary-active: #4176e6;
+      --danger: #ef4444;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --ok: #16a34a;
+      --radius-card: 16px;
+      --radius-input: 10px;
+      --shadow-card: 0 20px 30px -10px rgba(15, 23, 42, 0.08), 0 10px 15px -3px rgba(15, 23, 42, 0.04);
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    /* 移动端基线：禁止 iOS 横屏文字自动膨胀 */
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    * { box-sizing: border-box; margin: 0; padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+    body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+           background: var(--bg-gradient); padding: 24px; color: var(--text-main); }
+    .card { width: 100%; max-width: 440px; background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 34px 30px 28px; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    /* 与登录页保持一致：直接使用鲸鱼 LOGO（/favicon.svg），不再用蓝色方块 + 字母 D */
+    .brand-logo { width: 34px; height: 34px; display: block; object-fit: contain; }
+    @media (prefers-color-scheme: dark) { .brand-logo { filter: invert(1); } }
+    .brand-name { font-size: 17px; font-weight: 800; }
+    h1 { font-size: 19px; font-weight: 800; margin-bottom: 8px; }
+    .desc { font-size: 13px; color: var(--text-muted); line-height: 1.65; margin-bottom: 20px; }
+    .form-group { margin-bottom: 15px; }
+    .form-label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 7px; }
+    /* ≥16px：避免 iOS Safari 聚焦输入框时自动放大整个页面 */
+    .form-input { width: 100%; padding: 11px 13px; font-size: 16px; color: var(--text-main);
+                  background: #fff; border: 1px solid var(--card-border); border-radius: var(--radius-input);
+                  transition: var(--transition); outline: none; }
+    .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(103, 158, 254, 0.18); }
+    .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+    .hint.ok { color: var(--ok); }
+    .btn { width: 100%; padding: 12px; font-size: 14px; font-weight: 700; color: #fff; background: var(--primary);
+           border: none; border-radius: var(--radius-input); cursor: pointer; transition: var(--transition); margin-top: 6px; }
+    .btn:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn:active:not(:disabled) { background: var(--primary-active); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .alert { display: none; padding: 10px 13px; border-radius: var(--radius-input); font-size: 12.5px;
+             line-height: 1.6; margin-bottom: 14px; }
+    .alert.show { display: block; }
+    .alert-error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: #991b1b; }
+    .alert-ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .rules { background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius-input);
+             padding: 10px 13px; font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-bottom: 16px; }
+
+    /* ===== 移动端适配 ===== */
+    @media (max-width: 520px) {
+      body { padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+      .card { padding: 24px 18px 22px; border-radius: 14px; }
+      h1 { font-size: 18px; }
+      .desc { font-size: 12.5px; }
+      .btn { min-height: 46px; }
+    }
+
+    @media (max-width: 360px) {
+      body { padding: 12px 10px calc(12px + env(safe-area-inset-bottom, 0px)); }
+      .card { padding: 20px 14px 18px; }
+      .brand-logo { width: 28px; height: 28px; }
+      .brand-name { font-size: 15px; }
+    }
+
+    /* 横屏 / 矮屏：垂直居中会把内容顶出视口，改为顶部对齐并压缩留白 */
+    @media (max-height: 660px) {
+      body { justify-content: flex-start; }
+      .card { padding-top: 20px; padding-bottom: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img src="/favicon.svg" class="brand-logo" alt="DeepSeek Harness" />
+      <div class="brand-name">DeepSeek Harness</div>
+    </div>
+    <h1>初始化访问口令</h1>
+    <p class="desc">
+      检测到本容器<strong>尚未设置访问口令</strong>。为避免服务在无保护状态下暴露，
+      请先设置一个口令 —— 它将同时保护 DSH Web、管理后台与容器桌面 (VNC)。
+    </p>
+
+    <div class="alert alert-error" id="errBox"></div>
+    <div class="alert alert-ok" id="okBox"></div>
+
+    <div class="rules">
+      · 长度至少 <strong>8 位</strong>，建议混合字母、数字与符号<br />
+      · 不要使用 <code>admin</code> / <code>password</code> / <code>12345678</code> 等弱口令<br />
+      · 口令会以 <code>0600</code> 权限持久化保存，容器重启后依然有效
+    </div>
+
+    <form id="setupForm" autocomplete="off">
+      <div class="form-group">
+        <label class="form-label" for="pwd">访问口令</label>
+        <input class="form-input" id="pwd" type="password" autocomplete="new-password" placeholder="请输入访问口令" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pwd2">确认口令</label>
+        <input class="form-input" id="pwd2" type="password" autocomplete="new-password" placeholder="请再次输入以确认" />
+        <div class="hint" id="matchHint"></div>
+      </div>
+      <button class="btn" id="submitBtn" type="submit">设置并进入</button>
+    </form>
+  </div>
+
+  <script>
+    const MIN_LEN = 8;
+    const WEAK = ['admin', 'password', '12345678', '123456789', 'qwertyuiop', '11111111', '00000000', 'deepseek'];
+    const pwd = document.getElementById('pwd');
+    const pwd2 = document.getElementById('pwd2');
+    const matchHint = document.getElementById('matchHint');
+    const errBox = document.getElementById('errBox');
+    const okBox = document.getElementById('okBox');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function showError(msg) { okBox.classList.remove('show'); errBox.textContent = msg; errBox.classList.add('show'); }
+    function clearError() { errBox.classList.remove('show'); errBox.textContent = ''; }
+
+    function checkMatch() {
+      if (!pwd2.value) { matchHint.textContent = ''; matchHint.className = 'hint'; return; }
+      const same = pwd.value === pwd2.value;
+      matchHint.textContent = same ? '两次输入一致' : '两次输入不一致';
+      matchHint.className = 'hint' + (same ? ' ok' : '');
+    }
+    pwd.addEventListener('input', checkMatch);
+    pwd2.addEventListener('input', checkMatch);
+
+    document.getElementById('setupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      const p = pwd.value;
+      const p2 = pwd2.value;
+      if (p.length < MIN_LEN) return showError(`口令长度至少 ${MIN_LEN} 位`);
+      if (p !== p2) return showError('两次输入的口令不一致，请重新确认');
+      if (WEAK.includes(p.toLowerCase())) return showError('该口令过于常见，请更换更安全的口令');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '正在保存...';
+      try {
+        const res = await fetch('/__auth/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: p, confirm: p2 }),
+          signal: AbortSignal.timeout(15000)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || `设置失败 (HTTP ${res.status})`);
+        okBox.textContent = '✅ 访问口令设置成功，正在进入管理后台...';
+        okBox.classList.add('show');
+        setTimeout(() => { window.location.href = '/admin/'; }, 900);
+      } catch (err) {
+        showError('设置失败: ' + err.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = '设置并进入';
+      }
+    });
+  </script>
+</body>
+</html>

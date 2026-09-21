@@ -23,6 +23,9 @@
       ]
     }
   },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
   }

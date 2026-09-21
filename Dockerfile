@@ -246,39 +246,53 @@ RUN set -eux; \
     ln -s /usr/local/go/bin/go /usr/local/bin/go; \
     ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt; \
     mkdir -p /go/src /go/bin /go/pkg /workspace; \
-    chmod -R 777 /go; \
+    chmod -R 0755 /go; \
     if [ "$USE_CHINA_MIRROR" = "1" ] || [ "$USE_CHINA_MIRROR" = "true" ]; then \
       /usr/local/go/bin/go env -w GOPROXY="https://goproxy.cn,direct"; \
     fi; \
     go version
 
-# 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm，并补齐全局依赖链接
-ARG DSH_VERSION=""
-RUN if [ -n "$DSH_VERSION" ]; then \
-      TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
+# 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm（M10：固定版本 + 校验完整性 + 安装期不执行包脚本）
+#    版本默认来自 build.sh 读取的 version.json#supply，可用 --build-arg 覆盖。
+ARG DSH_VERSION="0.1.6-alpha.2"
+ARG PNPM_VERSION="12.5.1"
+RUN set -eux; \
+    TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
+    echo "===> 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \
+    mkdir -p /tmp/dsh-pkg; \
+    INTEG="$(npm view "${TARGET_PKG}" dist.integrity 2>/dev/null || true)"; \
+    TGZ="$(npm pack "${TARGET_PKG}" --pack-destination /tmp/dsh-pkg --silent | tail -n 1)"; \
+    if [ -n "${INTEG}" ]; then \
+      node -e "const c=require('crypto'),f=require('fs');const [alg,b64]=String(process.argv[1]).split('-');const h=c.createHash(alg).update(f.readFileSync(process.argv[2])).digest('base64');if(h!==b64){console.error('integrity 校验失败:',process.argv[1]);process.exit(1)}console.log('integrity OK ('+alg+')');" "${INTEG}" "/tmp/dsh-pkg/${TGZ}"; \
     else \
-      TARGET_PKG="@deepseek-ai/dsh"; \
+      echo "警告: registry 未返回 dist.integrity，跳过完整性校验"; \
     fi; \
-    echo "===> 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG}..." \
-    && npm config set allow-scripts all --location=global 2>/dev/null || true \
-    && npm install -g --ignore-scripts=false pnpm "${TARGET_PKG}" \
-    && for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \
-         pkg_name=$(basename "$d"); \
-         if [ "$pkg_name" != "dsh" ] && [ ! -e "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name" ]; then \
-           ln -s "$d" "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name"; \
-         fi; \
-       done \
-    && find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/dev/null || true \
-    && find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true
+    npm config set allow-scripts false --location=global 2>/dev/null || true; \
+    npm install -g --ignore-scripts "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; \
+    rm -rf /tmp/dsh-pkg; \
+    (cd /usr/local/lib/node_modules/@deepseek-ai/dsh && npm rebuild node-pty --foreground-scripts) 2>/dev/null || true; \
+    for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \
+      pkg_name=$(basename "$d"); \
+      if [ "$pkg_name" != "dsh" ] && [ ! -e "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name" ]; then \
+        ln -s "$d" "/usr/local/lib/node_modules/@deepseek-ai/$pkg_name"; \
+      fi; \
+    done; \
+    find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/dev/null || true; \
+    find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true; \
+    dsh --version || node -e "console.log(require('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json').version)"
 
 # 3.1 按需预装社区插件清单 (默认关闭 PREINSTALL_PLUGINS=0；设为 1 时自动安装 plugins.market.list)
 ARG PREINSTALL_PLUGINS=0
+# 预装层缓存刷新键：传成每次构建都不同的值（CI 用 run_id，本地用时间戳），
+# 强制本 RUN 层缓存失效并重新执行 —— 否则 plugins.market.list 内容不变时 Docker
+# 直接复用旧层，写成 @latest 的插件（如 dshmarket）永远拉不到新版。
+ARG MARKET_REFRESH=""
 COPY plugins.market.list /app/plugins.market.list
 RUN if [ "$PREINSTALL_PLUGINS" = "1" ] || [ "$PREINSTALL_PLUGINS" = "true" ]; then \
-      echo "===> 正在根据 plugins.market.list 预装社区插件清单 (Market 变体)..." \
+      echo "===> 正在根据 plugins.market.list 预装社区插件清单 (Market 变体, refresh=${MARKET_REFRESH:-none})..." \
       && sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' /app/plugins.market.list \
          | grep -v '^$' \
-         | xargs -r npm install -g \
+         | xargs -r npm install -g --ignore-scripts \
       && for p in dshmarket @hytime/dsh-thinking-effort; do \
            if [ -d "/usr/local/lib/node_modules/$p" ]; then \
              mkdir -p "/usr/local/lib/node_modules/$p/node_modules"; \
@@ -291,13 +305,38 @@ RUN if [ "$PREINSTALL_PLUGINS" = "1" ] || [ "$PREINSTALL_PLUGINS" = "true" ]; th
     fi
 
 # 4. 创建必要目录结构 (含 Go 工作区与缓存)
-RUN mkdir -p /app/gateway /app/scripts /app/plugins /workspace /root/.dsh /root/.dsh-snapshots /root/.config/chromium /go
+# M11：新增非 root 用户 dsh(uid 1000)。默认仍以 root 运行以兼容既有数据卷（/root/.dsh）；
+#       需要非 root 运行时：compose 里设置 user: "1000:1000" 且 DSH_HOME=/home/dsh，
+#       并把数据卷改挂到 /home/dsh/.dsh 等路径（详见 README 与 .env.example）。
+RUN set -eux; \
+    getent group dsh >/dev/null || groupadd -g 1001 dsh || groupadd dsh; \
+    getent passwd dsh >/dev/null || useradd -m -u 1001 -g dsh -s /bin/bash dsh || useradd -m -g dsh -s /bin/bash dsh; \
+    mkdir -p /app/gateway /app/scripts /app/plugins /workspace /root/.dsh /root/.dsh-snapshots /root/.config/chromium /go \
+    && mkdir -p /home/dsh/.dsh /home/dsh/.dsh-snapshots /home/dsh/.config/chromium /home/dsh/workspace \
+    && chown -R dsh:dsh /home/dsh /go \
+    && chmod 0755 /home/dsh \
+    && id dsh
 
 # 5. 复制项目脚本与网关程序
 COPY version.json /app/version.json
 COPY scripts/ /app/scripts/
 COPY gateway/ /app/gateway/
 COPY plugins/ /app/plugins/
+
+# 5.1 插件运行期依赖解析（M12）：构建上下文已排除 node_modules，这里显式创建指向
+#     官方 DSH 内置依赖的软链，避免依赖"宿主绝对路径软链"这种构建残留。
+#     （插件 index.js 直接 import '@deepseek-ai/schemastery'，其解析路径为
+#       /app/plugins/<plugin>/node_modules/@deepseek-ai/*）
+RUN for p in /app/plugins/*/; do \
+      mkdir -p "${p}node_modules/@deepseek-ai"; \
+      for d in /usr/local/lib/node_modules/@deepseek-ai/*; do \
+        n=$(basename "$d"); \
+        if [ "$n" != "dsh" ] && [ ! -e "${p}node_modules/@deepseek-ai/$n" ]; then \
+          ln -s "$d" "${p}node_modules/@deepseek-ai/$n"; \
+        fi; \
+      done; \
+    done \
+    && ls -l /app/plugins/*/node_modules/@deepseek-ai/ | head -20
 
 # 6. 安装网关依赖并赋予脚本执行权限
 RUN cd /app/gateway && npm install --omit=dev \
@@ -312,5 +351,9 @@ VOLUME ["/root/.dsh", "/root/.dsh-snapshots", "/workspace", "/root/.config/chrom
 
 # 8. 暴露统一对外的服务端口
 EXPOSE 3080
+
+# 9. 就绪探活：网关提供免鉴权 /healthz；连续失败会被编排层标记为 unhealthy
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3080/healthz || exit 1
 
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]

@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.3`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.4`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
 > 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.2`、`:0.1.6-alpha.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.3`、`:0.1.3-market`），精确锁定本容器套件自身的版本。
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.4`、`:0.1.4-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.3`<br>(`...:v0.1.3`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.3-market`<br>(`...:v0.1.3-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装，直接享受完整插件生态 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.4`<br>(`...:v0.1.4`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.4-market`<br>(`...:v0.1.4-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.3`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.4`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.3-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.4-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -169,6 +169,16 @@ docker compose -f docker-compose.market.yml up -d
 
 ## 📝 版本更新历史 (Changelog)
 
+### v0.1.4
+- 🎛️ **统一收敛配置权威至管理后台**：桌面与容器浏览器参数（主开关、分辨率、休眠时长、CDP 调试等）统一由 Web Admin 管理后台权威配置并即时生效；DSH 设置中心对应卡片调整为只读，消除双源配置冲突。
+- 🖥️ **虚拟桌面启停与生命周期重构**：引入串行操作队列消除并发死锁，完善进程监听与存活探针，支持崩溃自愈与优雅停止，彻底根除端口占用与资源泄漏隐患。
+- 🔐 **新增管理员初始化口令向导 (`/setup`)**：废除默认弱口令，首次部署强制引导设置管理员口令，内置弱口令拦截与安全权限持久化。
+- 📱 **管理后台全界面响应式与移动端适配**：全面适配多级屏幕断点与横屏场景，优化触控热区、贴底抽屉弹窗与 iOS 安全区，彻底解决小屏页面缩放与横向溢出问题。
+- 📜 **终端日志体验优化**：新增「自动滚动」状态记忆开关，优化日志刷新与渲染性能，翻阅历史日志顺畅不跳变。
+- 🛡️ **容器安全与工程化加固**：支持非 root 用户（`dsh:1001`）运行，默认配置 `cap_drop: [ALL]` 与 `no-new-privileges`，锁定核心依赖完整性校验，精简镜像构建上下文。
+- 🧩 **修复插件加载与状态恢复异常**：修正环境路径传递逻辑，解决应用市场及社区插件未被加载的问题；合并主控开关，解决停用后重新启用未能恢复的缺陷。
+- 🗑️ **废弃组件与清理**：下线冗余的配置占位插件，移除多余的配置轮询同步，统一各端品牌视觉标识。
+
 ### v0.1.3
 - ⚡ **快照备份新增「仅备份配置 (无对话内容)」选项**：
   - 新增独立的配置轻量快照模式，自动排除会话历史（`sessions/`）、多媒体附件（`attachments/`）与会话投影缓存；
@@ -176,8 +186,7 @@ docker compose -f docker-compose.market.yml up -d
   - Web Admin 快照管理提供可视化模态框选项与类型徽标识别（`📦 完整备份` vs `⚡ 仅配置 (无会话)`）。
 - 🌐 **内置插件与核心组件全面支持规范中文介绍**：
   - 内置插件（`@dsh-custom/dsh-browser-desktop`）以及官方核心运行环境的简介全面汉化；
-  - 消除管理后台拓展列表英中混杂现象，提升直观中文阅读体验；
-  - 彻底下线已无实际意义的 `@dsh-custom/dsh-settings-config-path` 冗余插件，精简加载链路。
+  - 消除管理后台拓展列表英中混杂现象，提升直观中文阅读体验。
 - 🛡️ **插件禁用与卸载持久化状态机重构（彻底解决重启强制复活 Bug）**：
   - 在持久化存储卷中引入独立状态清单 `/root/.dsh/plugins-state.json`，原子化记录已停用与已卸载插件；
   - 改造容器启动装配脚本 `install-plugin.mjs`，容器更新或重启时优先遵循持久化偏好，绝不覆盖用户禁用决定；

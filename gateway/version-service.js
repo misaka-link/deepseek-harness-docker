@@ -8,6 +8,15 @@ function parseSemver(v = '') {
   return { major, minor, patch, pre: pre || '' };
 }
 
+/**
+ * 严格 semver 校验（只接受 1.2.3 / v1.2.3 / 1.2.3-rc.1）。
+ * parseSemver 会把非法值静默降级为 0.0.0，若直接拿它比较，远端一个畸形版本号
+ * 就会造成"误报有新版本"，因此比较前必须先确认两边都是合法 semver。
+ */
+function isSemver(v) {
+  return /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(String(v ?? '').trim());
+}
+
 function compareSemver(v1, v2) {
   const p1 = parseSemver(v1);
   const p2 = parseSemver(v2);
@@ -45,8 +54,10 @@ class VersionService {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
         if (pkg.version) return pkg.version;
       }
-    } catch {}
-    return '0.1.3';
+    } catch (e) {
+      console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
+    }
+    return '0.1.4';
   }
 
   getLocalMeta() {
@@ -61,7 +72,9 @@ class VersionService {
         if (fs.existsSync(p)) {
           return JSON.parse(fs.readFileSync(p, 'utf8'));
         }
-      } catch {}
+      } catch (e) {
+        console.warn(`[version-service] 读取本地版本元数据失败 (${p}):`, e.message);
+      }
     }
     return {
       project: 'deepseek-harness-docker',
@@ -74,16 +87,18 @@ class VersionService {
       },
       latest: {
         version: this.getLocalProjectVersion(),
-        releaseDate: '2026-09-18',
-        releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.3',
-        changelog: '新增配置快照仅备份配置选项、内置插件规范中文描述、插件持久化状态防复活与启动崩溃自愈自动隔离',
+        releaseDate: '2026-09-21',
+        releaseUrl: 'https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.4',
+        changelog: 'Admin 配置权威收敛、桌面生命周期健壮性重构、安全与容器工程加固、移动端适配优化',
         changelogList: [
-          '配置快照与备份新增「仅备份配置(无对话内容)」选项，自动排除会话历史与媒体附件，体积轻巧便于迁移分享',
-          '内置插件 (@dsh-custom/*) 与官方核心组件功能介绍全面支持规范中文呈现',
-          '重构插件管理状态机，在 /root/.dsh/plugins-state.json 中持久化记录已禁用/卸载插件，彻底解决容器更新后插件强制复活问题',
-          'Web Admin 拓展管理新增已卸载预装插件展示与一键重新安装支持',
-          '新增 DSH 启动崩溃自愈与故障插件自动隔离功能 (实验性)，智能提取错误堆栈并自动停用引发崩溃的拓展',
-          '设置面板支持自定义单启动周期自愈隔离数量上限 (默认 5 个)，防止崩溃死锁'
+          '确立「Admin 为唯一权威」配置模型：桌面开关/分辨率/休眠/CDP/截图画质等统一由管理后台持久化并即时生效',
+          '重构虚拟桌面生命周期管理：消除并发竞争死锁，支持优雅停止与进程回收，增强崩溃自愈能力',
+          '新增管理员初始化口令向导 (/setup)，废除默认弱口令并强化安全持久化',
+          '容器安全加固：支持非 root 用户 (dsh:1001) 运行，默认剔除多余特权 (cap_drop ALL)',
+          '管理后台移动端全界面适配：多级断点自适应布局，优化触控热区、弹窗抽屉交互与 iOS 安全区',
+          '控制台日志终端体验优化：新增自动滚动记忆开关，优化渲染性能，翻阅历史日志更平稳',
+          '修复预装插件及社区插件在特定运行配置下未能正常加载的问题',
+          '预装插件跟随最新版本，供应链锁定核心引擎并强化完整性校验与构建上下文精简'
         ]
       },
       history: {
@@ -241,7 +256,8 @@ class VersionService {
     const meta = await this.fetchRemoteMeta(force);
     const currentProjectVer = this.getLocalProjectVersion();
     const latestProjectVer = meta.latest?.version || currentProjectVer;
-    const hasProjectUpdate = compareSemver(latestProjectVer, currentProjectVer) > 0;
+    const hasProjectUpdate = isSemver(latestProjectVer) && isSemver(currentProjectVer)
+      && compareSemver(latestProjectVer, currentProjectVer) > 0;
 
     let projectLevel = 'success';
     if (hasProjectUpdate) {
@@ -260,7 +276,8 @@ class VersionService {
         currentDshVer = dshManager.getCurrentVersion();
         const dshData = await dshManager.fetchAvailableVersions(false);
         latestDshVer = dshData.latest || '';
-        const hasDshUpdate = Boolean(latestDshVer && compareSemver(latestDshVer, currentDshVer) > 0);
+        const hasDshUpdate = Boolean(latestDshVer && isSemver(latestDshVer) && isSemver(currentDshVer)
+          && compareSemver(latestDshVer, currentDshVer) > 0);
         
         const evalRes = this.evaluateTargetVersion(currentDshVer, meta);
         isDshAdapted = evalRes.isAdapted;
@@ -280,7 +297,8 @@ class VersionService {
           };
         }
       } catch (err) {
-        // 静默保护
+        // 不再静默吞异常：DSH 版本研判失败要留下痕迹（安全降级为"无更新提示"）
+        console.warn('[version-service] DSH 版本研判失败(已降级为无更新提示):', err.message);
       }
     }
 

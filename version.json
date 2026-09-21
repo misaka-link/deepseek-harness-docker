@@ -9,20 +9,29 @@
     "upstreamReleases": "https://github.com/deepseek-ai/deepseek-harness/releases",
     "upstreamNpm": "https://www.npmjs.com/package/@deepseek-ai/dsh"
   },
+  "supply": {
+    "pnpmVersion": "12.5.1",
+    "dshVersion": "0.1.6-alpha.2",
+    "marketPlugins": {
+      "dshmarket": "latest",
+      "@hytime/dsh-thinking-effort": "latest"
+    },
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
+  },
   "latest": {
-    "version": "0.1.3",
-    "releaseDate": "2026-09-18",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.3",
-    "changelog": "CWE-330安全签名密钥持久化、右侧边栏桌面UI优化、配置轻量快照、内置插件中文规范、插件防复活与启动崩溃自愈隔离",
+    "version": "0.1.4",
+    "releaseDate": "2026-09-21",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.4",
+    "changelog": "Admin 配置权威收敛、桌面生命周期健壮性重构、安全与容器工程加固、移动端适配优化",
     "changelogList": [
-      "消除 CWE-330 会话签名密钥可预测性漏洞，自动生成 256 位强随机密钥并持久化至数据卷 (/root/.dsh/.session_secret)，容器重启会话无感保持",
-      "优化右侧边栏「容器桌面」Tab 样式与宽度保护 (min-width: 125px)，换用精致 14px 矢量显示器图标杜绝文字截断",
-      "配置快照与备份新增「仅备份配置(无对话内容)」选项，自动排除会话历史与媒体附件，体积轻巧便于迁移分享",
-      "内置插件 (@dsh-custom/*) 与官方核心组件功能介绍全面支持规范中文呈现",
-      "重构插件管理状态机，在 /root/.dsh/plugins-state.json 中持久化记录已禁用/卸载插件，彻底解决容器更新后插件强制复活问题",
-      "Web Admin 拓展管理新增已卸载预装插件展示与一键重新安装支持",
-      "新增 DSH 启动崩溃自愈与故障插件自动隔离功能 (实验性)，智能提取错误堆栈并自动停用引发崩溃的拓展",
-      "设置面板支持自定义单启动周期自愈隔离数量上限 (默认 5 个)，防止崩溃死锁"
+      "确立「Admin 为唯一权威」配置模型：桌面开关/分辨率/休眠/CDP/截图画质等统一由管理后台持久化并即时生效",
+      "重构虚拟桌面生命周期管理：消除并发竞争死锁，支持优雅停止与进程回收，增强崩溃自愈能力",
+      "新增管理员初始化口令向导 (/setup)，废除默认弱口令并强化安全持久化",
+      "容器安全加固：支持非 root 用户 (dsh:1001) 运行，默认剔除多余特权 (cap_drop ALL)",
+      "管理后台移动端全界面适配：多级断点自适应布局，优化触控热区、弹窗抽屉交互与 iOS 安全区",
+      "控制台日志终端体验优化：新增自动滚动记忆开关，优化渲染性能，翻阅历史日志更平稳",
+      "修复预装插件及社区插件在特定运行配置下未能正常加载的问题",
+      "预装插件跟随最新版本，供应链锁定核心引擎并强化完整性校验与构建上下文精简"
     ],
     "dshChangelogList": [
       "新增 Web 侧边栏“插件管理页”，支持 profile 插件动态启停与热装卸",
@@ -33,6 +42,22 @@
     ]
   },
   "history": {
+    "0.1.3": {
+      "version": "0.1.3",
+      "releaseDate": "2026-09-18",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.3",
+      "changelog": "CWE-330安全签名密钥持久化、右侧边栏桌面UI优化、配置轻量快照、内置插件中文规范、插件防复活与启动崩溃自愈隔离",
+      "changelogList": [
+        "消除 CWE-330 会话签名密钥可预测性漏洞，自动生成 256 位强随机密钥并持久化至数据卷 (/root/.dsh/.session_secret)，容器重启会话无感保持",
+        "优化右侧边栏「容器桌面」Tab 样式与宽度保护 (min-width: 125px)，换用精致 14px 矢量显示器图标杜绝文字截断",
+        "配置快照与备份新增「仅备份配置(无对话内容)」选项，自动排除会话历史与媒体附件，体积轻巧便于迁移分享",
+        "内置插件 (@dsh-custom/*) 与官方核心组件功能介绍全面支持规范中文呈现",
+        "重构插件管理状态机，在 /root/.dsh/plugins-state.json 中持久化记录已禁用/卸载插件，彻底解决容器更新后插件强制复活问题",
+        "Web Admin 拓展管理新增已卸载预装插件展示与一键重新安装支持",
+        "新增 DSH 启动崩溃自愈与故障插件自动隔离功能 (实验性)，智能提取错误堆栈并自动停用引发崩溃的拓展",
+        "设置面板支持自定义单启动周期自愈隔离数量上限 (默认 5 个)，防止崩溃死锁"
+      ]
+    },
     "0.1.2": {
       "version": "0.1.2",
       "releaseDate": "2026-09-18",

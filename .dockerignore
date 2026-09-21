@@ -1,0 +1,47 @@
+# ========================================================
+# .dockerignore —— 控制构建上下文（M12）
+# 目的：1) 避免把宿主环境残留（绝对路径软链、本地 node_modules）带进镜像；
+#       2) 大幅缩小构建上下文（数据卷、文档截图、缓存）；
+#       3) 防止 .env / 密钥等敏感文件被 COPY 进镜像层。
+# ========================================================
+
+# 版本控制与 CI
+.git
+.github
+.gitignore
+
+# 敏感文件（绝不进镜像）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 运行时数据卷与工作区（体积大且与镜像无关）
+data/
+workspace/
+tmp/
+.dsh/
+.dsh-snapshots/
+
+# 依赖目录（镜像内由 Dockerfile 显式创建解析软链，见 5.1 节）
+**/node_modules
+**/node_modules/**
+
+# 文档与截图（仅仓库展示用）
+doc/
+*.md
+!README.md
+
+# 日志与缓存
+*.log
+.cache/
+__pycache__/
+*.py[cod]
+
+# 操作系统 / IDE 噪音
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
