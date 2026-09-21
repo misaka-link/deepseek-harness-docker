@@ -52,16 +52,6 @@ doc/remote-test-*.png
 !doc/remote-test-confirm-modal.png
 doc/preview-remote-*.png
 !doc/preview-remote-admin-dropdown.png
-doc/admin-mobile-*.png
-doc/admin-autoscroll-*.png
-doc/admin-final-*.png
-doc/admin-snapshots-fixed.png
-doc/desktop-master-*.png
-doc/phase6-*.png
-doc/test-plugins-*.png
-doc/12-admin-master-switch.png
-doc/13-admin-master-switch-disabled.png
-doc/_diag/
 remote-test-*.png
 screenshot*.png
 .cache/
