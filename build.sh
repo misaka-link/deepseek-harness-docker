@@ -7,7 +7,7 @@ set -e
 #   ./build.sh --market -> 构建带预装插件清单的镜像 (deepseek-harness-docker:latest-market 及额外标签)
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.1.4"
+PROJ_VER="0.1.5"
 NODE_IMAGE="${NODE_IMAGE:-node:24-trixie}"
 NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 # 预装层缓存刷新键：默认用当前时间戳，保证每次构建都重新执行预装层，
@@ -22,7 +22,7 @@ read_supply() {
 }
 PINNED_DSH="$(read_supply dshVersion)"
 PINNED_PNPM="$(read_supply pnpmVersion)"
-DSH_VERSION="${DSH_VERSION:-${PINNED_DSH:-0.1.6-alpha.2}}"
+DSH_VERSION="${DSH_VERSION:-${PINNED_DSH:-0.1.7-alpha.1}}"
 PNPM_VERSION="${PNPM_VERSION:-${PINNED_PNPM:-12.5.1}}"
 echo " 供应链固定版本: DSH=${DSH_VERSION}  pnpm=${PNPM_VERSION}"
 if [ -z "${DSH_VERSION}" ]; then echo "错误: 未能确定 DSH 版本" >&2; exit 1; fi

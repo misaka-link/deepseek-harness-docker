@@ -5,10 +5,33 @@ const path = require('path');
 const DSH_HOME = process.env.DSH_HOME || '/root';
 const PROFILE_DIR = path.join(DSH_HOME, '.dsh/profiles/web');
 const PKG_PATH = path.join(PROFILE_DIR, 'package.json');
+// 注意（官方 0.1.7 起）：该 Profile 补丁文件同时是「DSH 设置」的权威存储（dsh-config-editor 落盘于此）。
+// 因此对它的任何读写都必须只按插件名做块级增删，绝不整体重写或写空为其它形态；
+// 容器级设置预设一律放 Home 级补丁 $DSH_HOME/.dsh/cordis.patch.yml（见 install-plugin.mjs 第 7 节）。
 const PATCH_PATH = path.join(PROFILE_DIR, 'cordis.patch.yml');
 const MOD_DIR = path.join(PROFILE_DIR, 'node_modules');
 const PLUGINS_DATA_DIR = path.join(DSH_HOME, '.dsh/plugins');
 const PLUGIN_STATE_FILE = path.join(DSH_HOME, '.dsh/plugins-state.json');
+
+// ── P6：与 DSH 共享 profile 写锁 ─────────────────────────────────────────
+// 官方 0.1.7 的原生插件管理器 / 设置编辑器在改 profile 前会取
+// `profiles/web/package.json.lock`（wx 独占）。我们此前不参与该锁，
+// 两边各自"读-改-写"整份文件 ⇒ 后写者覆盖先写者（插件状态漂移、设置被吞）。
+// 现在所有 profile 写操作都必须包在 withProfileLock 内；writePackageJson 与补丁写入
+// 都带 assertProfileLockHeld 运行时护栏，忘记加锁会立即报错而不是静默丢更新。
+const {
+  withProfileLock,
+  assertProfileLockHeld,
+  profileLockPath
+} = require(path.join(__dirname, '..', 'scripts', 'profile-lock.cjs'));
+
+// ── P6：cordis.patch.yml 改为"外科手术式"删除 + 安全闸 ──────────────────
+// 该文件同时是 DSH 设置的权威存储（含 `- id: llm-pi-ai` 模型 provider 配置）。
+const {
+  removePatchEntries,
+  assertPatchSafe,
+  topLevelEntryIds
+} = require(path.join(__dirname, '..', 'scripts', 'patch-yaml.cjs'));
 
 const CORE_PACKAGES = new Set([
   '@deepseek-ai/dsh-base',
@@ -77,6 +100,9 @@ function readPackageJson() {
 }
 
 function writePackageJson(pkg) {
+  // P6 护栏：写 profile 必须在写锁内。忘记加锁时立即抛 PROFILE_LOCK_NOT_HELD，
+  // 而不是静默产生丢更新（该抛错不会被下面的 try 吞掉）。
+  assertProfileLockHeld(PROFILE_DIR);
   try {
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
     atomicWrite(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n');
@@ -87,44 +113,29 @@ function writePackageJson(pkg) {
   }
 }
 
-/**
- * 按"条目"粒度删除 cordis.patch.yml 中命中的条目。
- * YAML 顶层是 `- ` 开头的数组条目，条目内续行都带缩进。
- * 旧实现用跨行正则 `- (?:id|insert):[\s\S]*?<name>[\s\S]*?(?=- |$)`，
- * 会跨条目贪婪匹配，可能连带删掉无关条目/注释（名称里的 `.` 也未转义）。
- */
-function removePatchEntries(content, matcher) {
-  const lines = content.split('\n');
-  const out = [];
-  let i = 0;
-  let removed = 0;
-  while (i < lines.length) {
-    if (/^-\s/.test(lines[i])) {
-      let j = i + 1;
-      // 条目续行：缩进行，或条目之间的空行
-      while (j < lines.length && !/^-\s/.test(lines[j]) && (lines[j].trim() === '' || /^\s/.test(lines[j]))) j++;
-      const block = lines.slice(i, j);
-      if (matcher(block.join('\n'))) { removed++; i = j; continue; }
-      out.push(...block);
-      i = j;
-      continue;
-    }
-    out.push(lines[i]);
-    i++;
-  }
-  return { text: out.join('\n'), removed };
-}
+// 条目级删除实现已抽到 scripts/patch-yaml.cjs（外科手术式：只删命中条目的字符区间，
+// 其余字节逐字保留，避免"拆行-过滤-重排"吞掉 DSH 并发写入或改变文档形态）。
+// 这里继续 re-export `removePatchEntries` 以保持既有测试与调用方兼容。
 
-function cleanPatchForPlugin(pluginName) {
-  if (!fs.existsSync(PATCH_PATH)) return;
+/**
+ * 清除 cordis.patch.yml 中提到该插件的条目（**必须在 profile 写锁内调用**）。
+ * 采用外科手术式删除 + 安全闸：只删命中条目的字符区间，其余字节逐字保留；
+ * 任何会波及 `llm-pi-ai` 等非本插件条目的改写都会被 assertPatchSafe 拦下并放弃写入。
+ * @returns {boolean} 是否真的发生了写入
+ */
+function cleanPatchForPluginLocked(pluginName) {
+  if (!fs.existsSync(PATCH_PATH)) return false;
+  assertProfileLockHeld(PROFILE_DIR);
   try {
-    let content = fs.readFileSync(PATCH_PATH, 'utf8');
+    const before = fs.readFileSync(PATCH_PATH, 'utf8');
+    let content = before;
     let changed = false;
+    const removedIds = [];
 
     // 若禁用的插件是 dsh-git-worktree，清理其禁用的 ui-workspace 补丁
     if (pluginName.includes('worktree')) {
       const r = removePatchEntries(content, (block) => /\bid:\s*ui-workspace\b/.test(block));
-      if (r.removed > 0) { content = r.text; changed = true; }
+      if (r.removed > 0) { content = r.text; changed = true; removedIds.push(...r.removedIds); }
     }
 
     // 清理提到该插件名的条目（按条目整体删除，不做跨行正则）
@@ -132,18 +143,32 @@ function cleanPatchForPlugin(pluginName) {
       const esc = pluginName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const re = new RegExp(esc);
       const r = removePatchEntries(content, (block) => re.test(block));
-      if (r.removed > 0) { content = r.text; changed = true; }
+      if (r.removed > 0) { content = r.text; changed = true; removedIds.push(...r.removedIds); }
     }
 
+    if (!changed) return false;
+
     content = content.trim();
-    if (!content || content === '') content = '[]';
-    if (changed) {
-      atomicWrite(PATCH_PATH, content + '\n');
-      console.log(`[plugin-manager] 已自动清理 cordis.patch.yml 中关于 ${pluginName} 的补丁条目`);
-    }
+    if (!content) content = '[]';
+    // 安全闸：不允许丢失任何非本插件的顶层条目（尤其 llm-pi-ai 模型配置）
+    assertPatchSafe({ before, after: content, removedIds });
+    atomicWrite(PATCH_PATH, content + '\n');
+    console.log(`[plugin-manager] 已自动清理 cordis.patch.yml 中关于 ${pluginName} 的补丁条目`);
+    return true;
   } catch (err) {
-    console.warn('[plugin-manager] 清理 patch 文件失败:', err.message);
+    // 安全闸拦下属于"拒绝写入"，必须显式告警，绝不能静默
+    console.error(`[plugin-manager] 清理 cordis.patch.yml 已放弃（未写入）: ${err.message}`);
+    return false;
   }
+}
+
+/** 对外入口：自行获取 profile 写锁后清理 */
+async function cleanPatchForPlugin(pluginName) {
+  return withProfileLock(
+    PROFILE_DIR,
+    async () => cleanPatchForPluginLocked(pluginName),
+    { label: `cleanPatch:${pluginName}` }
+  );
 }
 
 function getPlugins() {
@@ -293,7 +318,7 @@ function isValidPluginName(name) {
   return npmRegex.test(name) && !name.includes('..');
 }
 
-function togglePlugin(name, enable) {
+async function togglePlugin(name, enable) {
   if (!isValidPluginName(name)) {
     throw new Error('非法或不安全的插件名称: ' + name);
   }
@@ -301,52 +326,56 @@ function togglePlugin(name, enable) {
     throw new Error('系统核心组件 (' + name + ') 不允许禁用，否则会导致系统无法运行');
   }
 
-  const pkg = readPackageJson();
-  const pkgSnapshot = JSON.stringify(pkg, null, 2) + '\n'; // 供状态写失败时回滚
-  pkg.dsh = pkg.dsh || {};
-  pkg.dsh.profile = pkg.dsh.profile || {};
-  pkg.dsh.profile.bundles = Array.isArray(pkg.dsh.profile.bundles) ? pkg.dsh.profile.bundles : [];
+  // P6：整个"读 package.json → 改 bundles → 写回"必须在同一把 profile 写锁内完成，
+  // 否则会与 DSH 原生插件管理器的并发写互相覆盖（丢更新）。
+  return withProfileLock(PROFILE_DIR, async () => {
+    const pkg = readPackageJson();
+    const pkgSnapshot = JSON.stringify(pkg, null, 2) + '\n'; // 供状态写失败时回滚
+    pkg.dsh = pkg.dsh || {};
+    pkg.dsh.profile = pkg.dsh.profile || {};
+    pkg.dsh.profile.bundles = Array.isArray(pkg.dsh.profile.bundles) ? pkg.dsh.profile.bundles : [];
 
-  const bundles = pkg.dsh.profile.bundles;
-  const index = bundles.indexOf(name);
+    const bundles = pkg.dsh.profile.bundles;
+    const index = bundles.indexOf(name);
 
-  const state = readPluginState();
-  const disabledSet = new Set(state.disabled);
-  const uninstalledSet = new Set(state.uninstalled);
+    const state = readPluginState();
+    const disabledSet = new Set(state.disabled);
+    const uninstalledSet = new Set(state.uninstalled);
 
-  if (enable) {
-    if (index === -1) {
-      bundles.push(name);
+    if (enable) {
+      if (index === -1) {
+        bundles.push(name);
+      }
+      disabledSet.delete(name);
+      uninstalledSet.delete(name);
+    } else {
+      if (index !== -1) {
+        bundles.splice(index, 1);
+      }
+      disabledSet.add(name);
+      uninstalledSet.delete(name);
+      // 禁用时顺便清理该插件在 cordis.patch.yml 中的破坏性补丁（已在锁内，直接调 locked 版本）
+      cleanPatchForPluginLocked(name);
     }
-    disabledSet.delete(name);
-    uninstalledSet.delete(name);
-  } else {
-    if (index !== -1) {
-      bundles.splice(index, 1);
+
+    writePackageJson(pkg);
+    const stateOk = writePluginState({
+      disabled: Array.from(disabledSet),
+      uninstalled: Array.from(uninstalledSet)
+    });
+    if (!stateOk) {
+      // 状态文件写失败：回滚 package.json，避免内存/磁盘分叉（被禁用的插件重启后"复活"）
+      try { atomicWrite(PKG_PATH, pkgSnapshot); } catch {}
+      throw new Error('插件状态持久化失败（已回滚 package.json），请检查数据卷权限与磁盘空间');
     }
-    disabledSet.add(name);
-    uninstalledSet.delete(name);
-    // 禁用时顺便清理该插件在 cordis.patch.yml 中的破坏性补丁
-    cleanPatchForPlugin(name);
-  }
 
-  writePackageJson(pkg);
-  const stateOk = writePluginState({
-    disabled: Array.from(disabledSet),
-    uninstalled: Array.from(uninstalledSet)
-  });
-  if (!stateOk) {
-    // 状态文件写失败：回滚 package.json，避免内存/磁盘分叉（被禁用的插件重启后"复活"）
-    try { atomicWrite(PKG_PATH, pkgSnapshot); } catch {}
-    throw new Error('插件状态持久化失败（已回滚 package.json），请检查数据卷权限与磁盘空间');
-  }
+    console.log(`[plugin-manager] 插件 ${name} 已持久化${enable ? '启用' : '禁用'}`);
 
-  console.log(`[plugin-manager] 插件 ${name} 已持久化${enable ? '启用' : '禁用'}`);
-
-  return { ok: true, name, enabled: enable };
+    return { ok: true, name, enabled: enable };
+  }, { label: `toggle:${name}` });
 }
 
-function uninstallPlugin(name) {
+async function uninstallPlugin(name) {
   if (!isValidPluginName(name)) {
     throw new Error('非法或不安全的插件名称: ' + name);
   }
@@ -354,41 +383,45 @@ function uninstallPlugin(name) {
     throw new Error('系统核心组件 (' + name + ') 不允许卸载');
   }
 
-  const pkg = readPackageJson();
-  let changed = false;
+  // P6：profile 的"读-改-写 + 状态 + 补丁清理"整体放进同一把写锁；
+  // 下方 node_modules / 数据目录的物理删除与 profile 无关，放到锁外以免长时间占锁。
+  await withProfileLock(PROFILE_DIR, async () => {
+    const pkg = readPackageJson();
+    let changed = false;
 
-  // 1. 从 bundles 中移除
-  if (pkg.dsh?.profile?.bundles && Array.isArray(pkg.dsh.profile.bundles)) {
-    const idx = pkg.dsh.profile.bundles.indexOf(name);
-    if (idx !== -1) {
-      pkg.dsh.profile.bundles.splice(idx, 1);
+    // 1. 从 bundles 中移除
+    if (pkg.dsh?.profile?.bundles && Array.isArray(pkg.dsh.profile.bundles)) {
+      const idx = pkg.dsh.profile.bundles.indexOf(name);
+      if (idx !== -1) {
+        pkg.dsh.profile.bundles.splice(idx, 1);
+        changed = true;
+      }
+    }
+
+    // 2. 从 dependencies 中移除
+    if (pkg.dependencies && pkg.dependencies[name]) {
+      delete pkg.dependencies[name];
       changed = true;
     }
-  }
 
-  // 2. 从 dependencies 中移除
-  if (pkg.dependencies && pkg.dependencies[name]) {
-    delete pkg.dependencies[name];
-    changed = true;
-  }
+    if (changed) {
+      writePackageJson(pkg);
+    }
 
-  if (changed) {
-    writePackageJson(pkg);
-  }
+    // 3. 持久化记录到 plugins-state.json (记录已卸载，防止镜像更新或重启后自动复活)
+    const state = readPluginState();
+    const disabledSet = new Set(state.disabled);
+    const uninstalledSet = new Set(state.uninstalled);
+    disabledSet.delete(name);
+    uninstalledSet.add(name);
+    writePluginState({
+      disabled: Array.from(disabledSet),
+      uninstalled: Array.from(uninstalledSet)
+    });
 
-  // 3. 持久化记录到 plugins-state.json (记录已卸载，防止镜像更新或重启后自动复活)
-  const state = readPluginState();
-  const disabledSet = new Set(state.disabled);
-  const uninstalledSet = new Set(state.uninstalled);
-  disabledSet.delete(name);
-  uninstalledSet.add(name);
-  writePluginState({
-    disabled: Array.from(disabledSet),
-    uninstalled: Array.from(uninstalledSet)
-  });
-
-  // 4. 清除 cordis 补丁残留
-  cleanPatchForPlugin(name);
+    // 4. 清除 cordis 补丁残留（锁内直接调 locked 版本）
+    cleanPatchForPluginLocked(name);
+  }, { label: `uninstall:${name}` });
 
   // 5. 清理 node_modules 目录与插件数据目录 (严格沙箱前缀校验)
   const pluginDir = path.resolve(MOD_DIR, name);
@@ -418,60 +451,63 @@ function uninstallPlugin(name) {
   return { ok: true, name, uninstalled: true };
 }
 
-function installPlugin(name) {
+async function installPlugin(name) {
   if (!isValidPluginName(name)) {
     throw new Error('非法或不安全的插件名称: ' + name);
   }
 
-  const state = readPluginState();
-  const disabledSet = new Set(state.disabled);
-  const uninstalledSet = new Set(state.uninstalled);
-  uninstalledSet.delete(name);
-  disabledSet.delete(name);
+  // P6：软链建立 + package.json 读改写 + 状态持久化整体进同一把写锁
+  await withProfileLock(PROFILE_DIR, async () => {
+    const state = readPluginState();
+    const disabledSet = new Set(state.disabled);
+    const uninstalledSet = new Set(state.uninstalled);
+    uninstalledSet.delete(name);
+    disabledSet.delete(name);
 
-  const pkg = readPackageJson();
-  pkg.dependencies = pkg.dependencies || {};
-  pkg.dsh = pkg.dsh || { profile: {} };
-  pkg.dsh.profile = pkg.dsh.profile || {};
-  pkg.dsh.profile.bundles = Array.isArray(pkg.dsh.profile.bundles) ? pkg.dsh.profile.bundles : [];
+    const pkg = readPackageJson();
+    pkg.dependencies = pkg.dependencies || {};
+    pkg.dsh = pkg.dsh || { profile: {} };
+    pkg.dsh.profile = pkg.dsh.profile || {};
+    pkg.dsh.profile.bundles = Array.isArray(pkg.dsh.profile.bundles) ? pkg.dsh.profile.bundles : [];
 
-  // 判断是否为全局预装插件 (例如在 /usr/local/lib/node_modules 下)
-  const globalPath = path.join('/usr/local/lib/node_modules', name);
-  const customPath = path.join('/app/plugins', name.replace(/^@dsh-custom\//, ''));
+    // 判断是否为全局预装插件 (例如在 /usr/local/lib/node_modules 下)
+    const globalPath = path.join('/usr/local/lib/node_modules', name);
+    const customPath = path.join('/app/plugins', name.replace(/^@dsh-custom\//, ''));
 
-  let sourcePath = null;
-  if (fs.existsSync(globalPath)) {
-    sourcePath = globalPath;
-  } else if (fs.existsSync(customPath)) {
-    sourcePath = customPath;
-  }
-
-  if (sourcePath) {
-    const scopeDir = path.dirname(path.join(MOD_DIR, name));
-    fs.mkdirSync(scopeDir, { recursive: true });
-    const targetLink = path.join(MOD_DIR, name);
-    try {
-      if (fs.existsSync(targetLink) || fs.lstatSync(targetLink).isSymbolicLink()) {
-        fs.unlinkSync(targetLink);
-      }
-    } catch {}
-    try {
-      fs.symlinkSync(sourcePath, targetLink);
-    } catch (e) {
-      console.warn(`[plugin-manager] 重新建立插件软链接警告: ${e.message}`);
+    let sourcePath = null;
+    if (fs.existsSync(globalPath)) {
+      sourcePath = globalPath;
+    } else if (fs.existsSync(customPath)) {
+      sourcePath = customPath;
     }
-    pkg.dependencies[name] = 'link:' + sourcePath;
-  }
 
-  if (!pkg.dsh.profile.bundles.includes(name)) {
-    pkg.dsh.profile.bundles.push(name);
-  }
+    if (sourcePath) {
+      const scopeDir = path.dirname(path.join(MOD_DIR, name));
+      fs.mkdirSync(scopeDir, { recursive: true });
+      const targetLink = path.join(MOD_DIR, name);
+      try {
+        if (fs.existsSync(targetLink) || fs.lstatSync(targetLink).isSymbolicLink()) {
+          fs.unlinkSync(targetLink);
+        }
+      } catch {}
+      try {
+        fs.symlinkSync(sourcePath, targetLink);
+      } catch (e) {
+        console.warn(`[plugin-manager] 重新建立插件软链接警告: ${e.message}`);
+      }
+      pkg.dependencies[name] = 'link:' + sourcePath;
+    }
 
-  writePackageJson(pkg);
-  writePluginState({
-    disabled: Array.from(disabledSet),
-    uninstalled: Array.from(uninstalledSet)
-  });
+    if (!pkg.dsh.profile.bundles.includes(name)) {
+      pkg.dsh.profile.bundles.push(name);
+    }
+
+    writePackageJson(pkg);
+    writePluginState({
+      disabled: Array.from(disabledSet),
+      uninstalled: Array.from(uninstalledSet)
+    });
+  }, { label: `install:${name}` });
 
   console.log(`[plugin-manager] 插件 ${name} 已重新安装并恢复启用`);
   return { ok: true, name, installed: true };
@@ -482,8 +518,10 @@ module.exports = {
   togglePlugin,
   uninstallPlugin,
   installPlugin,
+  cleanPatchForPlugin,
   readPluginState,
   writePluginState,
   removePatchEntries,
+  topLevelEntryIds,
   PLUGIN_DESCRIPTIONS_ZH
 };

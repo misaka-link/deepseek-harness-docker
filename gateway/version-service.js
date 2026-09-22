@@ -57,7 +57,7 @@ class VersionService {
     } catch (e) {
       console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
     }
-    return '0.1.4';
+    return '0.1.5';
   }
 
   getLocalMeta() {
@@ -114,15 +114,21 @@ class VersionService {
         }
       },
       compatibility: {
-        recommendedDsh: '0.1.6-alpha.2',
-        supportedDshRange: '>=0.1.2-rc.1 <=0.1.6-alpha.2',
-        adaptedVersions: ['0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
+        recommendedDsh: '0.1.7-alpha.1',
+        supportedDshRange: '>=0.1.2-rc.1 <=0.1.7-alpha.1',
+        adaptedVersions: ['0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
         rules: [
           {
             pattern: '<0.1.5-rc.1',
             level: 'warning',
             title: '向后降级格式风险',
             message: '官方自 0.1.5-rc.1 起采用了全新的会话存储结构，向下降级至 0.1.5 以下可能导致新会话解析异常。'
+          },
+          {
+            pattern: '<0.1.7-alpha.1',
+            level: 'warning',
+            title: '会话格式 V4 降级风险',
+            message: '官方 0.1.7 起会话日志升级为 V4，且为单向迁移。降级到 0.1.6 及以下将无法读取已在 0.1.7 中新建或迁移的会话；如需回滚请连同数据卷快照一并恢复。'
           },
           {
             pattern: '>=0.2.0',
@@ -211,6 +217,7 @@ class VersionService {
     const m = meta || this.cachedMeta || this.getLocalMeta();
     const rules = m.compatibility?.rules || [];
     const adapted = m.compatibility?.adaptedVersions || [
+      '0.1.7-alpha.1',
       '0.1.6-alpha.2',
       '0.1.6-alpha.1',
       '0.1.5-rc.2',

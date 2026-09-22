@@ -254,21 +254,28 @@ RUN set -eux; \
 
 # 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm（M10：固定版本 + 校验完整性 + 安装期不执行包脚本）
 #    版本默认来自 build.sh 读取的 version.json#supply，可用 --build-arg 覆盖。
-ARG DSH_VERSION="0.1.6-alpha.2"
+ARG DSH_VERSION="0.1.7-alpha.1"
 ARG PNPM_VERSION="12.5.1"
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
     echo "===> 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \
     mkdir -p /tmp/dsh-pkg; \
-    INTEG="$(npm view "${TARGET_PKG}" dist.integrity 2>/dev/null || true)"; \
-    TGZ="$(npm pack "${TARGET_PKG}" --pack-destination /tmp/dsh-pkg --silent | tail -n 1)"; \
+    INTEG="$(npm view "${TARGET_PKG}" dist.integrity 2>/dev/null || npm view "${TARGET_PKG}" dist.integrity --registry=https://registry.npmjs.org 2>/dev/null || true)"; \
+    TGZ="$(npm pack "${TARGET_PKG}" --pack-destination /tmp/dsh-pkg --silent 2>/dev/null | tail -n 1)"; \
+    if [ -z "${TGZ}" ] || [ ! -f "/tmp/dsh-pkg/${TGZ}" ]; then \
+      echo "===> 国内镜像源尚未同步 ${TARGET_PKG}，回退官方源拉取 tarball..."; \
+      TGZ="$(npm pack "${TARGET_PKG}" --registry=https://registry.npmjs.org --pack-destination /tmp/dsh-pkg --silent | tail -n 1)"; \
+    fi; \
     if [ -n "${INTEG}" ]; then \
       node -e "const c=require('crypto'),f=require('fs');const [alg,b64]=String(process.argv[1]).split('-');const h=c.createHash(alg).update(f.readFileSync(process.argv[2])).digest('base64');if(h!==b64){console.error('integrity 校验失败:',process.argv[1]);process.exit(1)}console.log('integrity OK ('+alg+')');" "${INTEG}" "/tmp/dsh-pkg/${TGZ}"; \
     else \
       echo "警告: registry 未返回 dist.integrity，跳过完整性校验"; \
     fi; \
     npm config set allow-scripts false --location=global 2>/dev/null || true; \
-    npm install -g --ignore-scripts "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; \
+    if ! npm install -g --ignore-scripts "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; then \
+      echo "===> 依赖解析失败（常见于国内镜像源尚未同步齐同批子包），回退官方源重试..."; \
+      npm install -g --ignore-scripts --registry=https://registry.npmjs.org "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; \
+    fi; \
     rm -rf /tmp/dsh-pkg; \
     (cd /usr/local/lib/node_modules/@deepseek-ai/dsh && npm rebuild node-pty --foreground-scripts) 2>/dev/null || true; \
     for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \

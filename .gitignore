@@ -37,6 +37,11 @@ PROJECT_RULES.md
 RULES.md
 *RULES.md
 
+# Local audit / E2E verification artifacts (contain internal IPs, server paths and
+# machine-specific details — strictly local, never upload)
+doc/compat/
+doc/e2e/
+
 # Remote debug & test scripts (local execution only)
 scripts/mcp-remote-*.mjs
 scripts/remote-*.mjs

@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.1.6-alpha.2",
+    "dshVersion": "0.1.7-alpha.1",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,31 +19,44 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.1.4",
+    "version": "0.1.5",
     "releaseDate": "2026-09-22",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.4",
-    "changelog": "撤包重发(2026-09-22 13:11:07)：修复容器桌面 noVNC 无法连接并新增桌面启动页；Admin 配置权威收敛、桌面生命周期健壮性重构、安全与容器工程加固",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.5",
+    "changelog": "适配官方 @deepseek-ai/dsh@0.1.7-alpha.1：设置持久化迁移至补丁层、插件市场重启守护兜底、侧边栏浏览器与兼容性矩阵适配",
     "changelogList": [
-      "撤包重发 (2026-09-22 13:11:07)：修复容器桌面 noVNC 页面无法连接（WebSocket 端点相对路径 → 绝对路径 /vnc/websockify）",
-      "新增独立「容器桌面正在启动」页面：桌面未就绪时展示进度条与倒计时，3 秒后自动刷新，就绪后无感进入桌面",
-      "确立「Admin 为唯一权威」配置模型：桌面开关/分辨率/休眠/CDP/截图画质等统一由管理后台持久化并即时生效",
-      "重构虚拟桌面生命周期管理：消除并发竞争死锁，支持优雅停止与进程回收，增强崩溃自愈能力",
-      "新增管理员初始化口令向导 (/setup)，废除默认弱口令并强化安全持久化",
-      "容器安全加固：支持非 root 用户 (dsh:1001) 运行，默认剔除多余特权 (cap_drop ALL)",
-      "移动端进行了简单适配",
-      "控制台日志终端体验优化：新增自动滚动记忆开关，优化渲染性能，翻阅历史日志更平稳",
-      "修复预装插件及社区插件在特定运行配置下未能正常加载的问题",
-      "预装插件跟随最新版本，供应链锁定核心引擎并强化完整性校验与构建上下文精简"
+      "全面适配官方 @deepseek-ai/dsh@0.1.7-alpha.1 引擎",
+      "修复 0.1.7 起 settings.yaml 仅一次性导入导致的配置回退：容器级预设（市场重启守护、侧边栏浏览器）改写 Home 级补丁 $DSH_HOME/cordis.patch.yml",
+      "修复 dshmarket 一键重启在 0.1.7 下默认开启（其 settings.register 接口已移除），改用 entry config allowRestart:false 压制，避免与容器守护进程双重启冲突",
+      "Web 端重新开启 DSH 原生侧边栏浏览器 (ui-sidebar-browser)，保持与 0.1.6 一致的功能面",
+      "兼容性矩阵补充 0.1.6 ↔ 0.1.7 会话格式 V3/V4 单向迁移降级警告"
     ],
     "dshChangelogList": [
-      "新增 Web 侧边栏“插件管理页”，支持 profile 插件动态启停与热装卸",
-      "新增右侧边栏 Office 文档 (.docx / .xlsx / .pptx) 原生 WASM 高清预览",
-      "新增会话回合文件改动审阅卡片与 Review Tab 逐文件代码对比",
-      "支持右侧边栏沙箱浏览器 (ui-sidebar-browser) 与会话流预览",
-      "对齐原生 DeepSeek-V41-Flash 与 DeepSeek-V4-Pro 最新模型支持"
+      "侧边栏会话支持置顶、归档管理、筛选与从搜索结果恢复",
+      "新增「工作过程展示」「性能与用量」「开发者工具」设置，连续思考与工具调用合并为可折叠过程组",
+      "文件改动审阅默认左右分栏，支持代码高亮与同步滚动；侧边栏新增 Excel (XLSX/XLS/CSV/TSV) 只读预览",
+      "Session 日志升级 V4（单向迁移），官方 DeepSeek 适配器改为 Messages API only",
+      "内置浏览器在 Web 端默认关闭，Electron 默认启用"
     ]
   },
   "history": {
+    "0.1.4": {
+      "version": "0.1.4",
+      "releaseDate": "2026-09-22",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.4",
+      "changelog": "撤包重发(2026-09-22 13:11:07)：修复容器桌面 noVNC 无法连接并新增桌面启动页；Admin 配置权威收敛、桌面生命周期健壮性重构、安全与容器工程加固",
+      "changelogList": [
+        "撤包重发 (2026-09-22 13:11:07)：修复容器桌面 noVNC 页面无法连接（WebSocket 端点相对路径 → 绝对路径 /vnc/websockify）",
+        "新增独立「容器桌面正在启动」页面：桌面未就绪时展示进度条与倒计时，3 秒后自动刷新，就绪后无感进入桌面",
+        "确立「Admin 为唯一权威」配置模型：桌面开关/分辨率/休眠/CDP/截图画质等统一由管理后台持久化并即时生效",
+        "重构虚拟桌面生命周期管理：消除并发竞争死锁，支持优雅停止与进程回收，增强崩溃自愈能力",
+        "新增管理员初始化口令向导 (/setup)，废除默认弱口令并强化安全持久化",
+        "容器安全加固：支持非 root 用户 (dsh:1001) 运行，默认剔除多余特权 (cap_drop ALL)",
+        "移动端进行了简单适配",
+        "控制台日志终端体验优化：新增自动滚动记忆开关，优化渲染性能，翻阅历史日志更平稳",
+        "修复预装插件及社区插件在特定运行配置下未能正常加载的问题",
+        "预装插件跟随最新版本，供应链锁定核心引擎并强化完整性校验与构建上下文精简"
+      ]
+    },
     "0.1.3": {
       "version": "0.1.3",
       "releaseDate": "2026-09-18",
@@ -98,9 +111,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.1.6-alpha.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.6-alpha.2",
+    "recommendedDsh": "0.1.7-alpha.1",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-alpha.1",
     "adaptedVersions": [
+      "0.1.7-alpha.1",
       "0.1.6-alpha.2",
       "0.1.6-alpha.1",
       "0.1.5-rc.2",
@@ -113,6 +127,12 @@
         "level": "warning",
         "title": "向后降级格式风险",
         "message": "官方自 0.1.5-rc.1 起采用了全新的会话存储结构，向下降级至 0.1.5 以下可能导致新格式会话无法向前兼容读取。"
+      },
+      {
+        "pattern": "<0.1.7-alpha.1",
+        "level": "warning",
+        "title": "会话格式 V4 降级风险",
+        "message": "官方 0.1.7 起会话日志升级为 V4，且为单向迁移。降级到 0.1.6 及以下将无法读取已在 0.1.7 中新建或迁移的会话；如需回滚请连同数据卷快照一并恢复。"
       },
       {
         "pattern": ">=0.2.0",

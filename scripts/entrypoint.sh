@@ -76,28 +76,12 @@ if [ -d "${DSH_DIR}" ]; then
   done
 fi
 
-# 1.2 预设已确认内测声明与插件市场安全重启配置，防止弹窗阻塞与守护管理器双重启冲突
-if [ ! -f "${DSH_DIR}/settings.yaml" ]; then
-  cat <<'EOF' > "${DSH_DIR}/settings.yaml"
-ui-onboarding:
-  welcomeNoticeVersion: 2026-08-13.1
-dsh-market:
-  allowRestart: false
-EOF
-else
-  if ! grep -q "welcomeNoticeVersion" "${DSH_DIR}/settings.yaml" 2>/dev/null; then
-    printf '
-ui-onboarding:
-  welcomeNoticeVersion: 2026-08-13.1
-' >> "${DSH_DIR}/settings.yaml"
-  fi
-  if ! grep -q "dsh-market:" "${DSH_DIR}/settings.yaml" 2>/dev/null; then
-    printf '
-dsh-market:
-  allowRestart: false
-' >> "${DSH_DIR}/settings.yaml"
-  fi
-fi
+# 1.2 容器级配置预设：自官方 0.1.7 起，设置权威从 $DSH_DIR/settings.yaml 迁移到补丁层
+#     （旧 settings.yaml 只在 DSH 启动后被导入一次并改名 settings.yaml.imported），
+#     因此这里**不再**重建 settings.yaml——否则每次重启都会再次导入并回退用户在设置页改过的值。
+#     容器级预设（市场重启守护、原生侧边栏浏览器开关）统一由 install-plugin.mjs 写入
+#     Home 级补丁 $DSH_DIR/cordis.patch.yml（0.1.7 新增的最高优先级补丁层，对全部 profile 生效）。
+#     存量容器若仍有 settings.yaml，交由 DSH 首次启动完成一次性迁移，此处不干预。
 
 # 2. 自动注册并安装 dsh-browser-desktop 插件到 DSH profile
 if [ -f "/app/scripts/install-plugin.mjs" ]; then

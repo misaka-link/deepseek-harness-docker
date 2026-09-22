@@ -16,8 +16,13 @@
 
 # 1. DSH 社区应用市场插件
 # 项目地址: https://github.com/dsh-market/dsh-market
+# 已知限制（0.1.7）：dshmarket@1.55.0 仍调用已移除的 settings.register/get/watch，
+# 其「市场设置」命名空间注册失败（宿主不崩、路由正常），一键重启按钮默认开启；
+# 由 Home 级补丁 $DSH_HOME/cordis.patch.yml 的 dsh-market.config.allowRestart:false 压制。
 dshmarket@latest
 
 # 2. 思考强度调节插件
 # 项目地址: https://github.com/hytime/dsh-thinking-effort#readme
+# 已知限制（0.1.7）：宿主半依赖 settings.get 能力探测，0.1.7 下判为不可用并优雅降级
+# （打印 settings capability unavailable），不崩但「自动补齐思考强度默认值」不生效。
 @hytime/dsh-thinking-effort@latest

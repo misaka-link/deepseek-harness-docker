@@ -729,7 +729,7 @@ async function handleAdminApi(req, res, pathname, query) {
       try {
         if (!body || !body.name) throw new Error('缺少插件名称');
         const enabled = body.enabled !== false;
-        const r = pluginManager.togglePlugin(body.name, enabled);
+        const r = await pluginManager.togglePlugin(body.name, enabled);
         // 与浏览器总开关保持一致（"插件停用 → 浏览器也用不了"）：
         // 禁用本插件时顺带彻底停用浏览器；启用时恢复总开关（不强行拉起桌面，按需启动）。
         let desktopMirrored = null;
@@ -758,7 +758,7 @@ async function handleAdminApi(req, res, pathname, query) {
       const body = await readJsonBody(req);
       try {
         if (!body || !body.name) throw new Error('缺少插件名称');
-        const r = pluginManager.uninstallPlugin(body.name);
+        const r = await pluginManager.uninstallPlugin(body.name);
         return sendJson(res, 200, r);
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: safeErrMsg(err) });
@@ -769,7 +769,7 @@ async function handleAdminApi(req, res, pathname, query) {
       const body = await readJsonBody(req);
       try {
         if (!body || !body.name) throw new Error('缺少插件名称');
-        const r = pluginManager.installPlugin(body.name);
+        const r = await pluginManager.installPlugin(body.name);
         return sendJson(res, 200, r);
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: safeErrMsg(err) });

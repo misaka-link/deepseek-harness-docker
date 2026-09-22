@@ -57,11 +57,10 @@ const REPLACEMENTS = [
     replacement: 'true'
   },
   {
-    needle: 'connection.isLoopback ? "host" : "memory"',
-    replacement: '"host"'
-  },
-  {
-    needle: 'connection.isLoopback?"host":"memory"',
+    // 0.1.6/0.1.7 真实形态：ctx.remote.$host.isLoopback ? "host" : "memory"
+    // （旧的 connection.isLoopback 变体在两版中均不存在，属历史遗留死锚点；
+    //   这里改为真实 needle，使 host 持久化不再依赖 isLoopback 的间接链路）
+    needle: 'ctx.remote.$host.isLoopback ? "host" : "memory"',
     replacement: '"host"'
   }
 ];

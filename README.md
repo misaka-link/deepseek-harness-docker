@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.4`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.5`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.6-alpha.2`、`:0.1.6-alpha.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.4`、`:0.1.4-market`），精确锁定本容器套件自身的版本。
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.1.7-alpha.1`、`:0.1.7-alpha.1-market`），精确锁定底层 DSH 官方引擎；  
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.1.5`、`:0.1.5-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -38,7 +38,7 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 静态资源版本化隔离，配合 `dsh-browser-desktop` 插件，AI 可自主操控网页与实时截屏 |
 
-| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.1.6-alpha.2) |
+| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.1.7-alpha.1) |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，完美支持 DeepSeek-V41-Flash 等最新模型 |
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.6-alpha.2`<br>(`...:dsh-0.1.6-alpha.2`) | `...:0.1.4`<br>(`...:v0.1.4`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.6-alpha.2-market`<br>(`...:dsh-0.1.6-alpha.2-market`) | `...:0.1.4-market`<br>(`...:v0.1.4-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.7-alpha.1`<br>(`...:dsh-0.1.7-alpha.1`) | `...:0.1.5`<br>(`...:v0.1.5`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.7-alpha.1-market`<br>(`...:dsh-0.1.7-alpha.1-market`) | `...:0.1.5-market`<br>(`...:v0.1.5-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2` 或项目版本 `:0.1.4`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.7-alpha.1` 或项目版本 `:0.1.5`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.6-alpha.2-market` 或项目版本 `:0.1.4-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.7-alpha.1-market` 或项目版本 `:0.1.5-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -168,6 +168,16 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.1.5
+- 🛠️ **修复 0.1.7 设置持久化模型变更导致的配置回退**：官方 0.1.7 起 `settings.yaml` 仅在启动时导入一次并改名为 `settings.yaml.imported`；容器启动脚本原先每次重建该文件，导致反复导入并回退用户在设置页改过的值。现改为将容器级预设写入 0.1.7 新增的 Home 级补丁层 `$DSH_HOME/cordis.patch.yml`（对全部 profile 生效且优先级最高）。
+- 🧩 **修复插件市场「一键重启」在 0.1.7 下默认开启**：`dshmarket` 依赖的 `settings.register` 接口已被官方移除，其重启开关回落到默认开启；现通过 entry config `dsh-market.config.allowRestart:false` 压制，避免与容器 `dsh-manager` 守护进程双重启端口冲突。
+- 🖥️ **恢复 Web 端内置侧边栏浏览器**：官方 0.1.7 将内置浏览器在 Web 端默认关闭，现通过 Home 补丁 `ui-sidebar-browser.disabled:false` 重新开启，保持与 0.1.6 一致的功能面。
+- ⚠️ **新增会话格式 V4 降级预警**：兼容性矩阵补充 0.1.6 ↔ 0.1.7 的 V3/V4 单向迁移提示，降级切换前明确需连同数据卷快照一并回滚。
+- 🔒 **接入官方 profile 写锁，消除插件状态被并发覆盖**：官方 0.1.7 的原生插件管理器与设置编辑器改写 profile 前会取 `profiles/web/package.json.lock`；本套件此前不参与该锁，双方各自整文件读改写导致后写者覆盖先写者。现网关与容器装配脚本的所有 profile 写入都在同一把锁内完成（含进程内互斥与运行时护栏），实测确认「Admin 侧停用插件被并发原生操作静默回退」的问题已消除。
+- 🩹 **补丁文件改为外科手术式改写 + 安全闸**：`cordis.patch.yml` 同时承载 DSH 设置与模型 provider 配置，清理条目时只删除命中条目的字符区间，任何会丢失 `llm-pi-ai` 等非目标条目的改写一律放弃写入。
+- 🔁 **尊重 DSH 原生插件管理器的启停/卸载决定**：容器重启不再把在原生界面停用/卸载的插件自动装回（全新数据卷仍保持预装插件的开箱即用）。
+- 🧱 **构建加固**：DSH 安装步骤在国内 npm 镜像同步滞后时自动回退官方源重试。
 
 ### v0.1.4
 - 🎛️ **统一收敛配置权威至管理后台**：桌面与容器浏览器参数（主开关、分辨率、休眠时长、CDP 调试等）统一由 Web Admin 管理后台权威配置并即时生效；DSH 设置中心对应卡片调整为只读，消除双源配置冲突。

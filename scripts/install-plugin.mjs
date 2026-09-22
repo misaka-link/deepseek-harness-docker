@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 const profileDir = process.env.DSH_PROFILE_DIR || `${process.env.DSH_HOME || '/root'}/.dsh/profiles/web`;
 const pkgPath = path.join(profileDir, 'package.json');
@@ -9,6 +10,38 @@ const linkDir = path.join(profileDir, 'node_modules/@dsh-custom');
 const targetLink = path.join(linkDir, 'dsh-browser-desktop');
 const pluginSource = '/app/plugins/dsh-browser-desktop';
 const stateFile = `${process.env.DSH_HOME || '/root'}/.dsh/plugins-state.json`;
+
+// ── P6：与 DSH 共享 profile 写锁 ─────────────────────────────────────────
+// 官方 0.1.7 的原生插件管理器/设置编辑器在改 profile 前会取
+// `profiles/web/package.json.lock`（wx 独占）。容器启动/版本切换时本脚本也会改
+// 同一个 package.json；不加锁就会与 DSH 的并发写互相覆盖（丢更新）。
+// 这里让每处「读 package.json → 改 → 写」都在同一把锁内完成。
+const require = createRequire(import.meta.url);
+const { withProfileLock, assertProfileLockHeld } = require('./profile-lock.cjs');
+const { removePatchEntries, assertPatchSafe } = require('./patch-yaml.cjs');
+
+/**
+ * 在 profile 写锁内完成一次「读 package.json → 由 mutate 修改 → 需要时写回」。
+ * @param {(pkg: any) => boolean} mutate 返回 true 表示需要写回
+ * @returns {Promise<boolean>}
+ */
+async function writeProfile(mutate) {
+  return withProfileLock(profileDir, async () => {
+    assertProfileLockHeld(profileDir);
+    // 与既有语义一致：profile 文件不存在时不凭空创建（初始化由 ensureProfilePackage 负责）
+    if (!fs.existsSync(pkgPath)) return false;
+    let pkg;
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    } catch (e) {
+      console.warn('[install-plugin] 读取 package.json 失败，跳过本次写入:', e.message);
+      return false;
+    }
+    const changed = mutate(pkg);
+    if (changed) atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    return changed;
+  }, { label: 'install-plugin' });
+}
 
 /**
  * 原子写文件（轻微项）：先写临时文件再 rename，避免写盘中断留下半截 JSON/YAML
@@ -54,18 +87,22 @@ function removeIfExists(p) {
  * `if (fs.existsSync(pkgPath))` 的依赖/bundle 注册会被整段跳过，
  * 导致 dsh-browser-desktop 永远不会被注册进 profile（AI 工具与提示词全缺失）。
  */
-function ensureProfilePackage() {
+async function ensureProfilePackage() {
   try {
-    if (fs.existsSync(pkgPath)) return;
-    fs.mkdirSync(profileDir, { recursive: true });
-    const initial = {
-      name: 'dsh-profile-web',
-      private: true,
-      dependencies: {},
-      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } }
-    };
-    atomicWrite(pkgPath, JSON.stringify(initial, null, 2) + '\n');
-    console.log('[install-plugin] 已初始化 Web Profile package.json (全新容器首次启动)');
+    await withProfileLock(profileDir, async () => {
+      assertProfileLockHeld(profileDir);
+      // 锁内再判一次：避免与并发的另一个写者抢着初始化
+      if (fs.existsSync(pkgPath)) return;
+      fs.mkdirSync(profileDir, { recursive: true });
+      const initial = {
+        name: 'dsh-profile-web',
+        private: true,
+        dependencies: {},
+        dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } }
+      };
+      atomicWrite(pkgPath, JSON.stringify(initial, null, 2) + '\n');
+      console.log('[install-plugin] 已初始化 Web Profile package.json (全新容器首次启动)');
+    }, { label: 'install-plugin:init' });
   } catch (e) {
     console.warn('[install-plugin] 初始化 profile package.json 失败:', e.message);
   }
@@ -77,13 +114,16 @@ function readPluginState() {
       const data = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
       return {
         disabled: Array.isArray(data.disabled) ? data.disabled : [],
-        uninstalled: Array.isArray(data.uninstalled) ? data.uninstalled : []
+        uninstalled: Array.isArray(data.uninstalled) ? data.uninstalled : [],
+        // known：我们"见过/装配过"的插件清单。用于区分"从未装配过"（应默认启用）
+        // 与"被外部卸载"（应保持卸载）——见 reconcileManagedState()
+        known: Array.isArray(data.known) ? data.known : []
       };
     }
   } catch (e) {
     console.warn('[install-plugin] 读取 plugins-state.json 警告:', e.message);
   }
-  return { disabled: [], uninstalled: [] };
+  return { disabled: [], uninstalled: [], known: [] };
 }
 
 function writePluginState(state) {
@@ -92,6 +132,7 @@ function writePluginState(state) {
     atomicWrite(stateFile, JSON.stringify({
       disabled: Array.from(new Set(state.disabled || [])),
       uninstalled: Array.from(new Set(state.uninstalled || [])),
+      known: Array.from(new Set(state.known || [])),
       updatedAt: new Date().toISOString()
     }, null, 2) + '\n');
   } catch (e) {
@@ -99,7 +140,70 @@ function writePluginState(state) {
   }
 }
 
-ensureProfilePackage();
+/**
+ * 与 profile manifest 对齐"外部写者"（DSH 原生插件管理器 / 设置页）的插件状态。
+ *
+ * 为什么需要（P6 的语义面）：官方原生插件管理器启停插件时**只改 bundles**，
+ * 不会写我们的 plugins-state.json。若不识别，容器重启时本脚本会把"依赖仍在、
+ * 但已被移出 bundles"的插件当成"从未装配"而自动装回去，等于静默回退用户的停用决定。
+ *
+ * 规则（manifest 是唯一事实来源）：
+ *   dependencies 有 + bundles 有  → 启用：清除我们的 disabled / uninstalled 标记
+ *   dependencies 有 + bundles 无  → 停用：写入 disabled 标记（不再自动装配）
+ *   dependencies 无 + bundles 无 + known 中有 → 卸载：写入 uninstalled 标记
+ *   dependencies 无 + bundles 无 + known 中无 → 从未装配：维持默认（走正常自动装配）
+ *
+ * @param {string[]} names 受本脚本管理的插件名
+ */
+function reconcileManagedState(names) {
+  try {
+    if (!fs.existsSync(pkgPath)) return;
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const deps = Object.keys(pkg.dependencies || {});
+    const bundles = (pkg.dsh?.profile?.bundles) || [];
+    const state = readPluginState();
+    const known = new Set(state.known);
+    const disabled = new Set(state.disabled);
+    const uninstalled = new Set(state.uninstalled);
+    let changed = false;
+
+    // 1) 记录"见过/装配过"的插件（首次运行会用现有 manifest 播种；之后需持久化才能识别外部卸载）
+    for (const n of [...deps, ...bundles]) {
+      if (!known.has(n)) { known.add(n); changed = true; }
+    }
+
+    // 2) 按 manifest 对齐受管插件的启停/卸载标记
+    const notes = [];
+    for (const n of names) {
+      const present = deps.includes(n);
+      const bundled = bundles.includes(n);
+      if (present && bundled) {
+        if (disabled.delete(n)) { changed = true; notes.push(`${n}=启用`); }
+        if (uninstalled.delete(n)) { changed = true; notes.push(`${n}=重新安装`); }
+      } else if (present && !bundled) {
+        if (!disabled.has(n)) { disabled.add(n); changed = true; notes.push(`${n}=停用(外部)`); }
+        if (uninstalled.delete(n)) changed = true;
+      } else if (!present && !bundled && known.has(n)) {
+        if (!uninstalled.has(n)) { uninstalled.add(n); changed = true; notes.push(`${n}=卸载(外部)`); }
+        if (disabled.delete(n)) changed = true;
+      }
+    }
+
+    if (changed) {
+      writePluginState({ disabled: [...disabled], uninstalled: [...uninstalled], known: [...known] });
+      pluginState.disabled = [...disabled];
+      pluginState.uninstalled = [...uninstalled];
+      pluginState.known = [...known];
+      if (notes.length > 0) {
+        console.log(`[install-plugin] 已对齐外部（DSH 原生插件管理器）的插件状态: ${notes.join(', ')}`);
+      }
+    }
+  } catch (e) {
+    console.warn('[install-plugin] 对齐外部插件状态失败:', e.message);
+  }
+}
+
+await ensureProfilePackage();
 
 const pluginState = readPluginState();
 
@@ -176,6 +280,8 @@ for (const src of possibleSchemasterySources) {
 
 // 2. 自动注册并配置 @dsh-custom/dsh-browser-desktop (尊重用户持久化偏好)
 const browserDesktopName = '@dsh-custom/dsh-browser-desktop';
+// P6：先与 manifest 对齐（识别"被 DSH 原生插件管理器停用"），再决定是否装配
+reconcileManagedState([browserDesktopName]);
 const isBrowserDesktopUninstalled = pluginState.uninstalled.includes(browserDesktopName);
 const isBrowserDesktopDisabled = pluginState.disabled.includes(browserDesktopName);
 
@@ -184,9 +290,8 @@ if (isBrowserDesktopUninstalled) {
   try {
     if (pathExists(targetLink)) removeIfExists(targetLink);
   } catch {}
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  try {
+    await writeProfile((pkg) => {
       let ch = false;
       if (pkg.dependencies && pkg.dependencies[browserDesktopName]) {
         delete pkg.dependencies[browserDesktopName];
@@ -196,9 +301,9 @@ if (isBrowserDesktopUninstalled) {
         pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== browserDesktopName);
         ch = true;
       }
-      if (ch) atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    } catch {}
-  }
+      return ch;
+    });
+  } catch {}
 } else {
   try {
     if (pathExists(targetLink)) removeIfExists(targetLink);
@@ -208,9 +313,8 @@ if (isBrowserDesktopUninstalled) {
     console.warn('[install-plugin] 建立软链接失败:', e.message);
   }
 
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  try {
+    await writeProfile((pkg) => {
       pkg.dependencies = pkg.dependencies || {};
       pkg.dependencies[browserDesktopName] = 'link:' + pluginSource;
       pkg.dsh = pkg.dsh || { profile: {} };
@@ -228,47 +332,34 @@ if (isBrowserDesktopUninstalled) {
         }
         console.log('[install-plugin] 注册 bundle 依赖到 package.json 成功');
       }
-      atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    } catch (e) {
-      console.warn('[install-plugin] 更新 package.json 失败:', e.message);
-    }
+      return true;
+    });
+  } catch (e) {
+    console.warn('[install-plugin] 更新 package.json 失败:', e.message);
   }
 }
 
-// 3. 清除 cordis.patch.yml 中的重复 insert 项 (按顶级条目结构化过滤，绝不误伤相邻插件)
+// 3. 清除 cordis.patch.yml 中的重复 insert 项（外科手术式删除 + 安全闸，绝不误伤相邻插件/设置条目）
 if (fs.existsSync(patchPath)) {
   try {
-    const rawYaml = fs.readFileSync(patchPath, 'utf8');
-    // 本插件一律通过 bundles 加载；patch 里任何关于它的条目都是历史遗留（仅注入过期的 config）
-    if (rawYaml.includes('dsh-browser-desktop')) {
-      const lines = rawYaml.split('\n');
-      const entries = [];
-      let current = [];
-      let header = [];
-      let started = false;
-
-      for (const line of lines) {
-        if (/^-\s+/.test(line)) {
-          started = true;
-          if (current.length > 0) entries.push(current.join('\n'));
-          current = [line];
-        } else if (!started) {
-          header.push(line);
-        } else {
-          current.push(line);
-        }
-      }
-      if (current.length > 0) entries.push(current.join('\n'));
-
-      const filtered = entries.filter(e => !e.includes('dsh-browser-desktop'));
-      const res = ((header.length > 0 ? header.join('\n') + '\n' : '') + filtered.join('\n')).trim();
-      // 关键：过滤后若为空，必须写成合法的空 YAML 序列 '[]'。
+    await withProfileLock(profileDir, async () => {
+      assertProfileLockHeld(profileDir);
+      const before = fs.readFileSync(patchPath, 'utf8');
+      // 本插件一律通过 bundles 加载；patch 里任何关于它的条目都是历史遗留（仅注入过期的 config）
+      if (!before.includes('dsh-browser-desktop')) return;
+      const r = removePatchEntries(before, (block) => block.includes('dsh-browser-desktop'));
+      if (r.removed === 0) return;
+      let res = r.text.trim();
+      // 过滤后若为空，必须写成合法的空 YAML 序列 '[]'。
       // 写空文件（仅换行）会让 DSH 的 cordis patch 加载器解析失败 → DSH 启动即退出 (code=1)。
-      atomicWrite(patchPath, (res || '[]') + '\n');
+      if (!res) res = '[]';
+      // 安全闸：该文件同时是 DSH 设置权威（含 llm-pi-ai 模型配置），绝不吞掉非本插件条目
+      assertPatchSafe({ before, after: res, removedIds: r.removedIds });
+      atomicWrite(patchPath, res + '\n');
       console.log('[install-plugin] 已清理 cordis.patch.yml 中本插件的遗留条目（配置权威在 Admin）');
-    }
+    }, { label: 'install-plugin:patch-cleanup' });
   } catch (e) {
-    console.warn('[install-plugin] 处理 cordis.patch.yml 失败:', e.message);
+    console.warn('[install-plugin] 处理 cordis.patch.yml 失败（未写入）:', e.message);
   }
 }
 
@@ -320,9 +411,8 @@ try {
   }
 } catch {}
 
-if (fs.existsSync(pkgPath)) {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+try {
+  await writeProfile((pkg) => {
     let changed = false;
     const legacyPkgName = '@dsh-custom/dsh-settings-config-path';
     if (pkg.dependencies && pkg.dependencies[legacyPkgName]) {
@@ -334,16 +424,18 @@ if (fs.existsSync(pkgPath)) {
       changed = true;
     }
     if (changed) {
-      atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
       console.log('[install-plugin] 成功从 package.json 依赖与 bundles 中清理已下线插件 @dsh-custom/dsh-settings-config-path');
     }
-  } catch {}
-}
+    return changed;
+  });
+} catch {}
 
 // 6. 自动识别并装配已预装的 Market 插件 (从 plugins.market.list 动态同步，并完全尊重用户禁用/卸载偏好)
+// 预装插件的物理安装根目录（可用 DSH_MARKET_PLUGIN_ROOT 覆盖，便于测试与二次打包）
+const MARKET_ROOT = process.env.DSH_MARKET_PLUGIN_ROOT || '/usr/local/lib/node_modules';
 const marketPlugins = [
-  { id: 'dshmarket', name: 'dshmarket', path: '/usr/local/lib/node_modules/dshmarket' },
-  { id: 'dsh-thinking-effort', name: '@hytime/dsh-thinking-effort', path: '/usr/local/lib/node_modules/@hytime/dsh-thinking-effort' }
+  { id: 'dshmarket', name: 'dshmarket', path: path.join(MARKET_ROOT, 'dshmarket') },
+  { id: 'dsh-thinking-effort', name: '@hytime/dsh-thinking-effort', path: path.join(MARKET_ROOT, '@hytime/dsh-thinking-effort') }
 ];
 
 const listFile = '/app/plugins.market.list';
@@ -357,12 +449,15 @@ if (fs.existsSync(listFile)) {
         marketPlugins.push({
           id: shortId,
           name: clean,
-          path: path.join('/usr/local/lib/node_modules', clean)
+          path: path.join(MARKET_ROOT, clean)
         });
       }
     }
   } catch {}
 }
+
+// P6：与 manifest 对齐（识别外部停用/卸载），再决定是否装配
+reconcileManagedState(marketPlugins.map((p) => p.name));
 
 for (const p of marketPlugins) {
   const isMarketUninstalled = pluginState.uninstalled.includes(p.name);
@@ -375,9 +470,8 @@ for (const p of marketPlugins) {
     try {
       if (pathExists(targetLnk)) removeIfExists(targetLnk);
     } catch {}
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    try {
+      await writeProfile((pkg) => {
         let ch = false;
         if (pkg.dependencies && pkg.dependencies[p.name]) {
           delete pkg.dependencies[p.name];
@@ -387,9 +481,9 @@ for (const p of marketPlugins) {
           pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== p.name);
           ch = true;
         }
-        if (ch) atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-      } catch {}
-    }
+        return ch;
+      });
+    } catch {}
     continue;
   }
 
@@ -413,8 +507,7 @@ for (const p of marketPlugins) {
         }
       } catch (e) {}
 
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      await writeProfile((pkg) => {
         pkg.dependencies = pkg.dependencies || {};
         pkg.dependencies[p.name] = 'link:' + p.path;
         pkg.dsh = pkg.dsh || { profile: {} };
@@ -432,16 +525,15 @@ for (const p of marketPlugins) {
           }
           console.log(`[install-plugin] 自动装配预装 Market 插件: ${p.name}`);
         }
-        atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-      }
+        return true;
+      });
     } catch (e) {
       console.warn(`[install-plugin] 自动装配 Market 插件失败 (${p.name}):`, e.message);
     }
   } else {
     // 插件未安装（纯净基础镜像），清理 package.json 中残留的 bundle 引用
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    try {
+      await writeProfile((pkg) => {
         let changed = false;
         if (pkg.dsh?.profile?.bundles?.includes(p.name)) {
           pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== p.name);
@@ -452,23 +544,48 @@ for (const p of marketPlugins) {
           changed = true;
         }
         if (changed) {
-          atomicWrite(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
           console.log(`[install-plugin] 基础镜像已自动清理未装配插件引用: ${p.name}`);
         }
-      } catch (e) {}
-    }
+        return changed;
+      });
+    } catch (e) {}
   }
 }
 
-// 7. 确保 dsh-market 禁用独立进程重启 (由容器 dsh-manager 统一守护，防止双重启端口冲突)
-const settingsPath = `${process.env.DSH_HOME || '/root'}/.dsh/settings.yaml`;
-try {
-  if (fs.existsSync(settingsPath)) {
-    let sContent = fs.readFileSync(settingsPath, 'utf8');
-    if (!sContent.includes('dsh-market:')) {
-      sContent += '\ndsh-market:\n  allowRestart: false\n';
-      atomicWrite(settingsPath, sContent);
-      console.log('[install-plugin] 成功注入 dsh-market.allowRestart: false 到 settings.yaml');
+// 6.1 收尾对齐：把本次装配过的插件记入 known（日后才能区分"从未装配"与"被外部卸载"）
+reconcileManagedState([...marketPlugins.map((p) => p.name), browserDesktopName]);
+
+// 7. 容器级配置预设写入 Home 级补丁层（官方 0.1.7 起设置权威在补丁层，旧 settings.yaml 仅导入一次）。
+//    - dsh-market.allowRestart:false —— 由容器 dsh-manager 统一守护，防止市场「一键重启」双重启端口冲突。
+//      注意：该字段是 entry 的 config（dshmarket 未导出可配置 Schema，无法经 settings.yaml 导入）。
+//    - ui-sidebar-browser disabled:false —— 0.1.7 起内置侧边栏浏览器在 Web 端默认关闭，这里重新开启以保持 0.1.6 的功能面。
+//    Home 级补丁 $DSH_HOME/cordis.patch.yml 优先级最高，且不会被 DSH 设置页或我方 profile 补丁清理逻辑改写。
+const homePatchPath = path.join(process.env.DSH_HOME || '/root', '.dsh', 'cordis.patch.yml');
+
+function ensureHomePatchEntries(entries) {
+  try {
+    fs.mkdirSync(path.dirname(homePatchPath), { recursive: true });
+    let raw = '';
+    try { raw = fs.readFileSync(homePatchPath, 'utf8'); } catch {}
+    const trimmed = raw.trim();
+    const isFlowEmpty = trimmed === '' || trimmed === '[]';
+    let text = isFlowEmpty ? '' : raw.replace(/\s*$/, '\n');
+    const added = [];
+    for (const { key, block } of entries) {
+      if (text.includes(key)) continue;
+      text += block.replace(/\s*$/, '') + '\n';
+      added.push(key);
     }
+    if (added.length > 0) {
+      atomicWrite(homePatchPath, text);
+      console.log(`[install-plugin] Home 级补丁已更新 (${added.join(', ')}): ${homePatchPath}`);
+    }
+  } catch (e) {
+    console.warn('[install-plugin] 写入 Home 级补丁失败:', e.message);
   }
-} catch (e) {}
+}
+
+ensureHomePatchEntries([
+  { key: 'ui-sidebar-browser', block: '- id: ui-sidebar-browser\n  disabled: false' },
+  { key: 'dsh-market', block: '- id: dsh-market\n  config:\n    allowRestart: false' }
+]);

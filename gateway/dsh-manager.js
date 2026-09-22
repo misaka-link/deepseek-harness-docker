@@ -687,7 +687,8 @@ class DshManager {
 
               try {
                 const pm = require('./plugin-manager');
-                pm.togglePlugin(detected.name, false);
+                // P6：togglePlugin 现在会在 profile 写锁内完成"读-改-写"，必须 await
+                await pm.togglePlugin(detected.name, false);
 
                 const event = {
                   id: 'heal-' + Date.now(),
