@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8fafc" />
+  <meta http-equiv="refresh" content="3" />
+  <title>DeepSeek Harness - 容器桌面正在启动</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    :root {
+      --bg: radial-gradient(circle at 50% 15%, #f1f5f9 0%, #f8fafc 50%, #e2e8f0 100%);
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #679efe;
+      --primary-strong: #4176e6;
+      --track: #eef2f7;
+      --shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.08), 0 10px 15px -3px rgba(15, 23, 42, 0.04);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      padding: 36px 32px 26px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .icon { font-size: 42px; line-height: 1; margin-bottom: 14px; }
+    .title { font-size: 19px; font-weight: 650; letter-spacing: 0.2px; }
+    .subtitle { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+    .progress {
+      position: relative; height: 4px; width: 72%; margin: 40px auto 0;
+      background: var(--track); border-radius: 99px; overflow: hidden;
+    }
+    .progress span {
+      position: absolute; top: 0; left: -40%; width: 40%; height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #93b7ff, #4176e6);
+      animation: dsh-slide 1.2s ease-in-out infinite;
+    }
+    @keyframes dsh-slide { 0% { left: -40%; } 100% { left: 100%; } }
+    .countdown { margin-top: 20px; font-size: 13px; color: var(--muted); }
+    .countdown b { color: var(--primary-strong); font-size: 16px; font-variant-numeric: tabular-nums; }
+    .btn {
+      margin-top: 16px; padding: 9px 22px; border: none; border-radius: 10px;
+      background: var(--primary); color: #fff; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn:hover { background: var(--primary-strong); }
+    .btn:active { transform: translateY(1px); }
+    .hint {
+      margin-top: 18px; padding: 10px 12px; font-size: 12px; line-height: 1.6;
+      color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+    }
+    .hint a { color: var(--primary-strong); font-weight: 600; text-decoration: none; }
+    .foot { margin-top: 22px; font-size: 11px; color: #94a3b8; }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: radial-gradient(circle at 50% 15%, #1a1d23 0%, #111317 55%, #0b0d10 100%);
+        --card-bg: #16181d; --card-border: #2a2e36; --text: #e5e7eb; --muted: #9ca3af;
+        --track: #23262c; --shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.5);
+      }
+      .hint { background: #2a2313; border-color: #5b4a12; color: #fbbf24; }
+      .foot { color: #6b7280; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .progress span { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="status" aria-live="polite">
+    <div class="icon" aria-hidden="true">🖥️</div>
+    <h1 class="title">容器桌面正在启动</h1>
+    <p class="subtitle">首次启动或休眠唤醒通常需要几秒，页面会自动刷新，无需手动操作。</p>
+
+    <div class="progress" aria-hidden="true"><span></span></div>
+
+    <p class="countdown">将在 <b id="dsh-count">3</b> 秒后自动刷新</p>
+    <button type="button" class="btn" id="dsh-refresh">立即刷新</button>
+
+    <p class="hint" id="dsh-hint" hidden>
+      启动时间较长，可能遇到异常。<a href="__DSH_ADMIN_PATH__/">前往管理后台查看日志 →</a>
+    </p>
+    <p class="foot">DeepSeek Harness · 容器浏览器</p>
+  </main>
+
+  <script>
+    (function () {
+      // 网关可注入 __DSH_RETRY_SECONDS__（默认 3）；直接打开文件时回退为 3。
+      var DEFAULT_RETRY = (typeof __DSH_RETRY_SECONDS__ === 'number') ? __DSH_RETRY_SECONDS__ : 3;
+      var q = parseInt(new URLSearchParams(location.search).get('retry') || '', 10);
+      var RETRY = (isFinite(q) && q > 0) ? q : DEFAULT_RETRY;
+
+      // 保持 <meta refresh> 与倒计时一致（无 JS 时以静态 3s 兜底）
+      var meta = document.querySelector('meta[http-equiv="refresh"]');
+      if (meta) meta.setAttribute('content', String(RETRY));
+
+      // 连续多次重载仍未就绪 → 升级提示（sessionStorage 仅本标签页有效）
+      var attempts = 0;
+      try { attempts = parseInt(sessionStorage.getItem('dsh-desktop-starting-attempts') || '0', 10) || 0; } catch (e) {}
+      attempts += 1;
+      try { sessionStorage.setItem('dsh-desktop-starting-attempts', String(attempts)); } catch (e) {}
+      if (attempts >= 5) {
+        var hint = document.getElementById('dsh-hint');
+        if (hint) hint.hidden = false;
+      }
+
+      var countEl = document.getElementById('dsh-count');
+      var left = RETRY;
+      if (countEl) countEl.textContent = String(left);
+
+      var timer = setInterval(function () {
+        left -= 1;
+        if (countEl) countEl.textContent = String(Math.max(left, 0));
+        if (left <= 0) { clearInterval(timer); location.reload(); }
+      }, 1000);
+
+      var btn = document.getElementById('dsh-refresh');
+      if (btn) btn.addEventListener('click', function () { location.reload(); });
+    })();
+  </script>
+</body>
+</html>

@@ -165,6 +165,41 @@ function serveDesktopDisabledPage(res) {
   res.end(html);
 }
 
+// 是否为「浏览器直接导航」（HTML 页面请求）。用于在桌面尚未就绪时返回可自动刷新的页面，
+// 而不是把 HTML 塞进资源请求、或让用户看到裸 JSON / 502。
+function isHtmlNavigation(req) {
+  return !!req && req.method === 'GET' && String(req.headers.accept || '').includes('text/html');
+}
+
+// 桌面/浏览器「启动中」独立页面：默认 3 秒后自动刷新，桌面就绪后无感进入 noVNC。
+// 页面文件：gateway/public/desktop-starting.html（零外部依赖，可单独打开预览）。
+function serveDesktopStartingPage(res, { retrySeconds = 3 } = {}) {
+  const seconds = Number(retrySeconds) > 0 ? Number(retrySeconds) : 3;
+  let html;
+  try {
+    html = fs.readFileSync(path.join(__dirname, 'public', 'desktop-starting.html'), 'utf8')
+      .replace(/__DSH_ADMIN_PATH__/g, ADMIN_PATH)
+      .replace('__DSH_RETRY_SECONDS__', String(seconds));
+  } catch (err) {
+    // 兜底：页面文件缺失也绝不回退到裸 JSON / 502
+    html = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="${seconds}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>容器桌面正在启动</title></head>
+<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#0f172a;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<div style="text-align:center;font-size:14px">🖥️ 容器桌面正在启动，${seconds} 秒后自动刷新…</div>
+</body></html>`;
+  }
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0'
+  });
+  res.end(html);
+}
+
 const persisted = loadPersistedConfig();
 
 // 是否信任反向代理（决定限流 IP 取 XFF 还是 socket 对端）：配置显式值优先于环境变量
@@ -302,6 +337,11 @@ dshProxy.on('error', (err, req, res) => {
 vncProxy.on('error', (err, req, res) => {
   console.warn('[vnc-proxy] 上游连接等待中 (VNC 启动阶段):', err.message);
   if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+    // 浏览器直接导航（noVNC 页面本身）时返回独立的「启动中」页（3s 自动刷新），
+    // 避免用户看到原始 JSON 502 而误以为“桌面连不上”。
+    if (isHtmlNavigation(req)) {
+      return serveDesktopStartingPage(res);
+    }
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ ok: false, error: 'VNC 图形桌面正在就绪中，请稍候数秒后刷新' }));
   }
@@ -1102,18 +1142,27 @@ async function handleHttpRequest(req, res) {
     //   导致 Chromium 退出），打开 /vnc 也能自愈重启，而不是停在"空桌面"上。
     if (!desktopManager.getStatus().running) {
       desktopManager.start().catch(() => {});
+      // 桌面尚未就绪：HTML 导航直接返回「启动中」独立页（3s 自动刷新），
+      // 不再转发给还没监听的 websockify —— 从根上消除 502 / 裸 JSON / 黑屏。
+      if (isHtmlNavigation(req)) {
+        return serveDesktopStartingPage(res);
+      }
     } else {
       desktopManager.touchActivity();
     }
 
-    const vncPrefix = VNC_PATH.replace(/^\//, '');
     const novncRevision = process.env.NOVNC_ASSET_REVISION || '1.6.0';
     const versionedVncPath = `/novnc-${novncRevision}/vnc.html`;
+    // websockify 端点必须下发【绝对路径】。noVNC 在浏览器侧用 `new URL(path, location.href)`
+    // 解析 path 参数；由于 vnc.html 位于版本化子目录 (/vnc/novnc-<rev>/vnc.html)，
+    // 相对路径 "vnc/websockify" 会被解析成 /vnc/novnc-<rev>/vnc/websockify（网关不认），
+    // 导致 WebSocket 握手被拒 (1006)，页面显示 "Failed to connect"。
+    const websockifyPath = `${VNC_PATH}/websockify`;
 
     // 5.1 访问桌面根入口 (如 /vnc 或 /vnc/) -> 302 自动重定向至带版本隔离的 vnc.html (附带防缓存头)
     if (pathname === VNC_PATH || pathname === VNC_PATH + '/') {
       res.writeHead(302, {
-        Location: `${VNC_PATH}${versionedVncPath}?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=${vncPrefix}/websockify`,
+        Location: `${VNC_PATH}${versionedVncPath}?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=${websockifyPath}`,
         'Cache-Control': 'no-store, no-cache, must-revalidate',
         Pragma: 'no-cache',
         Expires: '0'
@@ -1123,7 +1172,7 @@ async function handleHttpRequest(req, res) {
 
     // 5.2 兼容直接访问旧版未版本化路径 /vnc/vnc.html -> 自动无感重定向至最新版本化路径
     if (pathname === `${VNC_PATH}/vnc.html`) {
-      const search = parsedUrl.search || `?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=${vncPrefix}/websockify`;
+      const search = parsedUrl.search || `?autoconnect=1&resize=scale&view_only=0&reconnect=1&path=${websockifyPath}`;
       res.writeHead(302, {
         Location: `${VNC_PATH}${versionedVncPath}${search}`,
         'Cache-Control': 'no-store, no-cache, must-revalidate',
