@@ -259,12 +259,18 @@ ARG PNPM_VERSION="12.5.1"
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
     echo "===> 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \
+    if [ "$USE_CHINA_MIRROR" = "1" ] || [ "$USE_CHINA_MIRROR" = "true" ]; then \
+      PRIMARY_REG="https://registry.npmmirror.com"; ALT_REG="https://registry.npmjs.org"; \
+    else \
+      PRIMARY_REG="https://registry.npmjs.org"; ALT_REG="https://registry.npmmirror.com"; \
+    fi; \
+    echo "===> 主源 ${PRIMARY_REG}；备用源 ${ALT_REG}"; \
     mkdir -p /tmp/dsh-pkg; \
-    INTEG="$(npm view "${TARGET_PKG}" dist.integrity 2>/dev/null || npm view "${TARGET_PKG}" dist.integrity --registry=https://registry.npmjs.org 2>/dev/null || true)"; \
-    TGZ="$(npm pack "${TARGET_PKG}" --pack-destination /tmp/dsh-pkg --silent 2>/dev/null | tail -n 1)"; \
+    INTEG="$(npm view "${TARGET_PKG}" dist.integrity --registry="${PRIMARY_REG}" 2>/dev/null || npm view "${TARGET_PKG}" dist.integrity --registry="${ALT_REG}" 2>/dev/null || true)"; \
+    TGZ="$(npm pack "${TARGET_PKG}" --registry="${PRIMARY_REG}" --pack-destination /tmp/dsh-pkg --silent 2>/dev/null | tail -n 1)"; \
     if [ -z "${TGZ}" ] || [ ! -f "/tmp/dsh-pkg/${TGZ}" ]; then \
-      echo "===> 国内镜像源尚未同步 ${TARGET_PKG}，回退官方源拉取 tarball..."; \
-      TGZ="$(npm pack "${TARGET_PKG}" --registry=https://registry.npmjs.org --pack-destination /tmp/dsh-pkg --silent | tail -n 1)"; \
+      echo "===> 主源未同步 ${TARGET_PKG}，回退备用源拉取 tarball..."; \
+      TGZ="$(npm pack "${TARGET_PKG}" --registry="${ALT_REG}" --pack-destination /tmp/dsh-pkg --silent | tail -n 1)"; \
     fi; \
     if [ -n "${INTEG}" ]; then \
       node -e "const c=require('crypto'),f=require('fs');const [alg,b64]=String(process.argv[1]).split('-');const h=c.createHash(alg).update(f.readFileSync(process.argv[2])).digest('base64');if(h!==b64){console.error('integrity 校验失败:',process.argv[1]);process.exit(1)}console.log('integrity OK ('+alg+')');" "${INTEG}" "/tmp/dsh-pkg/${TGZ}"; \
@@ -272,10 +278,12 @@ RUN set -eux; \
       echo "警告: registry 未返回 dist.integrity，跳过完整性校验"; \
     fi; \
     npm config set allow-scripts false --location=global 2>/dev/null || true; \
-    if ! npm install -g --ignore-scripts "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; then \
-      echo "===> 依赖解析失败（常见于国内镜像源尚未同步齐同批子包），回退官方源重试..."; \
-      npm install -g --ignore-scripts --registry=https://registry.npmjs.org "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; \
-    fi; \
+    INSTALL_OK=0; \
+    for REG in "${PRIMARY_REG}" "${ALT_REG}"; do \
+      if npm install -g --ignore-scripts --registry="${REG}" --prefer-online --fetch-retries=5 --fetch-retry-maxtimeout=60000 "pnpm@${PNPM_VERSION}" "/tmp/dsh-pkg/${TGZ}"; then INSTALL_OK=1; break; fi; \
+      echo "===> 依赖解析失败（镜像源未同步齐同批子包或上游元数据竞态），换源重试..."; \
+    done; \
+    if [ "${INSTALL_OK}" != "1" ]; then echo "错误: DSH 依赖解析在主源与备用源上均失败" >&2; exit 1; fi; \
     rm -rf /tmp/dsh-pkg; \
     (cd /usr/local/lib/node_modules/@deepseek-ai/dsh && npm rebuild node-pty --foreground-scripts) 2>/dev/null || true; \
     for d in /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/*; do \
