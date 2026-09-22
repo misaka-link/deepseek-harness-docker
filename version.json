@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.1.7-alpha.1",
+    "dshVersion": "0.1.7-alpha.2",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,26 +19,46 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.1.5",
-    "releaseDate": "2026-09-22",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.5",
-    "changelog": "适配官方 @deepseek-ai/dsh@0.1.7-alpha.1：设置持久化迁移至补丁层、插件市场重启守护兜底、侧边栏浏览器与兼容性矩阵适配",
+    "version": "0.1.6",
+    "releaseDate": "2026-09-23",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.6",
+    "changelog": "供应链升级：内置官方 @deepseek-ai/dsh@0.1.7-alpha.2；新增容器启动自动清理 profile 幽灵 bundle 条目，并在管理后台「网关与系统配置」提供清理策略开关",
     "changelogList": [
-      "全面适配官方 @deepseek-ai/dsh@0.1.7-alpha.1 引擎",
-      "修复 0.1.7 起 settings.yaml 仅一次性导入导致的配置回退：容器级预设（市场重启守护、侧边栏浏览器）改写 Home 级补丁 $DSH_HOME/cordis.patch.yml",
-      "修复 dshmarket 一键重启在 0.1.7 下默认开启（其 settings.register 接口已移除），改用 entry config allowRestart:false 压制，避免与容器守护进程双重启冲突",
-      "Web 端重新开启 DSH 原生侧边栏浏览器 (ui-sidebar-browser)，保持与 0.1.6 一致的功能面",
-      "兼容性矩阵补充 0.1.6 ↔ 0.1.7 会话格式 V3/V4 单向迁移降级警告"
+      "供应链升级：内置官方 DSH 引擎 0.1.7-alpha.1 → 0.1.7-alpha.2，兼容区间上界同步为 <=0.1.7-alpha.2",
+      "本次适配无需代码改动：8 个补丁点/10 条 needle 在 0.1.7-alpha.2 全部命中，网关令牌抓取与就绪探测逻辑未漂移",
+      "新增容器启动自动清理 profile 幽灵 bundle 条目：按官方解析规则剔除 dsh.profile.bundles 中已知下线且无法解析、未声明为依赖的包名，消除 DSH 反复打印的 skipping profile bundle 告警（默认保守模式，DSH_PRUNE_STALE_BUNDLES=all 激进 / =0 关闭）",
+      "管理后台「网关与系统配置」新增幽灵 bundle 清理策略开关（保守/激进/关闭）与额外清理清单，持久化到 gateway.config.json，重启容器后生效"
     ],
     "dshChangelogList": [
-      "侧边栏会话支持置顶、归档管理、筛选与从搜索结果恢复",
-      "新增「工作过程展示」「性能与用量」「开发者工具」设置，连续思考与工具调用合并为可折叠过程组",
-      "文件改动审阅默认左右分栏，支持代码高亮与同步滚动；侧边栏新增 Excel (XLSX/XLS/CSV/TSV) 只读预览",
-      "Session 日志升级 V4（单向迁移），官方 DeepSeek 适配器改为 Messages API only",
-      "内置浏览器在 Web 端默认关闭，Electron 默认启用"
+      "会话与工作详情组滚动跟随更稳定，历史分页与回合导航优化",
+      "统一代码块样式（复制/换行、更清晰的 diff 与行号）",
+      "修复 Excel 预览特殊内容失败、预览随窗格缩放且保留工作表与单元格位置",
+      "修复消息气泡长文件名溢出与文件选择菜单脱离",
+      "修复连续后台命令 / 一次性子代理任务后会话卡死（完成触发的 Agent 唤醒默认不限次）",
+      "修复服务端重启后 Web 客户端假连接：就绪后重连现有页面，保留历史与草稿"
     ]
   },
   "history": {
+    "0.1.5": {
+      "version": "0.1.5",
+      "releaseDate": "2026-09-22",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.5",
+      "changelog": "适配官方 @deepseek-ai/dsh@0.1.7-alpha.1：设置持久化迁移至补丁层、插件市场重启守护兜底、侧边栏浏览器与兼容性矩阵适配",
+      "changelogList": [
+        "全面适配官方 @deepseek-ai/dsh@0.1.7-alpha.1 引擎",
+        "修复 0.1.7 起 settings.yaml 仅一次性导入导致的配置回退：容器级预设（市场重启守护、侧边栏浏览器）改写 Home 级补丁 $DSH_HOME/cordis.patch.yml",
+        "修复 dshmarket 一键重启在 0.1.7 下默认开启（其 settings.register 接口已移除），改用 entry config allowRestart:false 压制，避免与容器守护进程双重启冲突",
+        "Web 端重新开启 DSH 原生侧边栏浏览器 (ui-sidebar-browser)，保持与 0.1.6 一致的功能面",
+        "兼容性矩阵补充 0.1.6 ↔ 0.1.7 会话格式 V3/V4 单向迁移降级警告"
+      ],
+      "dshChangelogList": [
+        "侧边栏会话支持置顶、归档管理、筛选与从搜索结果恢复",
+        "新增「工作过程展示」「性能与用量」「开发者工具」设置，连续思考与工具调用合并为可折叠过程组",
+        "文件改动审阅默认左右分栏，支持代码高亮与同步滚动；侧边栏新增 Excel (XLSX/XLS/CSV/TSV) 只读预览",
+        "Session 日志升级 V4（单向迁移），官方 DeepSeek 适配器改为 Messages API only",
+        "内置浏览器在 Web 端默认关闭，Electron 默认启用"
+      ]
+    },
     "0.1.4": {
       "version": "0.1.4",
       "releaseDate": "2026-09-22",
@@ -111,9 +131,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.1.7-alpha.1",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-alpha.1",
+    "recommendedDsh": "0.1.7-alpha.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-alpha.2",
     "adaptedVersions": [
+      "0.1.7-alpha.2",
       "0.1.7-alpha.1",
       "0.1.6-alpha.2",
       "0.1.6-alpha.1",

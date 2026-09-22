@@ -19,6 +19,7 @@ const stateFile = `${process.env.DSH_HOME || '/root'}/.dsh/plugins-state.json`;
 const require = createRequire(import.meta.url);
 const { withProfileLock, assertProfileLockHeld } = require('./profile-lock.cjs');
 const { removePatchEntries, assertPatchSafe } = require('./patch-yaml.cjs');
+const { pruneStaleBundles, resolvePruneConfig } = require('./stale-bundles.cjs');
 
 /**
  * 在 profile 写锁内完成一次「读 package.json → 由 mutate 修改 → 需要时写回」。
@@ -554,6 +555,48 @@ for (const p of marketPlugins) {
 
 // 6.1 收尾对齐：把本次装配过的插件记入 known（日后才能区分"从未装配"与"被外部卸载"）
 reconcileManagedState([...marketPlugins.map((p) => p.name), browserDesktopName]);
+
+// 6.2 自动清理无法解析的 profile bundle 幽灵条目。
+//     背景：官方 0.1.7 起合并/下线了若干 bundle 包（如
+//     `@deepseek-ai/dsh-experimental-agent-team-web-profile` 被并入
+//     `@deepseek-ai/dsh-experimental-agent-team-profile`）。镜像升级后，profile 的
+//     `dsh.profile.bundles` 会残留已不存在的包名，DSH 每次加载都打印
+//     `skipping profile bundle "..." : cannot resolve ...` 并在 UI 提示。
+//     策略来源（优先级）：环境变量 DSH_PRUNE_STALE_BUNDLES > 管理后台持久化配置
+//     `$DSH_HOME/.dsh/gateway.config.json#pruneStaleBundles` > 默认 known（保守）。
+//     默认「保守模式」仅清理已知被上游下线的 bundle（stale-bundles.cjs 的清单 + 额外清单），
+//     只删「确实无法解析且未在依赖字段声明」的条目，绝不误删并发写者/用户意图。
+//     注意：本脚本在容器启动阶段执行一次，管理后台改动需重启容器后生效。
+function readGatewayConfig() {
+  const file = process.env.GATEWAY_CONFIG_FILE || path.join(process.env.DSH_HOME || '/root', '.dsh', 'gateway.config.json');
+  try {
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    console.warn('[install-plugin] 读取网关配置失败（忽略，回落默认策略）:', e.message);
+  }
+  return {};
+}
+const pruneCfg = resolvePruneConfig(process.env, readGatewayConfig());
+if (pruneCfg.mode !== 'off') {
+  try {
+    await writeProfile((pkg) => {
+      const { pruned, declared } = pruneStaleBundles(pkg, {
+        profileDir,
+        mode: pruneCfg.mode,
+        extraNames: pruneCfg.extraNames
+      });
+      if (pruned.length > 0) {
+        console.log(`[install-plugin] 已自动清理无法解析的 profile bundle 幽灵条目 (模式: ${pruneCfg.mode}): ${pruned.join(', ')}`);
+      }
+      if (declared.length > 0) {
+        console.log(`[install-plugin] 以下 bundle 已在 dependencies 声明但尚未安装，保留未清理: ${declared.join(', ')}（可执行 dsh plugin --profile web install 安装）`);
+      }
+      return pruned.length > 0;
+    });
+  } catch (e) {
+    console.warn('[install-plugin] 自动清理幽灵 bundle 失败:', e.message);
+  }
+}
 
 // 7. 容器级配置预设写入 Home 级补丁层（官方 0.1.7 起设置权威在补丁层，旧 settings.yaml 仅导入一次）。
 //    - dsh-market.allowRestart:false —— 由容器 dsh-manager 统一守护，防止市场「一键重启」双重启端口冲突。

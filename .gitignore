@@ -45,6 +45,7 @@ doc/e2e/
 # Remote debug & test scripts (local execution only)
 scripts/mcp-remote-*.mjs
 scripts/remote-*.mjs
+scripts/local-*.mjs
 scripts/remote-*.sh
 scripts/test-runner-*.sh
 scripts/capture-*.mjs

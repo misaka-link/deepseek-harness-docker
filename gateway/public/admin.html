@@ -1454,6 +1454,33 @@
               </div>
             </div>
           </div>
+
+          <div class="form-group" style="grid-column: 1 / -1; background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:16px 18px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label class="form-label" style="margin-bottom:0; font-weight:700; color:var(--text-main);">profile 幽灵 bundle 自动清理</label>
+                <span class="nav-badge" style="background:#e0e7ff; color:#4338ca; font-size:11px; font-weight:700;">重启容器后生效</span>
+              </div>
+              <select id="editPruneStaleBundles" class="form-control" style="width:270px; height:34px; font-size:13px;">
+                <option value="known">保守（推荐，仅清理已知下线包）</option>
+                <option value="all">激进（清理任意无法解析条目）</option>
+                <option value="off">关闭（不自动清理）</option>
+              </select>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); line-height:1.5;">
+              容器启动时按官方解析规则剔除 <code>dsh.profile.bundles</code> 中已不存在、无法解析的包名，消除 DSH 反复打印的 <code>skipping profile bundle</code> 告警。仅清理「确实无法解析且未在依赖字段声明」的条目；核心 bundle 与「已声明待安装」条目一律保留。
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; justify-content:space-between; padding-top:10px; margin-top:10px; border-top:1px dashed var(--card-border);">
+              <div style="flex:1 1 240px; min-width:0;">
+                <div style="font-weight:600; font-size:13px; color:var(--text-main);">额外清理清单（可选）</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">逗号分隔的包名，追加到内置「已知下线清单」；例如 <code>@deepseek-ai/dsh-xxx,@scope/pkg</code>。</div>
+              </div>
+              <input type="text" id="editPruneBundlesExtra" class="form-control" placeholder="逗号分隔，留空为无" style="flex:1 1 320px; min-width:200px;" />
+            </div>
+            <div style="font-size:12px; color:#b45309; margin-top:10px; line-height:1.5;">
+              ⚠️ 该策略在<strong>容器启动装配阶段</strong>执行，修改后需<strong>重启容器</strong>（<code>docker restart</code> / <code>docker compose up -d</code>）才会应用；保存配置触发的网关热重启不会重跑装配脚本。
+            </div>
+          </div>
         </div>
 
         <div style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:12px 14px; border-radius:8px; font-size:13px; margin: 16px 0; line-height: 1.5;">
@@ -2763,6 +2790,14 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           if (autoHealMaxInput && document.activeElement !== autoHealMaxInput) {
             autoHealMaxInput.value = data.autoHealMaxPerBoot || 5;
           }
+          const pruneSelect = document.getElementById('editPruneStaleBundles');
+          if (pruneSelect && document.activeElement !== pruneSelect) {
+            pruneSelect.value = data.pruneStaleBundles || 'known';
+          }
+          const pruneExtraInput = document.getElementById('editPruneBundlesExtra');
+          if (pruneExtraInput && document.activeElement !== pruneExtraInput) {
+            pruneExtraInput.value = data.pruneBundlesExtra || '';
+          }
         }
 
         // 自动故障自愈告警横幅更新
@@ -3738,6 +3773,17 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       if (newAutoHealMax !== oldAutoHealMax) {
         diffs.push(`单周期自愈隔离上限: ${oldAutoHealMax}个 -> ${newAutoHealMax}个`);
       }
+      const newPruneMode = document.getElementById('editPruneStaleBundles')?.value || 'known';
+      const oldPruneMode = currentData.pruneStaleBundles || 'known';
+      if (newPruneMode !== oldPruneMode) {
+        const pruneZh = { known: '保守', all: '激进', off: '关闭' };
+        diffs.push(`幽灵 bundle 自动清理: ${pruneZh[oldPruneMode] || oldPruneMode} -> ${pruneZh[newPruneMode] || newPruneMode}`);
+      }
+      const newPruneExtra = (document.getElementById('editPruneBundlesExtra')?.value || '').trim();
+      const oldPruneExtra = (currentData.pruneBundlesExtra || '').trim();
+      if (newPruneExtra !== oldPruneExtra) {
+        diffs.push(`幽灵清理额外清单: ${oldPruneExtra || '无'} -> ${newPruneExtra || '无'}`);
+      }
 
       if (diffs.length === 0) {
         showToast('未检测到任何参数变动', 'info');
@@ -3751,7 +3797,9 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         authToken: rawToken ? rawToken : undefined,
         clearAuthToken: clearAuth,
         autoHealPlugins: newAutoHeal,
-        autoHealMaxPerBoot: newAutoHealMax
+        autoHealMaxPerBoot: newAutoHealMax,
+        pruneStaleBundles: newPruneMode,
+        pruneBundlesExtra: newPruneExtra
         // 桌面运行参数不在此处提交：权威在「浏览器与桌面控制」页
       };
 

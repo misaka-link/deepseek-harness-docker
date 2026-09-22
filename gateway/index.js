@@ -57,6 +57,25 @@ function savePersistedConfig(cfg) {
   }
 }
 
+// ── 幽灵 bundle 自动清理策略（0.1.7）─────────────────────────────
+// 持久化于本配置文件，由容器启动装配脚本 scripts/install-plugin.mjs 在 entrypoint 阶段读取执行。
+// 可选值：known(保守，默认) / all(激进) / off(关闭)。
+// ⚠️ 装配脚本仅在【容器启动】时执行一次，故该策略修改后需重启容器（docker restart / compose up -d）
+//    才会生效；管理后台保存触发的“网关热重启”不会重跑装配脚本。
+function normalizePruneMode(value) {
+  const v = String(value ?? '').trim().toLowerCase();
+  if (v === '0' || v === 'false' || v === 'off' || v === 'no') return 'off';
+  if (v === 'all') return 'all';
+  return 'known';
+}
+function normalizePruneExtra(value) {
+  const list = String(value ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set(list)].join(',');
+}
+
 /**
  * 回给管理后台的错误文案（N1）：抹掉宿主绝对路径等内部细节，完整错误只写服务端日志。
  * 管理 API 本身在鉴权之后，这里防的是"错误串里带出宿主目录/内部路径"这类信息外溢。
@@ -236,6 +255,10 @@ if (persisted.desktop) {
 const autoHealEnabled = persisted.autoHealPlugins !== false;
 const autoHealMaxPerBoot = Math.max(1, Math.min(50, Number(persisted.autoHealMaxPerBoot) || 5));
 dshManager.setAutoHeal(autoHealEnabled, autoHealMaxPerBoot);
+
+// 幽灵 bundle 清理策略（由 install-plugin.mjs 在容器启动阶段执行；此处仅读取用于展示/持久化）
+const pruneStaleBundles = normalizePruneMode(persisted.pruneStaleBundles);
+const pruneBundlesExtra = normalizePruneExtra(persisted.pruneBundlesExtra);
 
 // ── 端口与动态路径配置 ───────────────────────────────────────
 // M13：显式环境变量优先于持久化配置（否则 .env 里的 PROXY_PORT 成了"死配置"，
@@ -516,6 +539,8 @@ async function handleAdminApi(req, res, pathname, query) {
         hasAuthToken: Boolean(getAuthToken()),
         autoHealPlugins: dshManager.autoHealEnabled,
         autoHealMaxPerBoot: dshManager.maxAutoHealPerBoot,
+        pruneStaleBundles,
+        pruneBundlesExtra,
         autoIsolatedEvents: dshManager.getAutoIsolatedEvents()
       });
     }
@@ -814,6 +839,10 @@ async function handleAdminApi(req, res, pathname, query) {
       const autoHealMaxPerBoot = Math.max(1, Math.min(50, Number(body.autoHealMaxPerBoot) || 5));
       dshManager.setAutoHeal(autoHealPlugins, autoHealMaxPerBoot);
 
+      // 幽灵 bundle 清理策略：持久化后由下次【容器启动】的装配脚本读取执行
+      const newPruneMode = normalizePruneMode(body.pruneStaleBundles);
+      const newPruneExtra = normalizePruneExtra(body.pruneBundlesExtra);
+
       // 桌面运行参数以 DesktopManager 当前值为准（权威在「浏览器与桌面控制」页）
       const ds = desktopManager.getStatus();
 
@@ -824,6 +853,8 @@ async function handleAdminApi(req, res, pathname, query) {
         authToken: updatedToken,
         autoHealPlugins,
         autoHealMaxPerBoot,
+        pruneStaleBundles: newPruneMode,
+        pruneBundlesExtra: newPruneExtra,
         desktop: {
           // 桌面运行参数一律以 DesktopManager 当前值为准（权威在 Admin「浏览器与桌面控制」页），
           // 此页保存网关/系统配置时不得覆盖，避免形成第二个写入点。
@@ -1308,6 +1339,8 @@ async function bootstrap() {
       vncPath: VNC_PATH,
       autoHealPlugins: autoHealEnabled,
       autoHealMaxPerBoot,
+      pruneStaleBundles,
+      pruneBundlesExtra,
       desktop: {
         enabled: ds0.enabled, width: ds0.width, height: ds0.height,
         enableCdp: ds0.enableCdp, cdpPort: ds0.cdpPort,

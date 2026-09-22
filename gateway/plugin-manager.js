@@ -42,8 +42,7 @@ const CORE_PACKAGES = new Set([
 const PLUGIN_DESCRIPTIONS_ZH = {
   '@deepseek-ai/dsh-base': 'DeepSeek Harness 核心基础运行环境与智能体执行框架',
   '@deepseek-ai/dsh-web-app': 'DeepSeek Harness 官方 Web 图形交互客户端',
-  '@deepseek-ai/dsh-experimental-agent-team-profile': '官方 Agent Teams 多智能体协作实验性套件',
-  '@deepseek-ai/dsh-experimental-agent-team-web-profile': '官方 Agent Teams Web 端多智能体协作交互界面',
+  '@deepseek-ai/dsh-experimental-agent-team-profile': '官方 Agent Teams 多智能体协作实验性套件（0.1.7 起已合并原 Web 端套件）',
   '@dsh-custom/dsh-browser-desktop': '容器 Chromium 图形浏览器与 noVNC 桌面集成插件，支持 AI 自主浏览网页、多标签管理与实时无损截图',
   'dshmarket': 'DSH 可视化插件市场：在界面内直接浏览、搜索并一键安装/管理社区拓展插件',
   '@hytime/dsh-thinking-effort': '为 DSH 的第三方模型补充可配置的思考强度档位，并支持设置子 Agent 默认思考强度',

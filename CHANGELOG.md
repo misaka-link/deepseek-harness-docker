@@ -4,6 +4,20 @@
 
 ---
 
+## [v0.1.6] - 2026-09-23
+
+> 供应链升级：内置官方 `@deepseek-ai/dsh@0.1.7-alpha.2`；新增 profile 幽灵 bundle 自动清理及管理后台开关。
+
+### 🔼 供应链
+- **内置官方 DSH 引擎 0.1.7-alpha.1 → 0.1.7-alpha.2**：兼容区间上界同步为 `<=0.1.7-alpha.2`，`adaptedVersions` 增补 `0.1.7-alpha.2`。
+
+### 🧩 适配
+- **本次无需代码适配**：`patch-dsh-client.mjs` 的 8 个补丁点 / 10 条 needle 在 `0.1.7-alpha.2` 上全部命中（含 `client-loopback` / `auth-bypass` / `combo-fallback` 三个必需补丁），网关 `dsh web: <url>?token=` 令牌抓取与端口/就绪探测逻辑未漂移。
+
+### ✨ 新增
+- **容器启动自动清理 profile 幽灵 bundle 条目**：官方 0.1.7 合并/下线了部分 bundle 包（如 `@deepseek-ai/dsh-experimental-agent-team-web-profile` 并入 `@deepseek-ai/dsh-experimental-agent-team-profile`，`@deepseek-ai/dsh-settings-file` 移除），升级镜像后 profile 的 `dsh.profile.bundles` 会残留已不存在的包名，导致 DSH 每次加载反复打印 `skipping profile bundle ... cannot resolve ...` 并在界面提示。现容器启动装配阶段按官方解析规则（DSH 安装锚点 → profile 锚点，对齐 `dsh-app-boot`）自动剔除这类幽灵条目并打印日志。默认保守模式仅处理已知下线清单（可用 `DSH_PRUNE_BUNDLES_EXTRA` 追加），且只删「确实无法解析且未在依赖字段声明」的条目；核心 bundle（`dsh-base` / `dsh-web-app`）与「已声明待安装」的条目一律保留。`DSH_PRUNE_STALE_BUNDLES=all` 可切换为清理任意无法解析条目的激进模式，`=0` 关闭。
+- **管理后台新增幽灵 bundle 清理策略开关**：「网关与系统配置」页新增清理策略下拉（保守(推荐) / 激进 / 关闭）与「额外清理清单」输入框，持久化到 `gateway.config.json`；装配脚本按「环境变量 > 持久化配置 > 默认保守」解析。该策略在容器启动阶段执行，**重启容器后生效**。
+
 ## [v0.1.5] - 2026-09-22
 
 > 适配官方 `@deepseek-ai/dsh@0.1.7-alpha.1`：设置持久化从 `settings.yaml` 迁移至补丁层，修复插件市场重启守护与内置侧边栏浏览器在 Web 端的默认行为。

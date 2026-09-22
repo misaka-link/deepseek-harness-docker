@@ -254,7 +254,7 @@ RUN set -eux; \
 
 # 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm（M10：固定版本 + 校验完整性 + 安装期不执行包脚本）
 #    版本默认来自 build.sh 读取的 version.json#supply，可用 --build-arg 覆盖。
-ARG DSH_VERSION="0.1.7-alpha.1"
+ARG DSH_VERSION="0.1.7-alpha.2"
 ARG PNPM_VERSION="12.5.1"
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
