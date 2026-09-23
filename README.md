@@ -1,6 +1,6 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.6`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.1.7`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.7-alpha.2`<br>(`...:dsh-0.1.7-alpha.2`) | `...:0.1.6`<br>(`...:v0.1.6`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.7-alpha.2-market`<br>(`...:dsh-0.1.7-alpha.2-market`) | `...:0.1.6-market`<br>(`...:v0.1.6-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.1.7-alpha.2`<br>(`...:dsh-0.1.7-alpha.2`) | `...:0.1.7`<br>(`...:v0.1.7`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.1.7-alpha.2-market`<br>(`...:dsh-0.1.7-alpha.2-market`) | `...:0.1.7-market`<br>(`...:v0.1.7-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.7-alpha.2` 或项目版本 `:0.1.6`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.7-alpha.2` 或项目版本 `:0.1.7`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.7-alpha.2-market` 或项目版本 `:0.1.6-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.1.7-alpha.2-market` 或项目版本 `:0.1.7-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -168,6 +168,12 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.1.7
+- 📱 **Web Admin 移动端控制台全面重构**：顶部栏由 133px 压缩为 52px 紧凑单行；5 个标签改为网格分段控件后**无需横向滚动即可全部可见**；卡片、表单与按钮统一触控规范（按钮 ≥40px、表单 44px/16px）；6 个模态框统一为底部抽屉。
+- 🧭 **新增移动端「☰ 更多」底部抽屉导航**：收纳「进入工作区 / 打开桌面 / GitHub 直达 / 退出登录」与版本中心入口，解决窄屏顶栏按钮拥挤与误触。
+- 🩹 **修复 DSH 版本适配矩阵漂移**：管理后台把已深度适配的 `0.1.7-alpha.1` / `0.1.7-alpha.2` 误标为「未经特殊适配」（`dsh-manager` 的已适配兜底清单未随版本升级同步）；现收敛为单一数据源 `version.json → compatibility.adaptedVersions`。
+- 🩹 **修复版本中心「推荐核心」永久停留在旧值**：弹窗内推荐版本元素缺少 `id`，JS 取不到元素导致永不更新；现与顶部下拉保持一致。
 
 ### v0.1.6
 - 🔼 **供应链升级：内置官方 DSH 引擎更新至 `@deepseek-ai/dsh@0.1.7-alpha.2`**，兼容区间上界同步为 `<=0.1.7-alpha.2`（`0.1.7-alpha.1` 继续支持）。

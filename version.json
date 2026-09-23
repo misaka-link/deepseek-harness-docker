@@ -19,15 +19,16 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.1.6",
+    "version": "0.1.7",
     "releaseDate": "2026-09-23",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.6",
-    "changelog": "供应链升级：内置官方 @deepseek-ai/dsh@0.1.7-alpha.2；新增容器启动自动清理 profile 幽灵 bundle 条目，并在管理后台「网关与系统配置」提供清理策略开关",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.7",
+    "changelog": "Web Admin 移动端控制台全面重构（紧凑 App Bar / 标签免横滑 / 底部抽屉导航）；修复 DSH 版本适配矩阵漂移导致的「未经特殊适配」误报",
     "changelogList": [
-      "供应链升级：内置官方 DSH 引擎 0.1.7-alpha.1 → 0.1.7-alpha.2，兼容区间上界同步为 <=0.1.7-alpha.2",
-      "本次适配无需代码改动：8 个补丁点/10 条 needle 在 0.1.7-alpha.2 全部命中，网关令牌抓取与就绪探测逻辑未漂移",
-      "新增容器启动自动清理 profile 幽灵 bundle 条目：按官方解析规则剔除 dsh.profile.bundles 中已知下线且无法解析、未声明为依赖的包名，消除 DSH 反复打印的 skipping profile bundle 告警（默认保守模式，DSH_PRUNE_STALE_BUNDLES=all 激进 / =0 关闭）",
-      "管理后台「网关与系统配置」新增幽灵 bundle 清理策略开关（保守/激进/关闭）与额外清理清单，持久化到 gateway.config.json，重启容器后生效"
+      "Web Admin 移动端控制台全面重构：顶部栏 133px→52px 紧凑单行，5 个标签网格化后无需横向滚动即可全部可见",
+      "新增移动端「☰ 更多」底部抽屉导航，收纳进入工作区 / 打开桌面 / GitHub 直达 / 退出登录 与版本中心入口",
+      "移动端卡片、表单、按钮与模态框统一触控规范（按钮 ≥40px、表单 44px/16px），模态框统一为底部抽屉",
+      "修复 DSH 版本适配矩阵漂移：管理后台把已深度适配的 0.1.7-alpha.1 / 0.1.7-alpha.2 误标为「未经特殊适配」",
+      "已适配版本列表收敛为单一数据源（version.json compatibility.adaptedVersions），并修复版本中心「推荐核心」永久停留在旧值的问题"
     ],
     "dshChangelogList": [
       "会话与工作详情组滚动跟随更稳定，历史分页与回合导航优化",
@@ -39,6 +40,26 @@
     ]
   },
   "history": {
+    "0.1.6": {
+      "version": "0.1.6",
+      "releaseDate": "2026-09-23",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.6",
+      "changelog": "供应链升级：内置官方 @deepseek-ai/dsh@0.1.7-alpha.2；新增容器启动自动清理 profile 幽灵 bundle 条目，并在管理后台「网关与系统配置」提供清理策略开关",
+      "changelogList": [
+        "供应链升级：内置官方 DSH 引擎 0.1.7-alpha.1 → 0.1.7-alpha.2，兼容区间上界同步为 <=0.1.7-alpha.2",
+        "本次适配无需代码改动：8 个补丁点/10 条 needle 在 0.1.7-alpha.2 全部命中，网关令牌抓取与就绪探测逻辑未漂移",
+        "新增容器启动自动清理 profile 幽灵 bundle 条目：按官方解析规则剔除 dsh.profile.bundles 中已知下线且无法解析、未声明为依赖的包名，消除 DSH 反复打印的 skipping profile bundle 告警（默认保守模式，DSH_PRUNE_STALE_BUNDLES=all 激进 / =0 关闭）",
+        "管理后台「网关与系统配置」新增幽灵 bundle 清理策略开关（保守/激进/关闭）与额外清理清单，持久化到 gateway.config.json，重启容器后生效"
+      ],
+      "dshChangelogList": [
+        "会话与工作详情组滚动跟随更稳定，历史分页与回合导航优化",
+        "统一代码块样式（复制/换行、更清晰的 diff 与行号）",
+        "修复 Excel 预览特殊内容失败、预览随窗格缩放且保留工作表与单元格位置",
+        "修复消息气泡长文件名溢出与文件选择菜单脱离",
+        "修复连续后台命令 / 一次性子代理任务后会话卡死（完成触发的 Agent 唤醒默认不限次）",
+        "修复服务端重启后 Web 客户端假连接：就绪后重连现有页面，保留历史与草稿"
+      ]
+    },
     "0.1.5": {
       "version": "0.1.5",
       "releaseDate": "2026-09-22",

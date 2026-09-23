@@ -81,13 +81,41 @@ async function ensurePortReleased(port, timeoutMs = 3500) {
   return false;
 }
 
+// ── 版本元数据单一数据源 ────────────────────────────────────────────
+// 「已适配版本」曾在本文件、version-service.js 与 version.json 三处各写一份，
+// 升级时漏改本文件，导致管理后台把 0.1.7-alpha.1/alpha.2 误判为「未经特殊适配」。
+// 现统一优先读取仓库根 version.json 的 compatibility.adaptedVersions，杜绝再次漂移。
+const VERSION_META_PATHS = [
+  path.join(__dirname, '../version.json'),
+  path.join(__dirname, 'version.json'),
+  '/app/version.json'
+];
+
+function readVersionMeta() {
+  for (const p of VERSION_META_PATHS) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (meta && typeof meta === 'object') return meta;
+    } catch {}
+  }
+  return null;
+}
+
+const VERSION_META = readVersionMeta();
+
+// 兜底清单：仅在 version.json 缺失时使用，必须与 compatibility.recommendedDsh 保持同步
 const DEFAULT_ADAPTED_VERSIONS = [
+  '0.1.7-alpha.2',
+  '0.1.7-alpha.1',
   '0.1.6-alpha.2',
   '0.1.6-alpha.1',
   '0.1.5-rc.2',
   '0.1.5-rc.1',
   '0.1.2-rc.1'
 ];
+
+// 版本探测失败时的兜底版本号（优先取 version.json 供应链固定版本）
+const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.1.7-alpha.2';
 
 function parseSemver(v = '') {
   const clean = String(v).replace(/^v/, '').trim();
@@ -357,6 +385,9 @@ class DshManager {
     if (process.env.ADAPTED_DSH_VERSIONS) {
       return process.env.ADAPTED_DSH_VERSIONS.split(',').map(s => s.trim()).filter(Boolean);
     }
+    // 单一数据源：优先读取 version.json 的 compatibility.adaptedVersions
+    const list = VERSION_META && VERSION_META.compatibility && VERSION_META.compatibility.adaptedVersions;
+    if (Array.isArray(list) && list.length) return list;
     return DEFAULT_ADAPTED_VERSIONS;
   }
 
@@ -395,7 +426,7 @@ class DshManager {
       }
     } catch {}
 
-    return this.lastKnownVersion || '0.1.6-alpha.2';
+    return this.lastKnownVersion || FALLBACK_DSH_VERSION;
   }
 
   async fetchAvailableVersions(force = false) {
@@ -442,7 +473,7 @@ class DshManager {
         latest = newestInList;
       }
     }
-    if (!latest) latest = '0.1.6-alpha.2';
+    if (!latest) latest = FALLBACK_DSH_VERSION;
     const isUpToDate = Boolean(current && latest && compareSemver(current, latest) >= 0);
 
     return {

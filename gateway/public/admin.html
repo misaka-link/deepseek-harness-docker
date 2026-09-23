@@ -47,6 +47,8 @@
       z-index: 50;
     }
     .nav-brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 16px; text-decoration: none; color: var(--text-main); }
+    .nav-brand-desktop { display: inline; }
+    .nav-brand-mobile { display: none; }
     /* 与登录页保持一致：直接使用鲸鱼 LOGO（/favicon.svg），不再用蓝色方块 + 通用线条图标 */
     .nav-logo { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
     .nav-logo img { width: 26px; height: 26px; display: block; object-fit: contain; }
@@ -662,81 +664,389 @@
     .table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
     /* ============================================================
+       移动端专用组件基础定义 (Mobile Components Base - 宽屏默认隐藏)
+       ============================================================ */
+    .mobile-menu-btn { display: none; }
+    .mobile-menu-overlay { display: none; }
+    .mobile-menu-drawer { display: none; }
+
+    /* ============================================================
        移动端 / 窄屏自适应 (Mobile responsive)
-       分级断点：≤820px 平板竖屏 / ≤640px 手机 / ≤380px 小屏手机 / 横屏矮屏
+       分级断点：≤820px 平板竖屏 / ≤640px 手机 / ≤380px 小屏手机 / ≤340px 超小屏
        ============================================================ */
     @media (max-width: 820px) {
-      /* —— 把有限的竖向空间让给内容：顶栏随页面滚走，标签栏吸顶常驻 —— */
+      /* —— 紧凑 App Bar：品牌 + 精简标题 + 1 个版本胶囊 + 右侧「更多」按钮 —— */
       .navbar {
-        height: auto;
-        min-height: 0;
-        padding: 10px 14px;
-        flex-wrap: wrap;
-        row-gap: 8px;
-        position: static;
+        height: 52px;
+        min-height: 52px;
+        padding: 0 14px;
+        padding-top: env(safe-area-inset-top, 0px);
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: nowrap;
+        row-gap: 0;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: #ffffff;
       }
       .nav-logo { width: 26px; height: 26px; }
       .nav-logo img { width: 22px; height: 22px; }
-      .nav-brand { font-size: 15px; gap: 8px; }
-      .nav-brand span { font-size: 15px; }
-      .badge-status-pill { font-size: 11.5px; padding: 3px 9px; }
-      .badge-dot { width: 6px; height: 6px; }
-
-      .nav-actions {
-        width: 100%;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        gap: 8px;
-        padding-bottom: 2px;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
+      .nav-brand { font-size: 15px; gap: 8px; flex-shrink: 1; min-width: 0; }
+      .nav-brand-container {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-wrap: nowrap !important;
+        min-width: 0 !important;
+        flex-shrink: 1;
       }
-      .nav-actions::-webkit-scrollbar { display: none; }
-      .nav-actions > * { flex: 0 0 auto; }
-      .nav-actions .btn { white-space: nowrap; }
+      .nav-brand-desktop { display: none !important; }
+      .nav-brand-mobile { display: inline !important; white-space: nowrap; }
+      .nav-brand-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+      .badge-status-pill {
+        white-space: nowrap !important;
+        font-size: 11.5px;
+        padding: 3px 8px;
+        flex-shrink: 0;
+      }
+      #headerProjectBadge {
+        white-space: nowrap !important;
+        max-width: 160px;
+        display: inline-flex !important;
+        align-items: center;
+      }
+      #headerProjectText {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      .badge-dot { width: 6px; height: 6px; }
+      #headerDshBadge { display: none !important; }
 
-      /* —— 标签栏：横滑 + 吸顶；可继续右滑时用渐变遮罩给出「还有内容」的提示 —— */
+      /* 桌面端动作栏在移动端收起，改为右侧「☰ 更多」抽屉入口 */
+      .nav-actions { display: none !important; }
+      .mobile-menu-btn {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 6px;
+        min-height: 40px;
+        padding: 6px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        background: #f8fafc;
+        border: 1px solid var(--card-border);
+        color: var(--text-main);
+        border-radius: var(--radius-md);
+        flex-shrink: 0;
+        cursor: pointer;
+        user-select: none;
+      }
+      .mobile-menu-btn:active { background: #f1f5f9; transform: scale(0.97); }
+
+      /* 移动端快捷抽屉菜单 */
+      .mobile-menu-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(2px);
+        z-index: 90;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+      }
+      .mobile-menu-overlay.show {
+        display: block;
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .mobile-menu-drawer {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        background: #ffffff;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.16);
+        z-index: 95;
+        padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        max-height: 85vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .mobile-menu-drawer.show {
+        display: block;
+        transform: translateY(0);
+      }
+      .mobile-menu-handle {
+        width: 36px;
+        height: 4px;
+        background: #cbd5e1;
+        border-radius: 2px;
+        margin: 0 auto 10px auto;
+        flex-shrink: 0;
+      }
+      .mobile-menu-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--card-border);
+      }
+      .mobile-menu-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+      .mobile-menu-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        cursor: pointer;
+        border-radius: 50%;
+      }
+      .mobile-menu-close:active {
+        background: #f1f5f9;
+      }
+      .mobile-menu-version-card {
+        background: #f8fafc;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        margin-bottom: 14px;
+      }
+      .mobile-version-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12.5px;
+        margin-bottom: 6px;
+      }
+      .mobile-version-label {
+        color: var(--text-muted);
+      }
+      .mobile-version-btn {
+        width: 100%;
+        min-height: 40px;
+        margin-top: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        justify-content: center;
+      }
+      .mobile-nav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .mobile-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        min-height: 48px;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        color: var(--text-main);
+        background: #ffffff;
+        border: 1px solid var(--card-border);
+        transition: background 0.15s ease;
+      }
+      .mobile-nav-item:active {
+        background: #f1f5f9;
+        transform: scale(0.99);
+      }
+      .mobile-nav-icon {
+        font-size: 18px;
+        width: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .mobile-nav-text {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      .mobile-nav-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+      .mobile-nav-sub {
+        font-size: 11.5px;
+        color: var(--text-muted);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .mobile-nav-arrow {
+        font-size: 16px;
+        color: #94a3b8;
+        flex-shrink: 0;
+      }
+      .mobile-nav-danger {
+        border-color: #fee2e2;
+        background: #fef2f2;
+      }
+      .mobile-nav-danger .mobile-nav-label {
+        color: #dc2626;
+      }
+      .mobile-nav-danger:active {
+        background: #fee2e2;
+      }
+
+      /* —— 标签栏：≤820px 5 标签一步可达、无需横滑、吸顶在 App Bar 下方 —— */
       .tabs-header {
         position: sticky;
-        top: env(safe-area-inset-top, 0px);
+        top: calc(52px + env(safe-area-inset-top, 0px));
         z-index: 45;
         background: var(--bg-main);
-        padding-top: 8px;
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        overscroll-behavior-x: contain;
-        scroll-padding-inline: 12px;
-        margin-bottom: 16px;
+        padding: 8px 0;
+        margin-bottom: 14px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+        border-bottom: 1px solid var(--card-border);
+        overflow-x: visible;
       }
-      .tabs-header::-webkit-scrollbar { display: none; }
-      .tabs-header.can-scroll-right {
-        -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 26px), transparent 100%);
-        mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 26px), transparent 100%);
+      .tab-btn {
+        min-height: 42px;
+        padding: 8px 4px;
+        font-size: 12px;
+        line-height: 1.25;
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid var(--card-border);
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        white-space: normal;
+        transition: all 0.15s ease;
       }
-      .tab-btn { flex: 0 0 auto; white-space: nowrap; padding: 11px 14px; font-size: 13.5px; }
+      .tab-btn.active {
+        background: #eff6ff;
+        color: var(--primary);
+        border-color: var(--primary);
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+      }
 
-      /* —— 触控工效：按钮 ≥40px；输入类 ≥44px 且字号 ≥16px（规避 iOS 聚焦自动放大） —— */
-      .btn { min-height: 40px; padding: 9px 14px; font-size: 13px; }
-      /* 英雄卡片里的迷你胶囊按钮（11~12px）不套用 40px 触控下限，
-         否则会把卡片行高撑到 40px，在卡片底部留出一段很显眼的空洞 */
-      .version-hero-meta .btn { min-height: 30px; padding: 3px 10px; font-size: 11.5px; }
-      .form-control { height: 44px; font-size: 16px; }
-      .tab-btn { min-height: 44px; }
-      .switch { padding: 8px 4px; }
-      .modal-actions .btn { flex: 1 1 0; min-width: 0; }
+      /* —— 卡片统一与节奏 —— */
+      .card {
+        padding: 14px;
+        border-radius: 12px;
+        margin-bottom: 12px;
+      }
+      .card-title {
+        font-size: 15px;
+        margin-bottom: 12px;
+      }
+      .card-desc {
+        font-size: 12.5px;
+        margin-bottom: 14px;
+        line-height: 1.5;
+      }
+
+      /* —— 触控工效：按钮 ≥40px；输入类 ≥44px 且字号 ≥16px —— */
+      .btn { min-height: 42px; padding: 8px 14px; font-size: 13px; box-sizing: border-box; }
+      .version-hero-meta .btn {
+        min-height: 40px !important;
+        padding: 6px 12px !important;
+        font-size: 12px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+      .form-control,
+      select.form-control,
+      input.form-control,
+      #pluginSearchInput,
+      #editAutoHealPlugins,
+      #editPruneStaleBundles,
+      #editPruneBundlesExtra,
+      #editAutoHealMaxPerBoot {
+        height: 44px !important;
+        min-height: 44px !important;
+        font-size: 16px !important;
+        box-sizing: border-box !important;
+      }
+      .switch { min-height: 42px; padding: 6px 4px; }
+      .modal-actions .btn { flex: 1 1 0; min-width: 0; min-height: 44px; }
+
+      /* 行内/表格操作按钮：快照与插件操作统一 ≥40px (建议 40-44px)，行内高度一致 */
+      .table-stack td[data-label="操作"] .btn,
+      .snap-actions .btn,
+      .btn-plugin-toggle,
+      .btn-plugin-uninstall,
+      .btn-plugin-install {
+        min-height: 42px !important;
+        padding: 8px 12px !important;
+        font-size: 12.5px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+      .log-toolbar {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+      }
+      .log-toolbar .btn {
+        min-height: 42px !important;
+        padding: 8px 12px !important;
+        font-size: 12.5px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+      .log-toolbar .switch {
+        min-height: 42px !important;
+        height: 42px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        box-sizing: border-box !important;
+      }
+      #hubProjectReleaseLink,
+      #hubDshReleaseLink {
+        min-height: 40px !important;
+        padding: 6px 12px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+      }
 
       .table-scroll .table:not(.table-stack) { min-width: 620px; }
 
       .version-dropdown-popover {
         position: fixed;
-        top: calc(58px + env(safe-area-inset-top, 0px));
+        top: calc(56px + env(safe-area-inset-top, 0px));
         left: 12px;
         right: 12px;
         width: auto;
         max-width: none;
         max-height: 76vh;
+        z-index: 85;
       }
 
       /* 触屏按压反馈（桌面端不受影响） */
@@ -750,57 +1060,223 @@
         padding-left: max(12px, env(safe-area-inset-left, 0px));
         padding-right: max(12px, env(safe-area-inset-right, 0px));
         padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-        margin: 12px auto;
+        margin: 10px auto;
       }
-      .card { padding: 16px; border-radius: 12px; }
-      .card-title { flex-wrap: wrap; align-items: flex-start; gap: 8px; }
-      .card-title > div { flex-wrap: wrap; }
+      .nav-brand-full { display: none; }
+      .nav-brand span { font-size: 14px; }
 
-      /* 少数控件内联写了 34px/13px 的紧凑尺寸（桌面工具栏用），窄屏下按触控标准覆写 */
+      /* 标签栏：小屏 2 列网格，第 5 个独占一行，一步可达 */
+      .tabs-header {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px 8px;
+        padding: 6px 0 10px 0;
+      }
+      .tab-btn {
+        min-height: 42px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      .tab-btn:nth-child(5) {
+        grid-column: 1 / -1;
+      }
+
+      /* 少数控件内联写了紧凑尺寸，移动端统一覆写为 ≥44px / 16px 并支持全宽 */
       #pluginSearchInput,
-      #editAutoHealPlugins {
+      #editAutoHealPlugins,
+      #editPruneStaleBundles,
+      #editPruneBundlesExtra {
         width: 100% !important;
         height: 44px !important;
+        min-height: 44px !important;
         font-size: 16px !important;
       }
 
-      /* 顶栏动作收纳：GitHub 直达收成图标（title 保留）+ 桌面按钮去掉 (VNC) 后缀，
-         并收紧内边距，让「进入工作区 / 打开桌面 / 退出登录」在 360px 宽也无需横滑即可全部可见 */
-      .nav-actions { gap: 6px; }
-      .nav-actions .btn { padding: 9px 9px; font-size: 12.5px; }
-      .btn-nav-link { padding: 9px 8px; }
-      .btn-nav-link span { display: none; }
-      .nav-hide-narrow { display: none !important; }
+      /* 卡片标题与其内联动作/说明纵向堆叠：标题独占一行，动作/说明换行到下一行 */
+      .card-title {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+      }
+      .card-title > span:first-child {
+        width: 100% !important;
+        display: block;
+      }
+      .card-title > span:not(:first-child) {
+        width: 100% !important;
+        display: block;
+        line-height: 1.4;
+      }
+      .card-title .status-badge {
+        align-self: flex-start !important;
+      }
 
+      /* 插件管理页标题栏搜索与操作网格化 */
+      .card-title > div {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 0 !important;
+      }
+      .card-title > div #pluginSearchInput {
+        grid-column: 1 / -1;
+      }
+      .card-title > div .btn {
+        width: 100%;
+        min-height: 42px;
+        font-size: 12.5px;
+        justify-content: center;
+      }
+
+      /* 快照管理页顶部按钮网格化 */
+      .snapshot-header-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+        width: 100% !important;
+      }
+      .snapshot-header-actions .btn {
+        width: 100% !important;
+        min-height: 42px !important;
+        justify-content: center !important;
+      }
+
+      /* 浏览器总开关操作 */
+      .desktop-master-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+        width: 100% !important;
+        margin-top: 8px !important;
+      }
+      .desktop-master-actions .btn {
+        width: 100% !important;
+        min-height: 42px !important;
+        justify-content: center !important;
+      }
+
+      /* 表单网格 */
       .form-grid { grid-template-columns: 1fr; gap: 12px; }
 
-      /* 版本英雄卡片压缩：显著缩短首屏到日志的滚动距离 */
-      .version-hero-grid { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
-      .version-hero-card { padding: 12px 14px; }
+      /* 动作按钮组整齐网格化，主操作通栏，避免参差折行 */
+      .service-control-bar {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        padding: 12px !important;
+        gap: 8px !important;
+      }
+      .service-control-title {
+        grid-column: 1 / -1;
+        margin-right: 0 !important;
+        margin-bottom: 2px;
+      }
+      .service-control-bar .btn {
+        width: 100%;
+        min-height: 42px;
+        padding: 8px 4px;
+        font-size: 12.5px;
+        justify-content: center;
+      }
+      .service-control-status {
+        grid-column: 1 / -1;
+        margin-left: 0 !important;
+        margin-top: 4px;
+        text-align: center;
+      }
+
+      .version-action-bar,
+      .settings-action-bar {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+        width: 100%;
+      }
+      .version-action-bar .btn,
+      .settings-action-bar .btn {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+      }
+
+      .desktop-action-bar {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+        width: 100%;
+      }
+      .desktop-action-bar #saveDesktopCfgBtn {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-height: 44px;
+      }
+      .desktop-action-bar .btn {
+        width: 100%;
+        min-height: 42px;
+        font-size: 12.5px;
+        justify-content: center;
+        text-align: center;
+      }
+
+      /* 版本英雄卡片压缩：紧凑信息密度 */
+      .version-hero-grid { grid-template-columns: 1fr; gap: 10px; margin-bottom: 12px; }
+      .version-hero-card { padding: 12px 14px; border-radius: 10px; }
       .version-hero-label { font-size: 11px; margin-bottom: 4px; }
-      .version-hero-val { font-size: 19px; }
+      .version-hero-val { font-size: 18px; }
       .version-hero-meta { margin-top: 6px; font-size: 11.5px; gap: 6px; }
       .badge-chip { font-size: 10.5px; padding: 2px 7px; }
 
-      .terminal-log { height: 220px; font-size: 11.5px; }
+      /* 日志终端：全宽、11.5px、适当高度且不撑破卡片 */
+      .terminal-log {
+        height: 210px !important;
+        font-size: 11.5px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 10px 12px !important;
+      }
+      .log-toolbar .btn {
+        min-height: 42px !important;
+        padding: 8px 12px !important;
+        font-size: 12.5px !important;
+      }
 
       .step-list { gap: 2px; }
       .step-item { font-size: 10px; }
       .step-dot { width: 18px; height: 18px; font-size: 9px; }
 
-      /* 模态框改「底部抽屉」：全宽贴底、仅顶部圆角，操作按钮铺满整行便于点按 */
+      /* 模态框改「底部抽屉」：全宽贴底、顶部拖拽条 handle、操作按钮通栏 */
       .modal-overlay { padding: 0; align-items: flex-end; }
       .modal-box {
         width: 100% !important;
         max-width: 100% !important;
         max-height: 92vh;
         border-radius: 16px 16px 0 0;
-        padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
       }
-      .modal-actions { flex-wrap: wrap; gap: 8px; }
-      .modal-actions .btn { justify-content: center; }
+      .modal-box::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: #cbd5e1;
+        border-radius: 2px;
+        margin: 0 auto 10px auto;
+        flex-shrink: 0;
+      }
+      .modal-actions {
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        gap: 8px !important;
+        width: 100% !important;
+      }
+      .modal-actions .btn {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: center !important;
+      }
 
-      /* 轻提示（toast）在手机上改通栏，避免右侧定位 + 固定宽度造成横向溢出 */
+      /* 轻提示（toast）在手机上改通栏 */
       #toastHost {
         top: calc(12px + env(safe-area-inset-top, 0px)) !important;
         left: 12px !important;
@@ -808,7 +1284,7 @@
       }
       #toastHost > div { max-width: none !important; width: 100%; }
 
-      /* 窄屏：数据表格改为堆叠卡片式，避免横向滚动看不到操作按钮 */
+      /* 窄屏：数据表格堆叠卡片式优化 */
       .table-stack { display: block; width: 100%; border-collapse: separate; }
       .table-stack colgroup,
       .table-stack thead { display: none; }
@@ -816,7 +1292,7 @@
       .table-stack tr {
         display: block;
         border: 1px solid var(--card-border);
-        border-radius: var(--radius-md);
+        border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 10px;
         background: #ffffff;
@@ -825,27 +1301,46 @@
       .table-stack td {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
+        gap: 8px;
         border: none;
         padding: 4px 0;
         text-align: left !important;
         white-space: normal !important;
         max-width: none !important;
         min-width: 0;
+        word-break: break-word;
       }
       .table-stack td::before { display: none; }
       .table-stack td[data-label]:not([data-label=""])::before {
         display: block;
         content: attr(data-label);
-        flex: 0 0 70px;
+        flex: 0 0 64px;
         font-size: 12px;
         font-weight: 600;
         color: var(--text-muted);
-        line-height: 1.6;
+        line-height: 1.5;
+        flex-shrink: 0;
+      }
+      .table-stack td[data-label="操作"] {
+        padding-top: 8px;
+        margin-top: 6px;
+        border-top: 1px dashed var(--card-border) !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+      }
+      .table-stack td[data-label="操作"] .btn {
+        min-height: 42px !important;
+        padding: 8px 12px !important;
+        font-size: 12.5px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
       }
       .table-stack td[colspan] { display: block; text-align: center !important; }
       .table-stack .snap-name { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-all; }
-      .table-stack .snap-actions { justify-content: flex-start; flex-wrap: wrap; }
+      .table-stack .snap-actions { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
     }
 
     /* 小屏手机 (iPhone SE / 安卓小屏) */
@@ -854,21 +1349,32 @@
         padding-left: max(10px, env(safe-area-inset-left, 0px));
         padding-right: max(10px, env(safe-area-inset-right, 0px));
       }
-      .card { padding: 13px; }
-      .nav-brand span { font-size: 14px; }
-      /* 超窄屏优先保证「进入工作区 / 打开桌面 / 退出登录」可见：
-         GitHub 直达链接收起（版本中心弹窗内仍保留完整入口） */
-      #linkRepoProject,
-      #linkRepoDsh { display: none; }
-      .version-hero-val { font-size: 17px; }
-      .tab-btn { padding: 10px 12px; font-size: 13px; }
-      .table-stack td[data-label]:not([data-label=""])::before { flex-basis: 58px; font-size: 11.5px; }
+      .card { padding: 12px; }
+      .nav-brand span { font-size: 13.5px; }
+      #headerProjectBadge { font-size: 10px; padding: 2px 6px; max-width: 110px; white-space: nowrap !important; }
+      .service-control-bar {
+        grid-template-columns: 1fr !important;
+      }
+      .desktop-action-bar {
+        grid-template-columns: 1fr !important;
+      }
+      .version-hero-val { font-size: 16px; }
+      .tab-btn { padding: 8px 6px; font-size: 12px; }
+      .table-stack td[data-label]:not([data-label=""])::before { flex-basis: 56px; font-size: 11.5px; }
+    }
+
+    /* 超窄屏极端兜底 (≤340px，如 320px 视口)：收起顶栏版本胶囊，保证绝对无横向溢出 */
+    @media (max-width: 340px) {
+      #headerProjectBadge { display: none !important; }
+      .nav-brand span { font-size: 13px; }
+      .mobile-menu-btn span { display: none; }
+      .mobile-menu-btn { padding: 6px 8px; }
     }
 
     /* 横屏矮屏（手机横屏 / 窄窗口矮视口）：压缩固定高度，避免一屏只看到终端 */
     @media (max-width: 900px) and (max-height: 460px) {
-      .navbar { padding: 8px 12px; }
-      .terminal-log { height: 150px; }
+      .navbar { height: 44px; min-height: 44px; padding: 4px 10px; }
+      .terminal-log { height: 150px !important; }
       .modal-box { max-height: 96vh; }
     }
   </style>
@@ -876,16 +1382,19 @@
 <body>
   <!-- Navbar -->
   <header class="navbar">
-    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div class="nav-brand-container" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <a href="/" class="nav-brand">
         <div class="nav-logo">
           <img src="/favicon.svg" alt="DeepSeek Harness" />
         </div>
-        <span>DeepSeek Harness 管理面板</span>
+        <span class="nav-brand-text">
+          <span class="nav-brand-desktop"><span class="nav-brand-full">DeepSeek </span>Harness 管理面板</span>
+          <span class="nav-brand-mobile">DSH 管理面板</span>
+        </span>
       </a>
 
       <!-- 双版本与安全态势徽标组 (点击呼出版本更新中心) -->
-      <div style="display:flex; align-items:center; gap:8px;">
+      <div class="nav-badges-group" style="display:flex; align-items:center; gap:8px;">
         <div style="position:relative;">
           <div class="badge-status-pill badge-status-success" id="headerProjectBadge" onclick="toggleProjectDropdown(event)" title="点击查看容器套件版本与更新内容">
             <span class="badge-dot"></span>
@@ -920,12 +1429,14 @@
             <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; font-size:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="color:var(--text-main); font-weight:700; font-size:11px;">🎯 适配官方 DSH 核心版本：</span>
-                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.1.6-alpha.2</span>
+                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.1.7-alpha.2</span>
               </div>
               <div style="color:var(--text-muted); font-size:11px; margin-bottom:5px;">
-                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.6-alpha.2</code>
+                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.7-alpha.2</code>
               </div>
               <div id="popoverCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
+                <span class="badge-chip chip-green">0.1.7-alpha.2</span>
+                <span class="badge-chip chip-green">0.1.7-alpha.1</span>
                 <span class="badge-chip chip-green">0.1.6-alpha.2</span>
                 <span class="badge-chip chip-green">0.1.6-alpha.1</span>
                 <span class="badge-chip chip-green">0.1.5-rc.2</span>
@@ -991,16 +1502,109 @@
         <span>退出登录</span>
       </a>
     </div>
+
+    <!-- 移动端专享：更多导航按钮 -->
+    <button type="button" class="btn mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()" aria-label="快捷导航与控制">
+      <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+      <span>更多</span>
+    </button>
   </header>
+
+  <!-- 移动端快捷导航抽屉 (Mobile Menu Drawer) -->
+  <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="closeMobileMenu()"></div>
+  <div class="mobile-menu-drawer" id="mobileMenuDrawer" role="dialog" aria-modal="true" aria-label="移动端快捷导航">
+    <div class="mobile-menu-handle"></div>
+    <div class="mobile-menu-header">
+      <div class="mobile-menu-title">
+        <span>🧭 快捷导航与控制</span>
+      </div>
+      <button type="button" class="mobile-menu-close" onclick="closeMobileMenu()" aria-label="关闭菜单">✕</button>
+    </div>
+
+    <!-- 版本信息与快捷版本中心卡片 -->
+    <div class="mobile-menu-version-card">
+      <div class="mobile-version-row">
+        <span class="mobile-version-label">📦 套件版本:</span>
+        <strong id="mobileMenuProjectVer">v0.1.2</strong>
+      </div>
+      <div class="mobile-version-row">
+        <span class="mobile-version-label">⚡ DSH 核心:</span>
+        <strong id="mobileMenuDshVer">v...</strong>
+      </div>
+      <button type="button" class="btn btn-sm mobile-version-btn" onclick="openVersionHubModal(); closeMobileMenu();">
+        版本中心与更新日志 ↗
+      </button>
+    </div>
+
+    <!-- 导航链接列表 -->
+    <div class="mobile-nav-list">
+      <a href="/" class="mobile-nav-item" onclick="closeMobileMenu()">
+        <div class="mobile-nav-icon">💻</div>
+        <div class="mobile-nav-text">
+          <div class="mobile-nav-label">进入工作区</div>
+          <div class="mobile-nav-sub">返回 DSH 对话与开发主界面</div>
+        </div>
+        <div class="mobile-nav-arrow">›</div>
+      </a>
+
+      <a href="/vnc/" target="_blank" class="mobile-nav-item" id="mobileLinkToVnc" onclick="closeMobileMenu()">
+        <div class="mobile-nav-icon">🖥️</div>
+        <div class="mobile-nav-text">
+          <div class="mobile-nav-label">打开桌面 (VNC)</div>
+          <div class="mobile-nav-sub">在独立窗口查看容器 Chromium 桌面</div>
+        </div>
+        <div class="mobile-nav-arrow">↗</div>
+      </a>
+
+      <a href="https://github.com/misaka-link/deepseek-harness-docker" target="_blank" class="mobile-nav-item" id="mobileLinkRepoProject" onclick="closeMobileMenu()">
+        <div class="mobile-nav-icon">
+          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+        </div>
+        <div class="mobile-nav-text">
+          <div class="mobile-nav-label">本项目 GitHub</div>
+          <div class="mobile-nav-sub">deepseek-harness-docker 仓库与 Releases</div>
+        </div>
+        <div class="mobile-nav-arrow">↗</div>
+      </a>
+
+      <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" class="mobile-nav-item" id="mobileLinkRepoDsh" onclick="closeMobileMenu()">
+        <div class="mobile-nav-icon">
+          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+        </div>
+        <div class="mobile-nav-text">
+          <div class="mobile-nav-label">DSH 官方 GitHub</div>
+          <div class="mobile-nav-sub">deepseek-ai/deepseek-harness 核心仓库</div>
+        </div>
+        <div class="mobile-nav-arrow">↗</div>
+      </a>
+
+      <a href="/logout" class="mobile-nav-item mobile-nav-danger" onclick="closeMobileMenu()">
+        <div class="mobile-nav-icon">🚪</div>
+        <div class="mobile-nav-text">
+          <div class="mobile-nav-label">退出登录</div>
+          <div class="mobile-nav-sub">清除本机登录凭据并退出管理会话</div>
+        </div>
+        <div class="mobile-nav-arrow">›</div>
+      </a>
+    </div>
+  </div>
 
   <main class="container">
     <!-- Tabs Header -->
     <nav class="tabs-header">
-      <button class="tab-btn active" onclick="switchTab('tab-dsh')">DSH 版本管理</button>
-      <button class="tab-btn" onclick="switchTab('tab-plugins')">拓展与插件管理</button>
-      <button class="tab-btn" onclick="switchTab('tab-desktop')">浏览器与桌面控制</button>
-      <button class="tab-btn" onclick="switchTab('tab-snapshots')">配置快照与备份</button>
-      <button class="tab-btn" onclick="switchTab('tab-settings')">网关与系统配置</button>
+      <button class="tab-btn active" data-tab="tab-dsh" onclick="switchTab('tab-dsh')">DSH 版本管理</button>
+      <button class="tab-btn" data-tab="tab-plugins" onclick="switchTab('tab-plugins')">拓展与插件管理</button>
+      <button class="tab-btn" data-tab="tab-desktop" onclick="switchTab('tab-desktop')">浏览器与桌面控制</button>
+      <button class="tab-btn" data-tab="tab-snapshots" onclick="switchTab('tab-snapshots')">配置快照与备份</button>
+      <button class="tab-btn" data-tab="tab-settings" onclick="switchTab('tab-settings')">网关与系统配置</button>
     </nav>
 
     <!-- 故障自愈隔离告警横幅 -->
@@ -1082,8 +1686,8 @@
         </div>
 
         <!-- DSH 进程启停控制栏 -->
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 20px; padding: 14px 18px; background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius-md); flex-wrap: wrap;">
-          <div style="font-weight: 600; font-size: 13px; color: var(--text-main); margin-right: 6px;">
+        <div class="service-control-bar" style="display:flex; align-items:center; gap:10px; margin-bottom: 20px; padding: 14px 18px; background: #f8fafc; border: 1px solid var(--card-border); border-radius: var(--radius-md); flex-wrap: wrap;">
+          <div class="service-control-title" style="font-weight: 600; font-size: 13px; color: var(--text-main); margin-right: 6px;">
             服务启停控制:
           </div>
           <button class="btn btn-primary" onclick="startDsh()" id="startDshBtn">
@@ -1095,7 +1699,7 @@
           <button class="btn" onclick="restartDsh()" id="restartDshBtn">
             重启 DSH
           </button>
-          <span id="dshStatusDetail" style="font-size: 12px; color: var(--text-muted); margin-left: auto;"></span>
+          <span id="dshStatusDetail" class="service-control-status" style="font-size: 12px; color: var(--text-muted); margin-left: auto;"></span>
         </div>
 
         <!-- 版本选择与切换表单 -->
@@ -1128,7 +1732,7 @@
           </div>
         </div>
 
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div class="version-action-bar" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="installSelectedVersion()" id="installBtn">安装并切换版本</button>
           <button class="btn" onclick="loadVersions(true)">刷新版本列表</button>
           <span id="versionSwitchQuickHint" style="font-size:12px; color:var(--text-muted);"></span>
@@ -1259,7 +1863,7 @@
               插件本体始终保留（只停用、不卸载）；如需彻底安装/卸载插件，请到「拓展与插件管理」页。
             </div>
           </div>
-          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="desktop-master-actions" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             <span class="status-badge status-running" id="desktopMasterBadge"><span class="dot"></span> 获取中</span>
             <button class="btn btn-primary" id="desktopMasterEnableBtn" onclick="setDesktopMaster(true)">启用浏览器</button>
             <button class="btn btn-danger" id="desktopMasterDisableBtn" onclick="setDesktopMaster(false)">彻底停用浏览器</button>
@@ -1334,7 +1938,7 @@
           剩余工作时长: --
         </div>
 
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div class="desktop-action-bar" style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="saveDesktopConfig()" id="saveDesktopCfgBtn">保存桌面配置</button>
           <button class="btn" onclick="startDesktop()" id="startDesktopBtn">启动浏览器桌面</button>
           <button class="btn btn-danger" onclick="stopDesktop()" id="stopDesktopBtn">停止桌面 (休眠)</button>
@@ -1353,7 +1957,7 @@
       <div class="card">
         <div class="card-title">
           <span>DSH 配置文件快照与备份</span>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="snapshot-header-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="file" id="snapshotFileInput" accept=".tar.gz" style="display:none;" onchange="handleImportSnapshot(event)" />
             <button class="btn" id="btnImportSnapshot" onclick="document.getElementById('snapshotFileInput').click()" title="从本地上传导入 .tar.gz 快照归档">📥 导入快照 (.tar.gz)</button>
             <button class="btn btn-primary" id="btnCreateSnapshot" onclick="openCreateSnapshotModal()">+ 创建新快照</button>
@@ -1489,7 +2093,7 @@
           确认修改后网关服务将<strong>立即自动重启生效</strong>，页面将自动跳转到新的访问路径。
         </div>
 
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div class="settings-action-bar" style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="prepareSaveConfig()">保存配置并重启网关</button>
           <button class="btn" onclick="loadStatus()">重置表单</button>
         </div>
@@ -1797,11 +2401,13 @@
                 <span>🛡️ DSH 官方版本适配矩阵</span>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; line-height:1.5;">
-                <div>推荐核心：<strong style="color:var(--text-main);">v0.1.6-alpha.2</strong> (已深度适配)</div>
-                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.6-alpha.2</code></div>
+                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.1.7-alpha.2</strong> (已深度适配)</div>
+                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.7-alpha.2</code></div>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:5px;">已预置深度适配版本：</div>
               <div id="hubCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
+                <span class="badge-chip chip-green">0.1.7-alpha.2</span>
+                <span class="badge-chip chip-green">0.1.7-alpha.1</span>
                 <span class="badge-chip chip-green">0.1.6-alpha.2</span>
                 <span class="badge-chip chip-green">0.1.6-alpha.1</span>
                 <span class="badge-chip chip-green">0.1.5-rc.2</span>
@@ -2241,6 +2847,7 @@
         // 5. 同步渲染版本控制与更新中心弹窗及下拉框
         renderVersionHubModal(data);
         renderProjectDropdown();
+        syncMobileMenuData();
       } catch (err) {
         console.warn('版本检测请求异常:', err);
       } finally {
@@ -2360,7 +2967,7 @@
           hubDshNotice.style.background = '#f0fdf4';
           hubDshNotice.style.borderColor = '#bbf7d0';
           hubDshNotice.style.color = '#166534';
-          hubDshNotice.innerHTML = `<div class="notice-title" style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">✔ 官方核心 (v${escapeHtml(dsh.current || '0.1.6-alpha.2')}) 特性要点：</div>` + dshListHtml;
+          hubDshNotice.innerHTML = `<div class="notice-title" style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">✔ 官方核心 (v${escapeHtml(dsh.current || '0.1.7-alpha.2')}) 特性要点：</div>` + dshListHtml;
         }
       }
 
@@ -2369,9 +2976,9 @@
 
       // 适配 DSH 版本矩阵渲染 (大弹窗左栏卡片 3)
       const compat = versionCheckData?.compatibility || {};
-      const recDsh = compat.recommendedDsh || '0.1.6-alpha.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.6-alpha.2';
-      const adaptedList = compat.adaptedVersions || ['0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.1.7-alpha.2';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.7-alpha.2';
+      const adaptedList = compat.adaptedVersions || ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const hubCompatRecommended = document.getElementById('hubCompatRecommended');
       if (hubCompatRecommended) hubCompatRecommended.textContent = 'v' + recDsh;
@@ -2404,6 +3011,62 @@
       const m = document.getElementById('versionHubModal');
       if (m) m.style.display = 'none';
     }
+
+    // ── 移动端快捷抽屉菜单 (Mobile Menu Drawer) ──
+    function toggleMobileMenu() {
+      const drawer = document.getElementById('mobileMenuDrawer');
+      if (!drawer) return;
+      if (drawer.classList.contains('show')) {
+        closeMobileMenu();
+      } else {
+        openMobileMenu();
+      }
+    }
+
+    function openMobileMenu() {
+      const drawer = document.getElementById('mobileMenuDrawer');
+      const overlay = document.getElementById('mobileMenuOverlay');
+      if (drawer) drawer.classList.add('show');
+      if (overlay) overlay.classList.add('show');
+      document.body.style.overflow = 'hidden';
+      syncMobileMenuData();
+    }
+
+    function closeMobileMenu() {
+      const drawer = document.getElementById('mobileMenuDrawer');
+      const overlay = document.getElementById('mobileMenuOverlay');
+      if (drawer) drawer.classList.remove('show');
+      if (overlay) overlay.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    function syncMobileMenuData() {
+      const pText = document.getElementById('headerProjectText');
+      const mProj = document.getElementById('mobileMenuProjectVer');
+      if (pText && mProj) mProj.textContent = pText.textContent;
+
+      const dText = document.getElementById('headerDshText');
+      const mDsh = document.getElementById('mobileMenuDshVer');
+      if (dText && mDsh) mDsh.textContent = dText.textContent;
+
+      const vncLink = document.getElementById('linkToVnc');
+      const mVnc = document.getElementById('mobileLinkToVnc');
+      if (vncLink && mVnc) mVnc.href = vncLink.href;
+
+      const pRepo = document.getElementById('linkRepoProject');
+      const mPRepo = document.getElementById('mobileLinkRepoProject');
+      if (pRepo && mPRepo && pRepo.href) mPRepo.href = pRepo.href;
+
+      const dRepo = document.getElementById('linkRepoDsh');
+      const mDRepo = document.getElementById('mobileLinkRepoDsh');
+      if (dRepo && mDRepo && dRepo.href) mDRepo.href = dRepo.href;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeMobileMenu();
+      }
+    });
 
     // ── 容器套件版本下拉卡片 (Dropdown Popover) ──
     function toggleProjectDropdown(event) {
@@ -2448,9 +3111,9 @@
       // P5：兼容矩阵字段必须在本函数作用域内重新取值（原先引用了 renderVersionHubModal 内
       // 以 const 声明的 recDsh/rangeDsh/adaptedList，跨函数不可见 → ReferenceError）
       const compat = versionCheckData?.compatibility || {};
-      const recDsh = compat.recommendedDsh || '0.1.6-alpha.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.6-alpha.2';
-      const adaptedList = compat.adaptedVersions || ['0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.1.7-alpha.2';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.7-alpha.2';
+      const adaptedList = compat.adaptedVersions || ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const curElem = document.getElementById('popoverCurrentVer');
       if (curElem) curElem.textContent = 'v' + cur;
@@ -2566,7 +3229,7 @@
         const logs = data.recentLogs || [];
         let headerBanner = `[系统环境与状态概要]
 ----------------------------------------------------------------------
-DSH 核心版本 : v${currentVersion || '0.1.6-alpha.2'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
+DSH 核心版本 : v${currentVersion || '0.1.7-alpha.2'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
 服务监听端口 : 3080 (内部核心端口: 3079)
 进程运行状态 : PID ${data.pid || '--'} | 状态: ${data.running ? 'Active' : 'Stopped'}${data.manualStopped ? ' (已手动停止)' : ''}
 ----------------------------------------------------------------------\n`;
@@ -2630,6 +3293,7 @@ DSH 核心版本 : v${currentVersion || '0.1.6-alpha.2'} (${data.running ? (data
         }
         document.getElementById('linkToVnc').href = data.paths?.vnc || '/vnc/';
         document.getElementById('vncDirectBtn').href = data.paths?.vnc || '/vnc/';
+        syncMobileMenuData();
 
         // Hero Card 1: 当前运行核心
         const heroCur = document.getElementById('heroCurrentVersion');
@@ -2830,7 +3494,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         availableDistTags = tags;
         const versions = data.versions || [];
         availableCachedVersions = data.cachedVersions || [];
-        availableAdaptedVersions = data.adaptedVersions || ['0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        availableAdaptedVersions = data.adaptedVersions || ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
         availableEvaluations = data.versionEvaluations || {};
         currentVersion = data.current || currentVersion;
         latestVersion = data.latest || tags.latest || '';
