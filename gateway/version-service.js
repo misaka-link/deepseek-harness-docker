@@ -57,7 +57,7 @@ class VersionService {
     } catch (e) {
       console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
     }
-    return '0.1.6';
+    return '0.1.8';
   }
 
   getLocalMeta() {
@@ -114,9 +114,9 @@ class VersionService {
         }
       },
       compatibility: {
-        recommendedDsh: '0.1.7-alpha.2',
-        supportedDshRange: '>=0.1.2-rc.1 <=0.1.7-alpha.2',
-        adaptedVersions: ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
+        recommendedDsh: '0.1.7-rc.1',
+        supportedDshRange: '>=0.1.2-rc.1 <=0.1.7-rc.1',
+        adaptedVersions: ['0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
         rules: [
           {
             pattern: '<0.1.5-rc.1',
@@ -217,6 +217,7 @@ class VersionService {
     const m = meta || this.cachedMeta || this.getLocalMeta();
     const rules = m.compatibility?.rules || [];
     const adapted = m.compatibility?.adaptedVersions || [
+      '0.1.7-rc.1',
       '0.1.7-alpha.2',
       '0.1.7-alpha.1',
       '0.1.6-alpha.2',

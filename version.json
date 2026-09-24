@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.1.7-alpha.2",
+    "dshVersion": "0.1.7-rc.1",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,27 +19,44 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.1.7",
-    "releaseDate": "2026-09-23",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.7",
-    "changelog": "Web Admin 移动端控制台全面重构（紧凑 App Bar / 标签免横滑 / 底部抽屉导航）；修复 DSH 版本适配矩阵漂移导致的「未经特殊适配」误报",
+    "version": "0.1.8",
+    "releaseDate": "2026-09-24",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.8",
+    "changelog": "内置官方 DSH 引擎更新至 @deepseek-ai/dsh@0.1.7-rc.1",
     "changelogList": [
-      "Web Admin 移动端控制台全面重构：顶部栏 133px→52px 紧凑单行，5 个标签网格化后无需横向滚动即可全部可见",
-      "新增移动端「☰ 更多」底部抽屉导航，收纳进入工作区 / 打开桌面 / GitHub 直达 / 退出登录 与版本中心入口",
-      "移动端卡片、表单、按钮与模态框统一触控规范（按钮 ≥40px、表单 44px/16px），模态框统一为底部抽屉",
-      "修复 DSH 版本适配矩阵漂移：管理后台把已深度适配的 0.1.7-alpha.1 / 0.1.7-alpha.2 误标为「未经特殊适配」",
-      "已适配版本列表收敛为单一数据源（version.json compatibility.adaptedVersions），并修复版本中心「推荐核心」永久停留在旧值的问题"
+      "内置官方 DSH 引擎更新至 @deepseek-ai/dsh@0.1.7-rc.1（兼容区间上界同步为 <=0.1.7-rc.1）"
     ],
     "dshChangelogList": [
-      "会话与工作详情组滚动跟随更稳定，历史分页与回合导航优化",
-      "统一代码块样式（复制/换行、更清晰的 diff 与行号）",
-      "修复 Excel 预览特殊内容失败、预览随窗格缩放且保留工作表与单元格位置",
-      "修复消息气泡长文件名溢出与文件选择菜单脱离",
-      "修复连续后台命令 / 一次性子代理任务后会话卡死（完成触发的 Agent 唤醒默认不限次）",
-      "修复服务端重启后 Web 客户端假连接：就绪后重连现有页面，保留历史与草稿"
+      "Web 侧边栏新增终端：多标签、Shell 选择，刷新后自动恢复",
+      "插件管理页支持安装、配置、启停与运行时卸载；插件安装源可选官方源 / 国内镜像 / 自定义源",
+      "新增插件与 Profile 版本兼容性预检：不兼容时说明原因，并可对精确版本授予豁免",
+      "侧边栏支持 Word / Excel / PowerPoint / CSV / TSV 预览；会话文件改动支持逐行与左右分栏审阅",
+      "会话归档支持置顶、筛选与恢复；MCP 升级官方 SDK v2，支持资源发现与 URI 模板",
+      "修复服务端重启后 Web 客户端假连接、pi-ai 大型流式工具参数阻塞进程、反向代理子路径访问等问题"
     ]
   },
   "history": {
+    "0.1.7": {
+      "version": "0.1.7",
+      "releaseDate": "2026-09-23",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.7",
+      "changelog": "Web Admin 移动端控制台全面重构（紧凑 App Bar / 标签免横滑 / 底部抽屉导航）；修复 DSH 版本适配矩阵漂移导致的「未经特殊适配」误报",
+      "changelogList": [
+        "Web Admin 移动端控制台全面重构：顶部栏 133px→52px 紧凑单行，5 个标签网格化后无需横向滚动即可全部可见",
+        "新增移动端「☰ 更多」底部抽屉导航，收纳进入工作区 / 打开桌面 / GitHub 直达 / 退出登录 与版本中心入口",
+        "移动端卡片、表单、按钮与模态框统一触控规范（按钮 ≥40px、表单 44px/16px），模态框统一为底部抽屉",
+        "修复 DSH 版本适配矩阵漂移：管理后台把已深度适配的 0.1.7-alpha.1 / 0.1.7-alpha.2 误标为「未经特殊适配」",
+        "已适配版本列表收敛为单一数据源（version.json compatibility.adaptedVersions），并修复版本中心「推荐核心」永久停留在旧值的问题"
+      ],
+      "dshChangelogList": [
+        "会话与工作详情组滚动跟随更稳定，历史分页与回合导航优化",
+        "统一代码块样式（复制/换行、更清晰的 diff 与行号）",
+        "修复 Excel 预览特殊内容失败、预览随窗格缩放且保留工作表与单元格位置",
+        "修复消息气泡长文件名溢出与文件选择菜单脱离",
+        "修复连续后台命令 / 一次性子代理任务后会话卡死（完成触发的 Agent 唤醒默认不限次）",
+        "修复服务端重启后 Web 客户端假连接：就绪后重连现有页面，保留历史与草稿"
+      ]
+    },
     "0.1.6": {
       "version": "0.1.6",
       "releaseDate": "2026-09-23",
@@ -152,9 +169,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.1.7-alpha.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-alpha.2",
+    "recommendedDsh": "0.1.7-rc.1",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-rc.1",
     "adaptedVersions": [
+      "0.1.7-rc.1",
       "0.1.7-alpha.2",
       "0.1.7-alpha.1",
       "0.1.6-alpha.2",

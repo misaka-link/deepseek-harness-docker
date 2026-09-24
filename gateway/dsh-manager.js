@@ -105,6 +105,7 @@ const VERSION_META = readVersionMeta();
 
 // 兜底清单：仅在 version.json 缺失时使用，必须与 compatibility.recommendedDsh 保持同步
 const DEFAULT_ADAPTED_VERSIONS = [
+  '0.1.7-rc.1',
   '0.1.7-alpha.2',
   '0.1.7-alpha.1',
   '0.1.6-alpha.2',
@@ -115,7 +116,7 @@ const DEFAULT_ADAPTED_VERSIONS = [
 ];
 
 // 版本探测失败时的兜底版本号（优先取 version.json 供应链固定版本）
-const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.1.7-alpha.2';
+const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.1.7-rc.1';
 
 function parseSemver(v = '') {
   const clean = String(v).replace(/^v/, '').trim();

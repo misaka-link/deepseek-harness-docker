@@ -1429,12 +1429,13 @@
             <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; font-size:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="color:var(--text-main); font-weight:700; font-size:11px;">🎯 适配官方 DSH 核心版本：</span>
-                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.1.7-alpha.2</span>
+                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.1.7-rc.1</span>
               </div>
               <div style="color:var(--text-muted); font-size:11px; margin-bottom:5px;">
-                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.7-alpha.2</code>
+                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.7-rc.1</code>
               </div>
               <div id="popoverCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
+                <span class="badge-chip chip-green">0.1.7-rc.1</span>
                 <span class="badge-chip chip-green">0.1.7-alpha.2</span>
                 <span class="badge-chip chip-green">0.1.7-alpha.1</span>
                 <span class="badge-chip chip-green">0.1.6-alpha.2</span>
@@ -2401,11 +2402,12 @@
                 <span>🛡️ DSH 官方版本适配矩阵</span>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; line-height:1.5;">
-                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.1.7-alpha.2</strong> (已深度适配)</div>
-                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.7-alpha.2</code></div>
+                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.1.7-rc.1</strong> (已深度适配)</div>
+                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.1.7-rc.1</code></div>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:5px;">已预置深度适配版本：</div>
               <div id="hubCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
+                <span class="badge-chip chip-green">0.1.7-rc.1</span>
                 <span class="badge-chip chip-green">0.1.7-alpha.2</span>
                 <span class="badge-chip chip-green">0.1.7-alpha.1</span>
                 <span class="badge-chip chip-green">0.1.6-alpha.2</span>
@@ -2967,7 +2969,7 @@
           hubDshNotice.style.background = '#f0fdf4';
           hubDshNotice.style.borderColor = '#bbf7d0';
           hubDshNotice.style.color = '#166534';
-          hubDshNotice.innerHTML = `<div class="notice-title" style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">✔ 官方核心 (v${escapeHtml(dsh.current || '0.1.7-alpha.2')}) 特性要点：</div>` + dshListHtml;
+          hubDshNotice.innerHTML = `<div class="notice-title" style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">✔ 官方核心 (v${escapeHtml(dsh.current || '0.1.7-rc.1')}) 特性要点：</div>` + dshListHtml;
         }
       }
 
@@ -2976,9 +2978,9 @@
 
       // 适配 DSH 版本矩阵渲染 (大弹窗左栏卡片 3)
       const compat = versionCheckData?.compatibility || {};
-      const recDsh = compat.recommendedDsh || '0.1.7-alpha.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.7-alpha.2';
-      const adaptedList = compat.adaptedVersions || ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.1.7-rc.1';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.7-rc.1';
+      const adaptedList = compat.adaptedVersions || ['0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const hubCompatRecommended = document.getElementById('hubCompatRecommended');
       if (hubCompatRecommended) hubCompatRecommended.textContent = 'v' + recDsh;
@@ -3111,9 +3113,9 @@
       // P5：兼容矩阵字段必须在本函数作用域内重新取值（原先引用了 renderVersionHubModal 内
       // 以 const 声明的 recDsh/rangeDsh/adaptedList，跨函数不可见 → ReferenceError）
       const compat = versionCheckData?.compatibility || {};
-      const recDsh = compat.recommendedDsh || '0.1.7-alpha.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.7-alpha.2';
-      const adaptedList = compat.adaptedVersions || ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.1.7-rc.1';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.1.7-rc.1';
+      const adaptedList = compat.adaptedVersions || ['0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const curElem = document.getElementById('popoverCurrentVer');
       if (curElem) curElem.textContent = 'v' + cur;
@@ -3229,7 +3231,7 @@
         const logs = data.recentLogs || [];
         let headerBanner = `[系统环境与状态概要]
 ----------------------------------------------------------------------
-DSH 核心版本 : v${currentVersion || '0.1.7-alpha.2'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
+DSH 核心版本 : v${currentVersion || '0.1.7-rc.1'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
 服务监听端口 : 3080 (内部核心端口: 3079)
 进程运行状态 : PID ${data.pid || '--'} | 状态: ${data.running ? 'Active' : 'Stopped'}${data.manualStopped ? ' (已手动停止)' : ''}
 ----------------------------------------------------------------------\n`;
@@ -3494,7 +3496,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         availableDistTags = tags;
         const versions = data.versions || [];
         availableCachedVersions = data.cachedVersions || [];
-        availableAdaptedVersions = data.adaptedVersions || ['0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        availableAdaptedVersions = data.adaptedVersions || ['0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
         availableEvaluations = data.versionEvaluations || {};
         currentVersion = data.current || currentVersion;
         latestVersion = data.latest || tags.latest || '';
