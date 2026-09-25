@@ -105,6 +105,7 @@ const VERSION_META = readVersionMeta();
 
 // 兜底清单：仅在 version.json 缺失时使用，必须与 compatibility.recommendedDsh 保持同步
 const DEFAULT_ADAPTED_VERSIONS = [
+  '0.1.7-rc.2',
   '0.1.7-rc.1',
   '0.1.7-alpha.2',
   '0.1.7-alpha.1',
@@ -116,7 +117,7 @@ const DEFAULT_ADAPTED_VERSIONS = [
 ];
 
 // 版本探测失败时的兜底版本号（优先取 version.json 供应链固定版本）
-const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.1.7-rc.1';
+const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.1.7-rc.2';
 
 function parseSemver(v = '') {
   const clean = String(v).replace(/^v/, '').trim();
@@ -136,6 +137,177 @@ function compareSemver(v1, v2) {
   return p1.pre.localeCompare(p2.pre);
 }
 
+// ── 版本存储库（持久化路径）与目录置换原语 ──────────────────────────────
+// Issue #7 修复：版本归档原先落在 /app（容器可写层），容器重建或镜像更新即蒸发，
+// 导致「切回旧版必须重新下载」。现迁移到持久化路径 $DSH_SNAPSHOTS_DIR/versions
+// （复用快照卷，见下方 VERSIONS_DIR），并把「先 rm -rf 活动核心再 cp」改为
+// 「staging 复制 + 目录置换（优先 rename；overlayfs lower 层退化为复制 + 删除）」。
+const DSH_HOME_DIR = process.env.DSH_HOME || '/root';
+// 版本库默认落在「快照与备份」卷内的子目录（复用现有 ./data/snapshots 挂载，不再新增挂载点）。
+// 它是惰性缓存：只在「切换版本」时被读取，其余时间可随时删除（代价仅是该次回切重新下载）。
+// 需要隔离的用户可用 DSH_VERSIONS_DIR 指到独立卷，例如 /root/.dsh-versions。
+const VERSIONS_DIR = process.env.DSH_VERSIONS_DIR || path.join(SNAPSHOTS_DIR, 'versions');
+const STORE_STAGING_DIR = path.join(VERSIONS_DIR, '.staging');
+// 测试钩子：允许把「活动核心父目录 / dsh 软链」指到临时目录，从而在单元测试中覆盖
+// 置换与回滚逻辑。生产环境不设置这些变量，行为完全一致。
+const LIVE_CORE_PARENT = process.env.DSH_TEST_CORE_PARENT || '/usr/local/lib/node_modules/@deepseek-ai';
+const LIVE_CORE_DIR = path.join(LIVE_CORE_PARENT, 'dsh');
+const DSH_BIN_LINK = process.env.DSH_TEST_BIN_LINK || '/usr/local/bin/dsh';
+const ROLLBACK_PRESERVED_DIR = path.join(LIVE_CORE_PARENT, '.dsh-rollback-preserved');
+const READY_FILE = '.ready';
+const GC_KEEP_DEFAULT = Number(process.env.DSH_VERSIONS_KEEP) || 3;
+// 切换前磁盘水位阈值（MB，默认 1536；可用 DSH_VERSIONS_MIN_FREE_MB 覆盖，便于低配环境与故障演练）
+const MIN_FREE_BYTES = Math.max(64, Number(process.env.DSH_VERSIONS_MIN_FREE_MB) || 1536) * 1024 * 1024;
+
+// 镜像版本标识：同一 dsh 版本号可能出现在不同项目镜像里（version.json 未变则 dshVersion 相同），
+// 记录进 .ready 便于诊断「归档来自哪个镜像」。
+const IMAGE_REVISION = (() => {
+  const p = (VERSION_META && VERSION_META.latest && VERSION_META.latest.version) || 'unknown';
+  const d = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || 'unknown';
+  return `proj${p}-dsh${d}`;
+})();
+
+try { fs.mkdirSync(STORE_STAGING_DIR, { recursive: true }); } catch {}
+
+/** 执行外部命令并在失败时抛错（替代裸 spawnSync 的静默失败） */
+function runSyncSafe(cmd, args, options = {}) {
+  const res = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, ...options });
+  if (res.error) throw new Error(`执行 ${cmd} 失败: ${res.error.message}`);
+  if (res.status !== 0) {
+    const detail = String(res.stderr || res.stdout || '').trim().slice(0, 300);
+    throw new Error(`${cmd} ${args.slice(0, 2).join(' ')} … 退出码 ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  return res;
+}
+
+function isNonEmptyDir(p) {
+  try { return fs.statSync(p).isDirectory() && fs.readdirSync(p).length > 0; } catch { return false; }
+}
+
+/**
+ * 把目录 src 移动到 dst。
+ * 关键坑（远程实测）：overlayfs 上「位于 lower 层（镜像只读层）的目录」无法被 rename——
+ * 内核会返回 EXDEV（cross-device link not permitted）。活动核心 `/usr/local/lib/node_modules/
+ * @deepseek-ai/dsh` 在容器启动后若未被改写，就恰好位于 lower 层，此时必须退化为「复制 + 删除」。
+ * 语义等价，代价是多一次拷贝（仅每个容器世代首次切换时会命中该分支）。
+ * @returns {'rename'|'copy'}
+ */
+function moveDirOrCopy(src, dst) {
+  try {
+    fs.renameSync(src, dst);
+    return 'rename';
+  } catch (e) {
+    if (e.code !== 'EXDEV') throw e;
+    fs.mkdirSync(dst, { recursive: true });
+    runSyncSafe('cp', ['-a', src + '/.', dst + '/']);
+    runSyncSafe('rm', ['-rf', src]);
+    return 'copy';
+  }
+}
+
+/** 用备份目录恢复活动核心（同样兼容 overlayfs 的 EXDEV） */
+function restoreCoreFromBackup(backupDir) {
+  if (!fs.existsSync(backupDir)) throw new Error('回滚点不存在，无法还原');
+  try { fs.rmSync(LIVE_CORE_DIR, { recursive: true, force: true }); } catch {}
+  moveDirOrCopy(backupDir, LIVE_CORE_DIR);
+}
+
+/** 统计目录的文件数与总字节（用于 .ready 完整性元数据） */
+function measureDir(dir) {
+  let files = 0;
+  let bytes = 0;
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const p = path.join(cur, e.name);
+      if (e.isDirectory()) stack.push(p);
+      else if (e.isFile()) { files++; try { bytes += fs.statSync(p).size; } catch {} }
+    }
+  }
+  return { files, bytes };
+}
+
+function readReadyMarker(dir) {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(dir, READY_FILE), 'utf8'));
+    return (m && typeof m === 'object') ? m : null;
+  } catch { return null; }
+}
+
+/** 归档目录是否「完整可用」：.ready 签名 + package.json + 非空 node_modules，且 Node ABI / 架构匹配 */
+function isReadyVersionDir(dir) {
+  if (!dir || !fs.existsSync(path.join(dir, 'package.json'))) return false;
+  const marker = readReadyMarker(dir);
+  if (!marker) return false; // 无签名 → 视为半成品，绝不部署
+  if (marker.nodeAbi && String(marker.nodeAbi) !== String(process.versions.modules)) return false;
+  if (marker.arch && marker.arch !== process.arch) return false;
+  return isNonEmptyDir(path.join(dir, 'node_modules'));
+}
+
+function writeReadyMarker(dir, version) {
+  const { files, bytes } = measureDir(dir);
+  const marker = {
+    version,
+    nodeAbi: process.versions.modules,
+    nodeVersion: process.versions.node,
+    arch: process.arch,
+    imageRevision: IMAGE_REVISION,
+    fileCount: files,
+    sizeBytes: bytes,
+    createdAt: new Date().toISOString()
+  };
+  fs.writeFileSync(path.join(dir, READY_FILE), JSON.stringify(marker, null, 2));
+  return marker;
+}
+
+function dirSizeBytes(dir) {
+  return measureDir(dir).bytes;
+}
+
+function formatBytes(n) {
+  if (!Number.isFinite(n)) return '未知';
+  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(2) + ' GB';
+  if (n >= 1024 ** 2) return (n / 1024 ** 2).toFixed(1) + ' MB';
+  return (n / 1024).toFixed(0) + ' KB';
+}
+
+/** 目标路径是否落在某个真实挂载点下（用于判断版本库是否真的持久化） */
+function isMountedPath(p) {
+  try {
+    const info = fs.readFileSync('/proc/self/mountinfo', 'utf8');
+    return info.split('\n').some(line => {
+      const mp = (line.split(' ')[4] || '');
+      return mp && mp !== '/' && (p === mp || p.startsWith(mp.endsWith('/') ? mp : mp + '/'));
+    });
+  } catch { return false; }
+}
+
+/** 列出持久化版本库中的条目（含体积与最后使用时间） */
+function listStoreEntries() {
+  const out = [];
+  let names = [];
+  try { names = fs.readdirSync(VERSIONS_DIR); } catch { return out; }
+  for (const name of names) {
+    if (name.startsWith('.')) continue;
+    const dir = path.join(VERSIONS_DIR, name);
+    let st;
+    try { st = fs.statSync(dir); } catch { continue; }
+    if (!st.isDirectory()) continue;
+    out.push({
+      version: name,
+      dir,
+      ready: isReadyVersionDir(dir),
+      marker: readReadyMarker(dir),
+      mtimeMs: st.mtimeMs,
+      sizeBytes: dirSizeBytes(dir)
+    });
+  }
+  return out;
+}
+
 class DshManager {
   constructor() {
     this.proc = null;
@@ -146,7 +318,11 @@ class DshManager {
     this.registry = process.env.NPM_REGISTRY || 'https://registry.npmmirror.com';
     this.launchToken = '';
     this.upstreamCookie = '';
-    this.versionsCacheDir = '/app/.dsh-versions-cache';
+    // 持久化版本库（Issue #7）：容器重建 / 镜像更新后仍保留，回切免下载秒级还原
+    this.versionsCacheDir = VERSIONS_DIR;
+    // 容器层就地回滚点受保护槽位（单槽位保留一份，不持久化）
+    this.rollbackPreservedDir = ROLLBACK_PRESERVED_DIR;
+    this.lastGcAt = 0;
     this.restartTimer = null;
     this.lastCrashTime = 0;
     this.manualStopped = false;
@@ -162,7 +338,12 @@ class DshManager {
     this._opChain = Promise.resolve();
     // 崩溃时间窗口（M4）：只按"最近一段时间内的崩溃次数"熔断，而不是被一次就绪清零
     this.crashWindow = [];
-    try { fs.mkdirSync(this.versionsCacheDir, { recursive: true }); } catch {}
+    try {
+      fs.mkdirSync(this.versionsCacheDir, { recursive: true });
+    } catch (e) {
+      // 不再静默：版本库不可写会导致「回切必须重新下载」，必须让运维看得见
+      console.warn(`[dsh-manager] ⚠️ 版本库目录不可用 (${this.versionsCacheDir}): ${e.message}；版本回切将退化为重新下载`);
+    }
   }
 
   // 把生命周期操作串行化：前序操作无论成功失败都不阻塞后续操作
@@ -374,26 +555,39 @@ class DshManager {
     try {
       if (!fs.existsSync(this.versionsCacheDir)) return [];
       return fs.readdirSync(this.versionsCacheDir).filter(name => {
-        const pkg = path.join(this.versionsCacheDir, name, 'package.json');
-        return fs.existsSync(pkg);
+        if (name.startsWith('.')) return false; // 跳过 .staging 等内部目录
+        // 必须通过 .ready 完整性校验：半成品（只落了 package.json）绝不算「已缓存」
+        return isReadyVersionDir(path.join(this.versionsCacheDir, name));
       });
     } catch {
       return [];
     }
   }
 
-  getAdaptedVersions() {
+  getAdaptedVersions(meta = null) {
     if (process.env.ADAPTED_DSH_VERSIONS) {
       return process.env.ADAPTED_DSH_VERSIONS.split(',').map(s => s.trim()).filter(Boolean);
     }
-    // 单一数据源：优先读取 version.json 的 compatibility.adaptedVersions
-    const list = VERSION_META && VERSION_META.compatibility && VERSION_META.compatibility.adaptedVersions;
-    if (Array.isArray(list) && list.length) return list;
+    let liveMeta = meta;
+    if (!liveMeta) {
+      try {
+        const versionService = require('./version-service');
+        if (versionService && typeof versionService.getLiveMeta === 'function') {
+          liveMeta = versionService.getLiveMeta();
+        }
+      } catch {}
+    }
+    const liveList = liveMeta && liveMeta.compatibility && liveMeta.compatibility.adaptedVersions;
+    if (Array.isArray(liveList) && liveList.length) return liveList;
+
+    // 单一数据源回退：本地 version.json -> DEFAULT_ADAPTED_VERSIONS
+    const localList = VERSION_META && VERSION_META.compatibility && VERSION_META.compatibility.adaptedVersions;
+    if (Array.isArray(localList) && localList.length) return localList;
     return DEFAULT_ADAPTED_VERSIONS;
   }
 
-  isAdaptedVersion(ver) {
-    const list = this.getAdaptedVersions();
+  isAdaptedVersion(ver, meta = null) {
+    const list = this.getAdaptedVersions(meta);
     return list.includes(ver);
   }
 
@@ -403,6 +597,7 @@ class DshManager {
     }
 
     const paths = [
+      path.join(LIVE_CORE_DIR, 'package.json'),
       '/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json',
       '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/package.json'
     ];
@@ -430,7 +625,7 @@ class DshManager {
     return this.lastKnownVersion || FALLBACK_DSH_VERSION;
   }
 
-  async fetchAvailableVersions(force = false) {
+  async fetchAvailableVersions(force = false, meta = null) {
     let distTags = {};
     let versions = [];
 
@@ -483,7 +678,7 @@ class DshManager {
       isUpToDate,
       distTags,
       cachedVersions: this.getCachedVersions(),
-      adaptedVersions: this.getAdaptedVersions(),
+      adaptedVersions: this.getAdaptedVersions(meta),
       versions: Array.isArray(versions) ? versions.reverse() : [],
       registry: this.registry
     };
@@ -891,7 +1086,7 @@ class DshManager {
     return isValidVersion(value);
   }
 
-  async installVersion(version, onProgress, onLog) {
+  async installVersion(version, onProgress, onLog, options = {}) {
     // 入口强校验：版本号必须是合法 semver，杜绝 `../` 目录穿越与 npm 说明符注入
     const normalizedVersion = typeof version === 'string' ? version.trim() : '';
     if (!isValidVersion(normalizedVersion)) {
@@ -923,6 +1118,13 @@ class DshManager {
     };
 
     const previousVersion = this.getCurrentVersion() || '0.1.2-rc.1';
+    // 是否归档当前引擎版本：由切换前弹窗的勾选决定（默认勾选，用户可取消）。
+    // 归档是纯用户功能——熔断回滚走「切换期间保留的回滚点」，不依赖它。
+    const archiveCurrent = options && options.archiveCurrent === true;
+    let stagingDir = null; // 容器层待激活目录（失败时需清理，避免残留）
+    let tmpPrefix = null; // npm 临时前缀（必须在 try 之外声明，否则 catch 块看不到）
+    let rollbackDir = null; // 置换时保留的旧核心回滚点（探活通过后才清理）
+    let coreMutated = false; // 是否已开始改动现网核心（未改动则失败时无需熔断回滚）
 
     try {
       // === 阶段 1/5: 切换预检与环境检查 ===
@@ -952,44 +1154,67 @@ class DshManager {
       }
       log(`✔ 预检通过：环境就绪，软件源: ${this.registry}`);
 
-      // === 阶段 2/5: 本地安全快照存档 (保障随时秒级熔断回滚) ===
-      emitProgress({ step: 2, total: 5, percent: 25, label: '备份当前稳定版本快照', mode: 'install' });
-      log(`=== [阶段 2/5] 本地安全快照存档 (保障秒级熔断回滚) ===`);
-      // 纵深防御：即便 previousVersion 来自 package.json，也强制落在缓存目录内
-      let prevBackup;
-      try {
-        prevBackup = resolveWithinDir(this.versionsCacheDir, previousVersion);
-      } catch (e) {
-        log(`⚠️ 跳过本地快照（当前版本号不合法）: ${e.message}`);
-        prevBackup = path.join(this.versionsCacheDir, '.invalid-' + Date.now());
-      }
-      if (!fs.existsSync(prevBackup) && fs.existsSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json')) {
-        log(`正在对当前稳定版本 ${previousVersion} 生成本地秒级快照存档...`);
-        spawnSync('mkdir', ['-p', prevBackup]);
-        spawnSync('cp', ['-a', '/usr/local/lib/node_modules/@deepseek-ai/dsh/.', prevBackup + '/']);
-        log(`✔ 稳定版本 ${previousVersion} 本地快照存档就绪`);
-      } else if (fs.existsSync(prevBackup)) {
-        log(`✔ 本地已存在稳定版本 ${previousVersion} 的快照存档，具备秒级回滚能力`);
+      // 磁盘水位预检（前置闸门）：归档旧版本 + 下载新版本都会写入版本库卷，
+      // 提前拦截可避免磁盘将满时白下载 540MB。
+      this._assertDiskSpace([this.versionsCacheDir, LIVE_CORE_PARENT], MIN_FREE_BYTES, log);
+
+      // === 阶段 2/5: （可选）归档当前引擎至持久化版本库 ===
+      emitProgress({ step: 2, total: 5, percent: 25, label: archiveCurrent ? '备份当前引擎版本' : '跳过引擎备份', mode: 'install' });
+      log(`=== [阶段 2/5] 当前引擎版本归档（${archiveCurrent ? '用户已勾选' : '未勾选 → 跳过'}） ===`);
+      log(`📦 版本库: ${this.versionsCacheDir}${isMountedPath(this.versionsCacheDir) ? ' (持久化卷 ✔，容器重建/镜像更新后仍保留)' : ' (⚠️ 不在挂载点内：容器重建后归档会丢失)'}`);
+      if (!archiveCurrent) {
+        log(`ℹ️ 未勾选「归档当前引擎」→ 跳过。切换失败仍会自动秒级回滚（走切换期间保留的回滚点，不依赖归档、不联网）。`);
+      } else if (!isValidVersion(previousVersion)) {
+        log(`⚠️ 跳过归档：当前版本号不合法 (${previousVersion})，不向版本库写入脏目录`);
       } else {
-        log(`ℹ️ 当前运行版本无本地快照，熔断时将通过 npm 镜像源自动拉取回滚`);
+        const prevArchive = resolveWithinDir(this.versionsCacheDir, previousVersion);
+        if (isReadyVersionDir(prevArchive)) {
+          this._touchVersionUsage(previousVersion);
+          log(`✔ 版本库中已存在完整归档 ${previousVersion}，无需重复归档`);
+        } else {
+          if (fs.existsSync(prevArchive)) {
+            log(`⚠️ 检测到不完整的旧归档 ${previousVersion}，删除重建（避免残缺版本被误判为可用）`);
+            fs.rmSync(prevArchive, { recursive: true, force: true });
+          }
+          if (fs.existsSync(path.join(LIVE_CORE_DIR, 'package.json'))) {
+            log(`正在归档当前引擎 ${previousVersion} 至持久化版本库...`);
+            const archTmp = path.join(STORE_STAGING_DIR, `archive-${process.pid}-${Date.now()}`);
+            try {
+              fs.mkdirSync(archTmp, { recursive: true });
+              runSyncSafe('cp', ['-a', LIVE_CORE_DIR + '/.', archTmp + '/']);
+              writeReadyMarker(archTmp, previousVersion);
+              fs.renameSync(archTmp, prevArchive);
+              log(`✔ 已归档 ${previousVersion} (${formatBytes(dirSizeBytes(prevArchive))})，之后切回本版本免下载`);
+            } catch (e) {
+              try { fs.rmSync(archTmp, { recursive: true, force: true }); } catch {}
+              log(`⚠️ 归档失败（不影响本次切换）: ${e.message}`);
+            }
+          } else {
+            log(`ℹ️ 未找到活动核心，跳过归档`);
+          }
+        }
       }
 
-      // === 阶段 3/5: 部署目标核心版本 ===
+      // === 阶段 3/5: 部署目标核心版本（先落 staging，再原子置换，绝不先删后拷） ===
       emitProgress({ step: 3, total: 5, percent: 40, label: '获取目标版本核心包', mode: 'install' });
       log(`=== [阶段 3/5] 部署目标核心版本 @deepseek-ai/dsh@${version} ===`);
-      const targetCached = resolveWithinDir(this.versionsCacheDir, version);
-      if (fs.existsSync(path.join(targetCached, 'package.json'))) {
-        log(`⚡ [秒级加速] 命中本地版本高速快照缓存，正在秒级部署 ${version}...`);
-        spawnSync('rm', ['-rf', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
-        spawnSync('mkdir', ['-p', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
-        spawnSync('cp', ['-a', targetCached + '/.', '/usr/local/lib/node_modules/@deepseek-ai/dsh/']);
-        spawnSync('ln', ['-sfn', '/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js', '/usr/local/bin/dsh']);
-        log(`✔ 核心文件与软链已完成秒级还原 (耗时 < 1s)`);
-        emitProgress({ step: 3, total: 5, percent: 60, label: '目标核心秒级解压就绪', mode: 'install' });
+      const targetArchive = resolveWithinDir(this.versionsCacheDir, version);
+      let sourceDir = null;
+      if (isReadyVersionDir(targetArchive)) {
+        sourceDir = targetArchive;
+        this._touchVersionUsage(version);
+        log(`⚡ [免下载] 命中持久化版本库 ${version}，直接从本地归档部署（无需联网）`);
       } else {
+        if (fs.existsSync(targetArchive)) {
+          log(`⚠️ 版本库中的 ${version} 归档不完整，已忽略并改为重新下载`);
+          fs.rmSync(targetArchive, { recursive: true, force: true });
+        }
         log(`正在从 npm 镜像源下载并安装 @deepseek-ai/dsh@${version} (源: ${this.registry})...`);
+        const tmpPrefixPath = path.join(STORE_STAGING_DIR, `npm-${process.pid}-${Date.now()}`);
+        tmpPrefix = tmpPrefixPath;
+        fs.mkdirSync(tmpPrefixPath, { recursive: true });
         const installArgs = [
-          'install', '-g', '--omit=dev', '--no-audit', '--no-fund',
+          'install', '-g', '--prefix', tmpPrefixPath, '--omit=dev', '--no-audit', '--no-fund',
           `--registry=${this.registry}`,
           `@deepseek-ai/dsh@${version}`
         ];
@@ -1022,11 +1247,52 @@ class DshManager {
         const exitCode = await new Promise(r => child.on('close', r));
         clearInterval(heartbeat);
 
-        if (exitCode !== 0) throw new Error(`npm install 安装异常，退出码: ${exitCode}`);
+        if (exitCode !== 0) {
+          try { fs.rmSync(tmpPrefix, { recursive: true, force: true }); } catch {}
+          throw new Error(`npm install 安装异常，退出码: ${exitCode}`);
+        }
         const totalSec = ((Date.now() - startTime) / 1000).toFixed(1);
         log(`✔ npm 下载并解压完成，总耗时 ${totalSec}s`);
+        // 镜像构建期会对 node-pty 做原生重建（Dockerfile）；在线下载同样补齐，避免终端原生模块缺失
+        try {
+          const rb = spawnSync('npm', ['rebuild', 'node-pty', '--foreground-scripts', '--prefix', tmpPrefixPath], { encoding: 'utf8', timeout: 180000 });
+          if (rb.status !== 0) log(`⚠️ node-pty 原生重建未成功（不阻断切换）: ${String(rb.stderr || '').trim().slice(0, 200)}`);
+          else log(`✔ node-pty 原生模块已就绪`);
+        } catch (e) {
+          log(`⚠️ node-pty 原生重建异常（不阻断切换）: ${e.message}`);
+        }
+        sourceDir = path.join(tmpPrefixPath, 'lib/node_modules/@deepseek-ai/dsh');
+        if (!fs.existsSync(path.join(sourceDir, 'package.json'))) {
+          throw new Error('npm 安装完成但未找到 @deepseek-ai/dsh 产物');
+        }
+        // 注意：这里不再「下载即归档」——归档是用户显式选择的行为（见阶段 2），
+        // 系统不会在后台悄悄占用磁盘。
         emitProgress({ step: 3, total: 5, percent: 60, label: '目标版本下载安装完成', mode: 'install' });
       }
+
+      // 磁盘水位预检：版本库卷与容器层都要有足够空间，不足则干净中止
+      this._assertDiskSpace([this.versionsCacheDir, LIVE_CORE_PARENT], MIN_FREE_BYTES, log);
+
+      // 构建隔离 staging（与活动核心同文件系统 → 优先 rename；overlayfs lower 层会退化为复制）
+      const stagingPath = path.join(LIVE_CORE_PARENT, `.dsh-staging-${process.pid}-${Date.now()}`);
+      stagingDir = stagingPath;
+      fs.mkdirSync(stagingPath, { recursive: true });
+      runSyncSafe('cp', ['-a', sourceDir + '/.', stagingPath + '/']);
+      const stagedPkg = JSON.parse(fs.readFileSync(path.join(stagingPath, 'package.json'), 'utf8'));
+      if (stagedPkg.version !== version) {
+        throw new Error(`staging 版本校验失败：期望 ${version}，实际 ${stagedPkg.version}`);
+      }
+      log(`✔ 目标版本 ${version} 已在隔离 staging 目录就绪（现网服务全程未受影响）`);
+      // staging 已就绪，npm 临时前缀不再需要（避免在持久化卷上遗留 ~540MB 垃圾）
+      if (tmpPrefix) { try { fs.rmSync(tmpPrefix, { recursive: true, force: true }); } catch {} tmpPrefix = null; }
+
+      // 原子置换：先停进程（杜绝旧进程惰性 require 到新树），再 rename
+      log(`正在停止 DSH 进程以执行核心目录原子置换...`);
+      coreMutated = true;
+      await this.stop();
+      rollbackDir = this._atomicSwapCore(stagingPath);
+      stagingDir = null;
+      log(`✔ 核心目录已完成原子置换（staging → live，全程无「先删后拷」窗口）`);
 
       // === 阶段 4/5: 插件装配与宿主补丁自愈 ===
       emitProgress({ step: 4, total: 5, percent: 70, label: '插件装配与补丁自愈', mode: 'install' });
@@ -1071,11 +1337,29 @@ class DshManager {
       }
 
       const currentVer = this.getCurrentVersion();
-      // 安装就绪成功后，存入本地高速快照
-      if (!fs.existsSync(targetCached) && fs.existsSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json')) {
-        log(`正在将新版本 ${version} 归档至本地高速快照缓存...`);
-        spawnSync('mkdir', ['-p', targetCached]);
-        spawnSync('cp', ['-a', '/usr/local/lib/node_modules/@deepseek-ai/dsh/.', targetCached + '/']);
+      // 探活通过：切换已经成功，将本次换下的核心提升为受保护槽位（不再自动清理，单槽位保留一份）
+      if (rollbackDir && fs.existsSync(rollbackDir)) {
+        try {
+          this._promoteToPreservedRollback(rollbackDir, previousVersion);
+          log(`✔ 前序核心已转为就地回滚点保留，如需释放空间请到【快照与备份】面板手动清理`);
+        } catch (promoteErr) {
+          log(`⚠️ 回滚点提升保留非致命跳过: ${promoteErr.message}`);
+        }
+        rollbackDir = null;
+      }
+      // 切换主流程完成：先解除安装中互斥锁，允许后续的后台 GC 与状态查询正常执行
+      this.installing = false;
+      this.lastKnownVersion = '';
+
+      // 注意：不再自动归档新版本——归档是用户在切换前勾选的行为（阶段 2）。
+      // 版本库容量治理：LRU 保留（默认 3 份），活动版本与镜像出厂基准版本永不被清理
+      try {
+        const gc = this.gcVersions({ keepN: GC_KEEP_DEFAULT, activeVersion: currentVer });
+        if (gc && gc.ok && Array.isArray(gc.removed) && gc.removed.length) {
+          log(`🧹 版本库 GC：已清理 ${gc.removed.length} 个旧版本，释放 ${formatBytes(gc.freedBytes)}`);
+        }
+      } catch (e) {
+        log(`⚠️ 版本库 GC 跳过: ${e.message}`);
       }
 
       emitProgress({
@@ -1092,12 +1376,12 @@ class DshManager {
       log(`🌐 工作区访问地址: http://127.0.0.1:${DSH_PORT}`);
       log(`======================================================================`);
 
-      this.installing = false;
-      // M5：切换成功后必须让版本缓存失效，否则 getStatus().version 与"回滚目标"都会停留在旧值
-      this.lastKnownVersion = '';
       return { ok: true, version: currentVer };
 
     } catch (err) {
+      // 清理未激活的 staging 残留（绝不触碰活动核心）
+      if (stagingDir) { try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {} stagingDir = null; }
+      if (tmpPrefix) { try { fs.rmSync(tmpPrefix, { recursive: true, force: true }); } catch {} tmpPrefix = null; }
       log(`======================================================================`);
       log(`❌ 新版本安装或启动失败: ${err.message}`);
       // 打印失败根因分析
@@ -1112,6 +1396,18 @@ class DshManager {
         log(`可能原因: 进程在 60 秒内未监听端口 ${DSH_PORT}，或端口无有效 HTTP 响应`);
       }
       log(`-----------------------------------------------------------`);
+      if (!coreMutated) {
+        // 尚未触碰现网核心（预检/下载/校验阶段失败）：无需停服回滚，服务继续原样运行
+        log(`ℹ️ 现网核心未做任何改动，无需熔断回滚；服务继续运行在当前版本 v${previousVersion}`);
+        this.installing = false;
+        this.lastKnownVersion = '';
+        return { ok: false, error: `切换已中止（现网未受影响）: ${err.message}`, untouched: true, version: previousVersion };
+      }
+      // 置换阶段抛错时可能已生成回滚点（见 _atomicSwapCore 的 err.rollbackDir），这里接过来兜底还原
+      if (!rollbackDir && err && err.rollbackDir && fs.existsSync(err.rollbackDir)) {
+        rollbackDir = err.rollbackDir;
+        log(`ℹ️ 检测到置换阶段留下的回滚点，将优先从它还原`);
+      }
       log(`⚠️ 触发安全熔断保护机制：正在秒级自动回滚至稳定版本 v${previousVersion}...`);
       log(`======================================================================`);
 
@@ -1124,25 +1420,42 @@ class DshManager {
       });
 
       try {
-        const prevCached = resolveWithinDir(this.versionsCacheDir, previousVersion);
-        if (fs.existsSync(path.join(prevCached, 'package.json'))) {
-          log(`[回滚 1/3] ⚡ 从本地快照中秒级还原稳定核心 ${previousVersion}...`);
-          spawnSync('rm', ['-rf', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
-          spawnSync('mkdir', ['-p', '/usr/local/lib/node_modules/@deepseek-ai/dsh']);
-          spawnSync('cp', ['-a', prevCached + '/.', '/usr/local/lib/node_modules/@deepseek-ai/dsh/']);
-          spawnSync('ln', ['-sfn', '/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js', '/usr/local/bin/dsh']);
-          log(`✔ 稳定核心文件已秒级还原完毕`);
+        if (rollbackDir && fs.existsSync(rollbackDir)) {
+          // 首选：切换期间保留的旧核心回滚点 —— 本地秒级还原，不联网、不依赖归档
+          log(`[回滚 1/3] ⚡ 从切换期间保留的回滚点秒级还原稳定核心 ${previousVersion}（无需归档/联网）...`);
+          await this.stop();
+          this._restoreFromRollbackDir(rollbackDir);
+          rollbackDir = null;
+          log(`✔ 稳定核心已从回滚点秒级还原完毕`);
         } else {
-          log(`[回滚 1/3] 本地无快照，从 npm 源重新拉回稳定版本 ${previousVersion}...`);
-          const rbArgs = [
-            'install', '-g', '--omit=dev', '--no-audit', '--no-fund',
-            `--registry=${this.registry}`,
-            `@deepseek-ai/dsh@${previousVersion}`
-          ];
-          const rbChild = spawn('npm', rbArgs, { env: process.env });
-          rbChild.stdout.on('data', d => d.toString().split('\n').map(l => l.trim()).filter(Boolean).forEach(l => log(`[回滚] ${l}`)));
-          rbChild.stderr.on('data', d => d.toString().split('\n').map(l => l.trim()).filter(Boolean).forEach(l => log(`[回滚] ${l}`)));
-          await new Promise(r => rbChild.on('close', r));
+          const prevCached = resolveWithinDir(this.versionsCacheDir, previousVersion);
+          if (isReadyVersionDir(prevCached)) {
+            log(`[回滚 1/3] ⚡ 从持久化版本库免下载还原稳定核心 ${previousVersion}...`);
+            await this.stop();
+            const rbStaging = path.join(LIVE_CORE_PARENT, `.dsh-staging-rb-${process.pid}-${Date.now()}`);
+            fs.mkdirSync(rbStaging, { recursive: true });
+            try {
+              runSyncSafe('cp', ['-a', prevCached + '/.', rbStaging + '/']);
+              this._disposeRollbackDir(this._atomicSwapCore(rbStaging)); // 换下来的坏核心立即丢弃
+            } catch (rbSwapErr) {
+              try { fs.rmSync(rbStaging, { recursive: true, force: true }); } catch {}
+              throw rbSwapErr;
+            }
+            log(`✔ 稳定核心文件已免下载还原完毕`);
+          } else {
+            log(`[回滚 1/3] 版本库无完整归档，从 npm 源重新拉回稳定版本 ${previousVersion}...`);
+            const rbArgs = [
+              'install', '-g', '--omit=dev', '--no-audit', '--no-fund',
+              `--registry=${this.registry}`,
+              `@deepseek-ai/dsh@${previousVersion}`
+            ];
+            const rbChild = spawn('npm', rbArgs, { env: process.env });
+            rbChild.stdout.on('data', d => d.toString().split('\n').map(l => l.trim()).filter(Boolean).forEach(l => log(`[回滚] ${l}`)));
+            rbChild.stderr.on('data', d => d.toString().split('\n').map(l => l.trim()).filter(Boolean).forEach(l => log(`[回滚] ${l}`)));
+            const rbExit = await new Promise(r => rbChild.on('close', r));
+            if (rbExit !== 0) throw new Error(`npm 回滚安装异常，退出码: ${rbExit}`);
+            try { runSyncSafe('ln', ['-sfn', path.join(LIVE_CORE_DIR, 'lib/bin.js'), DSH_BIN_LINK]); } catch {}
+          }
         }
 
         emitProgress({
@@ -1205,9 +1518,607 @@ class DshManager {
         };
       } catch (rbErr) {
         log(`💥 [严重警报] 自动回滚遇到异常: ${rbErr.message}`);
+        // 兜底 1：活动核心缺失但回滚点还在 → 尽力还原，避免容器变砖
+        if (rollbackDir && fs.existsSync(rollbackDir) && !fs.existsSync(path.join(LIVE_CORE_DIR, 'package.json'))) {
+          try {
+            this._restoreFromRollbackDir(rollbackDir);
+            rollbackDir = null;
+            log(`🛡️ [兜底还原] 已从回滚点紧急还原原核心。`);
+          } catch (e2) {
+            log(`💥 [兜底还原失败] 回滚点保留于 ${rollbackDir}，可重启容器由 entrypoint 自愈。`);
+          }
+        }
+        // 兜底 2：核心文件已在（很可能已是旧版），但服务没起来 → 尽力拉起，避免"核心在却不可用"
+        let booted = false;
+        if (fs.existsSync(path.join(LIVE_CORE_DIR, 'package.json'))) {
+          try {
+            const b = await this.boot();
+            booted = !!(b && b.ok);
+            if (booted) log(`🛡️ [兜底启动] 已重新拉起 DSH 服务。`);
+          } catch (e3) {
+            log(`⚠️ 兜底启动失败: ${e3.message}`);
+          }
+        }
         this.installing = false;
-        return { ok: false, error: `切换失败且回滚异常: ${rbErr.message}` };
+        return {
+          ok: false,
+          error: `切换失败且回滚异常: ${rbErr.message}`,
+          rolledBack: booted,
+          version: previousVersion,
+          hint: booted ? '服务已重新拉起' : '核心文件仍在，但服务可能未就绪，建议重启容器'
+        };
       }
+    }
+  }
+
+  // === 版本库治理与原子置换原语 (Issue #7) ===
+
+  /** 标记版本最近使用时间（LRU 依据）；失败不影响主流程 */
+  _touchVersionUsage(version) {
+    try {
+      const dir = resolveWithinDir(this.versionsCacheDir, version);
+      const now = new Date();
+      fs.utimesSync(dir, now, now);
+    } catch {}
+  }
+
+  /**
+   * 原子置换活动核心目录：staging → live。
+   * 先把 live rename 到临时回滚点 (.dsh-rollback-tmp-*)，再把 staging rename 成 live（同文件系统，毫秒级）。
+   * 任一步失败立即把回滚点还原，保证「要么全旧、要么全新」，绝不出现半死半生。
+   */
+  _atomicSwapCore(stagingDirPath) {
+    const backupDir = path.join(LIVE_CORE_PARENT, `.dsh-rollback-tmp-${process.pid}-${Date.now()}`);
+    let moved = false;
+    if (fs.existsSync(LIVE_CORE_DIR)) {
+      // 先把现网核心挪到回滚点（lower 层目录在 overlayfs 上会退化为复制+删除）
+      try {
+        moveDirOrCopy(LIVE_CORE_DIR, backupDir);
+      } catch (e) {
+        // 把已生成的（可能是完整副本的）回滚点挂在错误上，供调用方兜底还原
+        const err = new Error(`核心目录置换失败（无法暂存原核心）: ${e.message}`);
+        if (fs.existsSync(backupDir)) err.rollbackDir = backupDir;
+        throw err;
+      }
+      moved = true;
+    }
+    try {
+      fs.renameSync(stagingDirPath, LIVE_CORE_DIR);
+    } catch (e) {
+      // 置换失败：立即还原回滚点，保证「要么全旧、要么全新」
+      if (moved) {
+        try { restoreCoreFromBackup(backupDir); }
+        catch (err) { console.error('[dsh-manager] 💥 还原原核心失败（需人工介入/重启容器自愈）:', err.message); }
+      }
+      throw new Error(`核心目录置换失败（已尝试还原原核心）: ${e.message}`);
+    }
+    // bin 软链目标路径固定不变，刷新失败不影响可用性 → best-effort
+    try {
+      runSyncSafe('ln', ['-sfn', path.join(LIVE_CORE_DIR, 'lib/bin.js'), DSH_BIN_LINK]);
+    } catch (e) {
+      console.warn(`[dsh-manager] ⚠️ dsh 软链刷新失败（不影响运行）: ${e.message}`);
+    }
+    // 关键：不在这里删除回滚点。回滚点保留到「健康探活通过」为止，
+    // 这样探活失败时的熔断回滚可以直接本地还原——既不依赖持久化归档，也不需要联网。
+    return moved ? backupDir : null;
+  }
+
+  /**
+   * 将临时回滚目录提升为容器层受保护的单槽位就地回滚点 (.dsh-rollback-preserved)
+   * 若已有旧备件，在提升成功后再删除旧的，保证轮替不提前破坏
+   */
+  _promoteToPreservedRollback(tmpDir, version = '') {
+    if (!tmpDir || !fs.existsSync(tmpDir)) return;
+    if (path.resolve(tmpDir) === path.resolve(ROLLBACK_PRESERVED_DIR)) return;
+
+    let ver = version;
+    if (!ver) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8'));
+        ver = pkg.version || '';
+      } catch {}
+    }
+    // 写入完整的 .ready 元数据标记（含 nodeAbi / arch / sizeBytes / createdAt 等）
+    try {
+      writeReadyMarker(tmpDir, ver || 'unknown');
+    } catch (e) {
+      console.warn(`[dsh-manager] ⚠️ 回滚点元数据写入跳过: ${e.message}`);
+    }
+
+    const oldPreserved = path.join(LIVE_CORE_PARENT, `.dsh-rollback-old-${process.pid}-${Date.now()}`);
+    let movedOld = false;
+
+    if (fs.existsSync(ROLLBACK_PRESERVED_DIR)) {
+      try {
+        moveDirOrCopy(ROLLBACK_PRESERVED_DIR, oldPreserved);
+        movedOld = true;
+      } catch (e) {
+        console.warn(`[dsh-manager] ⚠️ 暂存旧回滚点备件失败: ${e.message}`);
+      }
+    }
+
+    try {
+      moveDirOrCopy(tmpDir, ROLLBACK_PRESERVED_DIR);
+      if (movedOld && fs.existsSync(oldPreserved)) {
+        try { fs.rmSync(oldPreserved, { recursive: true, force: true }); } catch {}
+      }
+    } catch (err) {
+      if (movedOld && fs.existsSync(oldPreserved) && !fs.existsSync(ROLLBACK_PRESERVED_DIR)) {
+        try { moveDirOrCopy(oldPreserved, ROLLBACK_PRESERVED_DIR); } catch {}
+      }
+      throw new Error(`回滚点提升至受保护槽位失败: ${err.message}`);
+    }
+  }
+
+  /** 清理切换期间产生的临时回滚点目录 */
+  _disposeRollbackDir(dir) {
+    if (!dir) return;
+    try { fs.rmSync(dir, { recursive: true, force: true }); }
+    catch (e) { console.warn(`[dsh-manager] ⚠️ 清理回滚点失败（不影响运行）: ${e.message}`); }
+  }
+
+  /** 从回滚点目录还原活动核心（熔断回滚或就地还原路径，带 ABI 校验） */
+  _restoreFromRollbackDir(dir) {
+    if (!dir || !fs.existsSync(dir)) throw new Error('回滚点不存在，无法还原');
+    if (!fs.existsSync(path.join(dir, 'package.json'))) {
+      throw new Error('回滚点目录不完整（缺失 package.json），无法还原');
+    }
+    const marker = readReadyMarker(dir);
+    if (marker) {
+      if (marker.nodeAbi && String(marker.nodeAbi) !== String(process.versions.modules)) {
+        throw new Error(`回滚点 Node ABI (${marker.nodeAbi}) 与当前运行环境 (${process.versions.modules}) 不匹配，已拒绝还原`);
+      }
+      if (marker.arch && marker.arch !== process.arch) {
+        throw new Error(`回滚点系统架构 (${marker.arch}) 与当前运行环境 (${process.arch}) 不匹配，已拒绝还原`);
+      }
+    }
+    restoreCoreFromBackup(dir);
+  }
+
+  /** 磁盘水位预检：切换前确认目标路径有足够空间，不足则干净中止（现网服务不受影响） */
+  _assertDiskSpace(paths, needBytes, log = () => {}) {
+    for (const p of paths) {
+      try {
+        const st = fs.statfsSync(p);
+        const free = st.bavail * st.bsize;
+        if (free < needBytes) {
+          let hint = '（可先到【快照与备份】面板清理回滚点释放空间）';
+          try {
+            const rb = this.getRollbackPoint ? this.getRollbackPoint() : null;
+            if (rb && rb.exists && rb.sizeFormatted) {
+              hint = `（可先到【快照与备份】面板清理回滚点释放 ${rb.sizeFormatted} 空间）`;
+            }
+          } catch {}
+          throw new Error(`磁盘空间不足：${p} 可用 ${formatBytes(free)}，切换至少需要 ${formatBytes(needBytes)}${hint}（已拒绝切换，现网服务保持运行）`);
+        }
+        log(`✔ 磁盘水位检查通过 ${p}: 可用 ${formatBytes(free)}`);
+      } catch (e) {
+        if (/磁盘空间不足/.test(e.message)) throw e;
+        log(`ℹ️ 跳过磁盘水位检查 ${p}: ${e.message}`);
+      }
+    }
+  }
+
+  /** 版本库统计：容量、挂载状态、各版本体积与状态 */
+  getVersionsStoreStats() {
+    const activeVersion = this.getCurrentVersion();
+    const pinnedVersion = FALLBACK_DSH_VERSION;
+    let freeBytes = null;
+    let totalBytes = null;
+    try {
+      const st = fs.statfsSync(this.versionsCacheDir);
+      freeBytes = st.bavail * st.bsize;
+      totalBytes = st.blocks * st.bsize;
+    } catch {}
+    const versions = listStoreEntries().map(e => ({
+      version: e.version,
+      ready: e.ready,
+      sizeBytes: e.sizeBytes,
+      lastUsedAt: new Date(e.mtimeMs).toISOString(),
+      active: e.version === activeVersion,
+      pinned: e.version === pinnedVersion,
+      imageRevision: (e.marker && e.marker.imageRevision) || null
+    })).sort((a, b) => (a.version < b.version ? 1 : -1));
+    return {
+      ok: true,
+      dir: this.versionsCacheDir,
+      persisted: isMountedPath(this.versionsCacheDir),
+      freeBytes,
+      totalBytes,
+      keepN: GC_KEEP_DEFAULT,
+      activeVersion,
+      pinnedVersion,
+      totalSizeBytes: versions.reduce((s, v) => s + (v.sizeBytes || 0), 0),
+      versions
+    };
+  }
+
+  /**
+   * 版本库 LRU 清理：保留 keepN 份最近使用版本 + 活动版本 + 镜像出厂基准版本。
+   * 返回清理清单与释放空间；dryRun 只预览不删除。
+   */
+  gcVersions({ keepN = GC_KEEP_DEFAULT, dryRun = false, activeVersion = null } = {}) {
+    if (this.installing) return { ok: false, error: '版本切换进行中，已拒绝并发清理' };
+    const entries = listStoreEntries().filter(e => e.ready);
+    const keep = new Set();
+    const n = Math.max(1, Number(keepN) || GC_KEEP_DEFAULT);
+    for (const e of [...entries].sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, n)) keep.add(e.version);
+    for (const v of [activeVersion || this.getCurrentVersion(), FALLBACK_DSH_VERSION]) {
+      if (v) keep.add(v);
+    }
+    const removed = [];
+    for (const e of entries) {
+      if (keep.has(e.version)) continue;
+      if (dryRun) { removed.push({ version: e.version, bytes: e.sizeBytes, dryRun: true }); continue; }
+      try {
+        fs.rmSync(e.dir, { recursive: true, force: true });
+        removed.push({ version: e.version, bytes: e.sizeBytes });
+      } catch (err) {
+        console.warn(`[dsh-manager] 版本库清理失败 ${e.version}: ${err.message}`);
+      }
+    }
+    // 顺带清理过期的 staging 残留（>1 小时）
+    if (!dryRun) this.cleanupStagingOrphans();
+    this.lastGcAt = Date.now();
+    return { ok: true, dir: this.versionsCacheDir, kept: [...keep], removed, freedBytes: removed.reduce((s, r) => s + (r.bytes || 0), 0), dryRun };
+  }
+
+  /** 清理版本库 staging 与容器层 staging/rollback 残留（启动与 GC 时调用） */
+  cleanupStagingOrphans(maxAgeMs = 3600 * 1000) {
+    const now = Date.now();
+    for (const dir of [STORE_STAGING_DIR, LIVE_CORE_PARENT]) {
+      let names = [];
+      try { names = fs.readdirSync(dir); } catch { continue; }
+      for (const name of names) {
+        // 显式跳过受保护的就地回滚点单槽位备件，绝不自动清理
+        if (name === '.dsh-rollback-preserved') continue;
+        const isStoreStaging = dir === STORE_STAGING_DIR;
+        if (!isStoreStaging && !/^\.dsh-(staging|rollback)-/.test(name)) continue;
+        const p = path.join(dir, name);
+        try {
+          const st = fs.statSync(p);
+          if (now - st.mtimeMs < maxAgeMs) continue;
+          fs.rmSync(p, { recursive: true, force: true });
+          console.log(`[dsh-manager] 已清理过期残留: ${p}`);
+        } catch {}
+      }
+    }
+  }
+
+  /** 删除版本库中的指定版本（活动版本与镜像出厂基准版本受保护） */
+  deleteCachedVersion(version) {
+    if (this.installing) return { ok: false, error: '版本切换进行中，已拒绝并发删除' };
+    if (!isValidVersion(version)) return { ok: false, error: '版本号格式不合法' };
+    const activeVersion = this.getCurrentVersion();
+    if (version === activeVersion) return { ok: false, error: `版本 ${version} 正在运行，禁止删除` };
+    if (version === FALLBACK_DSH_VERSION) return { ok: false, error: `版本 ${version} 为镜像出厂基准版本，禁止删除` };
+    let dir;
+    try { dir = resolveWithinDir(this.versionsCacheDir, version); } catch (e) { return { ok: false, error: e.message }; }
+    if (!fs.existsSync(dir)) return { ok: false, error: `版本库中不存在版本 ${version}` };
+    fs.rmSync(dir, { recursive: true, force: true });
+    return { ok: true, version, dir };
+  }
+
+  // === 就地回滚点管理与就地还原 (Issue #7 引擎回滚点治理) ===
+
+  /**
+   * 获取当前容器层受保护的就地回滚点状态
+   * @returns {{ exists: boolean, version: string|null, sizeBytes: number, sizeFormatted: string, createdAt: string|null, nodeAbi: string|null, abiMatches: boolean, path: string, canRestore: boolean }}
+   */
+  getRollbackPoint() {
+    const p = ROLLBACK_PRESERVED_DIR;
+    if (!fs.existsSync(p)) {
+      return {
+        exists: false,
+        version: null,
+        sizeBytes: 0,
+        sizeFormatted: '0 B',
+        createdAt: null,
+        nodeAbi: null,
+        abiMatches: false,
+        path: p,
+        canRestore: false
+      };
+    }
+
+    let version = null;
+    const pkgPath = path.join(p, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        version = pkg.version || null;
+      } catch {}
+    }
+
+    const marker = readReadyMarker(p);
+    if (marker && marker.version) {
+      version = marker.version;
+    }
+
+    const currentAbi = String(process.versions.modules);
+    const currentArch = process.arch;
+    const nodeAbi = marker && marker.nodeAbi ? String(marker.nodeAbi) : currentAbi;
+    const arch = marker && marker.arch ? marker.arch : currentArch;
+    const abiMatches = (nodeAbi === currentAbi) && (arch === currentArch);
+
+    let sizeBytes = 0;
+    if (marker && typeof marker.sizeBytes === 'number' && marker.sizeBytes > 0) {
+      sizeBytes = marker.sizeBytes;
+    } else {
+      try { sizeBytes = dirSizeBytes(p); } catch {}
+    }
+
+    let createdAt = null;
+    if (marker && marker.createdAt) {
+      createdAt = marker.createdAt;
+    } else {
+      try {
+        const st = fs.statSync(p);
+        createdAt = new Date(st.mtimeMs).toISOString();
+      } catch {}
+    }
+
+    const hasPkg = fs.existsSync(pkgPath);
+    const canRestore = !this.installing && abiMatches && hasPkg;
+
+    return {
+      exists: true,
+      version,
+      sizeBytes,
+      sizeFormatted: formatBytes(sizeBytes),
+      createdAt,
+      nodeAbi,
+      abiMatches,
+      path: p,
+      canRestore
+    };
+  }
+
+  /**
+   * 手动清理受保护的回滚点以释放磁盘空间
+   * @returns {{ ok: boolean, freedBytes?: number, error?: string, path?: string }}
+   */
+  deleteRollbackPoint() {
+    if (this.installing) {
+      return { ok: false, error: '版本切换或还原进行中，已拒绝并发删除' };
+    }
+    const p = ROLLBACK_PRESERVED_DIR;
+    if (!fs.existsSync(p)) {
+      return { ok: false, error: '回滚点不存在或已被清理' };
+    }
+    const point = this.getRollbackPoint();
+    const freedBytes = point.sizeBytes || dirSizeBytes(p);
+    try {
+      fs.rmSync(p, { recursive: true, force: true });
+      return { ok: true, freedBytes, path: p };
+    } catch (err) {
+      return { ok: false, error: `清理回滚点失败: ${err.message}` };
+    }
+  }
+
+  /**
+   * 将活动核心就地还原至受保护的回滚点备件 (Issue #7 还原语义)
+   * @param {function} onProgress
+   * @param {function} onLog
+   * @returns {Promise<{ ok: boolean, version?: string, error?: string, rolledBack?: boolean }>}
+   */
+  async restoreRollbackPoint(onProgress = () => {}, onLog = () => {}) {
+    this.installLog = [];
+    if (typeof onProgress === 'function' && typeof onLog !== 'function') {
+      onLog = onProgress;
+      onProgress = null;
+    }
+    const log = (msg) => {
+      const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      this.installLog.push(line);
+      if (typeof onLog === 'function') onLog(line);
+      console.log(`[dsh-restore] ${msg}`);
+    };
+    const emitProgress = (data) => {
+      if (typeof onProgress === 'function') {
+        try { onProgress(data); } catch {}
+      }
+    };
+
+    if (this.installing) {
+      log('❌ 已有版本切换或还原任务正在进行中，已拒绝并发操作');
+      return { ok: false, error: '已有任务正在进行中，请稍候' };
+    }
+
+    this.installing = true;
+    let staging = null;
+    let newRb = null;
+    const previousVersion = this.getCurrentVersion();
+
+    try {
+      emitProgress({ step: 1, total: 5, percent: 10, label: '环境检查与回滚点备件校验', mode: 'install' });
+      log(`=== [阶段 1/5] 回滚点备件完整性与 ABI 预检 ===`);
+
+      const rbPoint = this.getRollbackPoint();
+      if (!rbPoint.exists) {
+        throw new Error('回滚点备件不存在，无法就地还原');
+      }
+      if (!rbPoint.abiMatches) {
+        throw new Error(`回滚点 Node ABI (${rbPoint.nodeAbi}) 与当前运行环境 (${process.versions.modules}) 不匹配，无法安全还原`);
+      }
+      if (!fs.existsSync(path.join(ROLLBACK_PRESERVED_DIR, 'package.json'))) {
+        throw new Error('回滚点目录缺失 package.json，已被损坏');
+      }
+
+      const targetVersion = rbPoint.version || 'unknown';
+      log(`✔ 回滚点校验通过: 目标版本 v${targetVersion}，体积 ${rbPoint.sizeFormatted}，Node ABI 匹配`);
+
+      // 预检容器层磁盘空间
+      this._assertDiskSpace([LIVE_CORE_PARENT], MIN_FREE_BYTES, log);
+
+      emitProgress({ step: 2, total: 5, percent: 25, label: '停止服务并复制备件至 staging', mode: 'install' });
+      log(`=== [阶段 2/5] 停止现网服务并将备件复制至 staging ===`);
+      log(`正在停止 DSH 进程...`);
+      await this.stop();
+
+      // 复制备件到容器层 staging 目录（绝不能用 rename 或硬链接，确保失败时备件原封不动且补丁不会污染备件）
+      staging = path.join(LIVE_CORE_PARENT, `.dsh-staging-restore-${process.pid}-${Date.now()}`);
+      fs.mkdirSync(staging, { recursive: true });
+      log(`> 正在复制备件至隔离 staging 目录: ${staging}`);
+      runSyncSafe('cp', ['-a', ROLLBACK_PRESERVED_DIR + '/.', staging + '/']);
+      log(`✔ 备件副本已在隔离 staging 目录就绪`);
+
+      emitProgress({ step: 3, total: 5, percent: 50, label: '原子置换核心目录', mode: 'install' });
+      log(`=== [阶段 3/5] 执行核心目录原子置换 (staging → live) ===`);
+      newRb = this._atomicSwapCore(staging);
+      staging = null; // 置换成功后 staging 目录已重命名为 live
+      log(`✔ 核心目录置换完成（原核心已暂存为临时回滚点 ${path.basename(newRb || '')}）`);
+
+      emitProgress({ step: 4, total: 5, percent: 75, label: '插件装配与补丁自愈', mode: 'install' });
+      log(`=== [阶段 4/5] 插件环境装配与客户端补丁自愈 ===`);
+      if (fs.existsSync('/app/scripts/install-plugin.mjs')) {
+        log(`> 正在同步并链接插件依赖至新核心 (schemastery & dsh-browser-desktop)...`);
+        const res = spawnSync('node', ['/app/scripts/install-plugin.mjs'], { encoding: 'utf8' });
+        if (res.stdout) log(res.stdout.trim());
+      }
+      if (fs.existsSync('/app/scripts/patch-dsh-client.mjs')) {
+        log(`> 正在注入客户端回环宿主持久化补丁...`);
+        const res = spawnSync('node', ['/app/scripts/patch-dsh-client.mjs'], { encoding: 'utf8' });
+        if (res.stdout) log(res.stdout.trim());
+      }
+      log(`✔ 插件与补丁适配完成`);
+
+      emitProgress({ step: 5, total: 5, percent: 85, label: '拉起服务并健康探活', mode: 'install' });
+      log(`=== [阶段 5/5] 拉起还原核心并执行健康探活 ===`);
+      this.lastExitInfo = null;
+      this.recentLogs = [];
+
+      const bootRes = await this.restart((probe) => {
+        const dynamicPercent = Math.min(97, 85 + Math.floor(probe.attempts * 0.8));
+        log(`🔍 [健康探活] 正在探测端口 ${DSH_PORT} 就绪响应 (第 ${probe.attempts} 次, 已等待 ${probe.elapsedSec}s)...`);
+        emitProgress({
+          step: 5,
+          total: 5,
+          percent: dynamicPercent,
+          label: `端口健康就绪探活中 (${probe.attempts}/30)...`,
+          mode: 'install'
+        });
+      });
+
+      if (!bootRes.ok) {
+        let failDetail = `还原版本 ${targetVersion} 启动后未能通过端口健康就绪探测`;
+        if (this.lastExitInfo) {
+          failDetail = `还原版本进程启动异常退出 (Exit Code: ${this.lastExitInfo.code}, Signal: ${this.lastExitInfo.sig || 'none'})`;
+        }
+        throw new Error(failDetail);
+      }
+
+      // 探活成功：把本次置换下的旧核心 (newRb) 提升为 .dsh-rollback-preserved（旧槽位在此轮替），
+      // 于是槽位里变成刚离开的版本，天然支持撤销还原
+      if (newRb && fs.existsSync(newRb)) {
+        try {
+          this._promoteToPreservedRollback(newRb, previousVersion);
+          newRb = null;
+          log(`✔ 原活动版本 (v${previousVersion}) 已轮替存入就地回滚点（天然支持再次撤销还原）`);
+        } catch (promoteErr) {
+          log(`⚠️ 回滚点轮替提升非致命警告: ${promoteErr.message}`);
+        }
+      }
+
+      this.lastKnownVersion = '';
+      const currentVer = this.getCurrentVersion();
+
+      emitProgress({
+        step: 5,
+        total: 5,
+        percent: 100,
+        label: `还原完成！当前核心已恢复至 v${currentVer}`,
+        mode: 'install'
+      });
+
+      log(`======================================================================`);
+      log(`🎉 [SUCCESS] DSH 核心就地还原成功！`);
+      log(`🚀 当前运行版本: v${currentVer} (服务已健康就绪)`);
+      log(`======================================================================`);
+
+      return { ok: true, version: currentVer };
+
+    } catch (err) {
+      log(`======================================================================`);
+      log(`❌ 还原失败: ${err.message}`);
+
+      // 若已发生核心目录置换（newRb 存在），触发安全回退
+      if (newRb && fs.existsSync(newRb)) {
+        log(`⚠️ 触发安全撤销保护：正在恢复还原前的原活动核心 (v${previousVersion})...`);
+        emitProgress({
+          step: 1,
+          total: 3,
+          percent: 40,
+          label: `🛡️ 正在撤销置换并恢复原活动核心 v${previousVersion}...`,
+          mode: 'rollback'
+        });
+
+        try {
+          await this.stop();
+          this._restoreFromRollbackDir(newRb);
+          newRb = null;
+          log(`✔ 原活动核心已从临时备份恢复`);
+
+          if (fs.existsSync('/app/scripts/install-plugin.mjs')) {
+            spawnSync('node', ['/app/scripts/install-plugin.mjs'], { encoding: 'utf8' });
+          }
+          if (fs.existsSync('/app/scripts/patch-dsh-client.mjs')) {
+            spawnSync('node', ['/app/scripts/patch-dsh-client.mjs'], { encoding: 'utf8' });
+          }
+
+          emitProgress({
+            step: 2,
+            total: 3,
+            percent: 75,
+            label: `🛡️ 重新拉起原核心并健康探活...`,
+            mode: 'rollback'
+          });
+
+          await this.restart();
+          log(`✔ 原活动核心已重新就绪，原有回滚点备件完整未受污染`);
+
+          emitProgress({
+            step: 3,
+            total: 3,
+            percent: 100,
+            label: `🛡️ 已安全回退至原活动版本 v${previousVersion}`,
+            mode: 'rollback'
+          });
+
+          return {
+            ok: false,
+            rolledBack: true,
+            error: err.message,
+            version: previousVersion
+          };
+        } catch (revErr) {
+          log(`💥 [严重警报] 撤销还原遇到异常: ${revErr.message}`);
+          return {
+            ok: false,
+            rolledBack: false,
+            error: `还原失败且撤销异常: ${revErr.message}`,
+            version: previousVersion
+          };
+        }
+      }
+
+      return {
+        ok: false,
+        rolledBack: false,
+        error: err.message,
+        version: previousVersion
+      };
+
+    } finally {
+      // 全程清理 staging 残留与未被消费的临时回滚点，保证 installing 复位
+      if (staging && fs.existsSync(staging)) {
+        try { fs.rmSync(staging, { recursive: true, force: true }); } catch {}
+      }
+      if (newRb && fs.existsSync(newRb)) {
+        try { fs.rmSync(newRb, { recursive: true, force: true }); } catch {}
+      }
+      this.installing = false;
+      this.lastKnownVersion = '';
     }
   }
 

@@ -18,6 +18,8 @@ export DSH_DESKTOP_DEPTH="${DSH_DESKTOP_DEPTH:-24}"
 export DSH_HOME="${DSH_HOME:-/root}"
 export DSH_DIR="${DSH_HOME}/.dsh"
 export DSH_SNAPSHOT_DIR="${DSH_SNAPSHOT_DIR:-${DSH_HOME}/.dsh-snapshots}"
+# Issue #7：多核心版本隔离版本库。默认落在「快照与备份」卷内的子目录（复用现有挂载，不新增挂载点）
+export DSH_VERSIONS_DIR="${DSH_VERSIONS_DIR:-${DSH_SNAPSHOT_DIR}/versions}"
 export CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-${DSH_HOME}/.config/chromium}"
 # 轻微项：DSH 日志落数据卷（便于排障与留存），并做简单的体积轮转
 export DSH_WEB_LOG="${DSH_WEB_LOG:-${DSH_HOME:-/root}/.dsh/logs/dsh-web.log}"
@@ -82,6 +84,44 @@ fi
 #     容器级预设（市场重启守护、原生侧边栏浏览器开关）统一由 install-plugin.mjs 写入
 #     Home 级补丁 $DSH_DIR/cordis.patch.yml（0.1.7 新增的最高优先级补丁层，对全部 profile 生效）。
 #     存量容器若仍有 settings.yaml，交由 DSH 首次启动完成一次性迁移，此处不干预。
+
+# 1.15 版本库 (Issue #7)：目录就绪 + 中断自愈 + 残留清理 + 持久化自检
+mkdir -p "${DSH_VERSIONS_DIR}/.staging" 2>/dev/null || true
+
+CORE_PARENT="/usr/local/lib/node_modules/@deepseek-ai"
+CORE_DIR="${CORE_PARENT}/dsh"
+
+# 1.15.1 中断自愈：活动核心缺失（上次原子置换被打断）时从最新回滚点还原，避免容器变砖
+# 优先用临时回滚点 (.dsh-rollback-tmp-*)，若无再退而使用受保护的单槽位备件 (.dsh-rollback-preserved)（保命优先于保留）
+if [ ! -d "${CORE_DIR}" ]; then
+  _rb="$(ls -1d "${CORE_PARENT}"/.dsh-rollback-tmp-* 2>/dev/null | sort | tail -1 || true)"
+  if [ -z "${_rb}" ] || [ ! -d "${_rb}" ]; then
+    if [ -d "${CORE_PARENT}/.dsh-rollback-preserved" ]; then
+      _rb="${CORE_PARENT}/.dsh-rollback-preserved"
+    fi
+  fi
+  if [ -n "${_rb}" ] && [ -d "${_rb}" ]; then
+    echo "[entrypoint] ⚠️ 检测到活动核心缺失，正在从回滚点恢复: ${_rb}"
+    mv "${_rb}" "${CORE_DIR}" 2>/dev/null || true
+  fi
+fi
+
+# 1.15.2 清理过期 staging/rollback 残留（>60 分钟），绝不触碰活动核心与受保护回滚点
+find "${CORE_PARENT}" -maxdepth 1 -name ".dsh-staging-*" -type d -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+find "${CORE_PARENT}" -maxdepth 1 -name ".dsh-rollback-*" ! -name ".dsh-rollback-preserved" -type d -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+find "${DSH_VERSIONS_DIR}/.staging" -maxdepth 1 -mindepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+
+# 1.15.3 持久化自检：版本库必须落在某个持久化挂载点内（默认即快照卷 <snapshots>/versions）
+_persisted=0
+while IFS= read -r _mp; do
+  [ -z "$_mp" ] && continue
+  [ "$_mp" = "/" ] && continue
+  case "${DSH_VERSIONS_DIR}/" in "${_mp}/"*) _persisted=1; break ;; esac
+done < <(awk '{print $5}' /proc/self/mountinfo 2>/dev/null)
+if [ "$_persisted" != "1" ]; then
+  echo "[entrypoint] ⚠️ 版本库 ${DSH_VERSIONS_DIR} 不在任何持久化挂载点内：容器重建/镜像更新后已归档版本将丢失（回切会重新下载）。"
+  echo "[entrypoint] ⚠️ 默认应落在快照卷内 (${DSH_SNAPSHOT_DIR}/versions)；如需独立隔离，可挂载 -v ./data/versions:/root/.dsh-versions 并设置 DSH_VERSIONS_DIR=/root/.dsh-versions"
+fi
 
 # 2. 自动注册并安装 dsh-browser-desktop 插件到 DSH profile
 if [ -f "/app/scripts/install-plugin.mjs" ]; then

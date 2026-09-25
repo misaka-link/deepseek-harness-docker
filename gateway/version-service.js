@@ -28,9 +28,27 @@ function compareSemver(v1, v2) {
   return p1.pre.localeCompare(p2.pre);
 }
 
+/**
+ * 匹配单条 semver 表达式（`>=` / `>` / `<=` / `<` / `=` / 裸版本号）。
+ * 同时支持**空格分隔的复合 AND 区间**（npm semver 语义），例如
+ * `">=0.1.2-rc.1 <=0.1.7-rc.2"` 会被拆成两个 term 逐条 AND 求值。
+ *
+ * 修复前：`p.slice(2).trim()` 会把 `">=0.1.2-rc.1 <=0.1.7-rc.2"` 的剩余部分
+ * 当成版本号交给 parseSemver，后者静默降级为 `0.1.2`，导致 `0.2.0`（本应硬阻断）
+ * 被误判为落在区间内（返回 true，应为 false）。
+ */
 function matchSemverPattern(ver, pattern) {
   if (!ver || !pattern) return false;
   const p = String(pattern).trim();
+  if (!p) return false;
+
+  // 复合区间：空白分隔 = AND（支持多空格 / Tab / 换行）。逐 term 求值后取与。
+  // 单 term 不会进入该分支，因此不存在递归失控。
+  const terms = p.split(/\s+/).filter(Boolean);
+  if (terms.length > 1) {
+    return terms.every((term) => matchSemverPattern(ver, term));
+  }
+
   if (p.startsWith('>=')) return compareSemver(ver, p.slice(2).trim()) >= 0;
   if (p.startsWith('>')) return compareSemver(ver, p.slice(1).trim()) > 0;
   if (p.startsWith('<=')) return compareSemver(ver, p.slice(2).trim()) <= 0;
@@ -39,12 +57,36 @@ function matchSemverPattern(ver, pattern) {
   return compareSemver(ver, p) === 0;
 }
 
+/**
+ * 求值复合区间（空格分隔 = AND）。`version.json` 的 `supportedDshRange`
+ * 这类字段必须用它判定，而不是裸用 matchSemverPattern：区间求值前先做
+ * isSemver 守卫，避免非法版本号被 parseSemver 静默降级成 0.0.0 后误判。
+ *
+ * @param {string} version 待判定版本号，如 '0.1.7-rc.2'
+ * @param {string} range   区间表达式，如 '>=0.1.2-rc.1 <=0.1.7-rc.2'
+ * @returns {boolean} 版本是否满足区间内**全部**约束
+ */
+function satisfiesRange(version, range) {
+  if (!isSemver(version) || !range) return false;
+  const terms = String(range).trim().split(/\s+/).filter(Boolean);
+  return terms.length > 0 && terms.every((term) => matchSemverPattern(version, term));
+}
+
 class VersionService {
   constructor() {
     this.cacheTTL = 10 * 60 * 1000; // 10 分钟缓存
     this.cachedMeta = null;
     this.lastFetched = 0;
     this.inFlightFetch = null;
+    this._isRemoteMeta = false;
+  }
+
+  getLiveMeta() {
+    return this.cachedMeta || this.getLocalMeta();
+  }
+
+  isUsingRemoteMeta() {
+    return Boolean(this._isRemoteMeta && this.cachedMeta);
   }
 
   getLocalProjectVersion() {
@@ -57,7 +99,7 @@ class VersionService {
     } catch (e) {
       console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
     }
-    return '0.1.8';
+    return '0.1.9';
   }
 
   getLocalMeta() {
@@ -114,9 +156,9 @@ class VersionService {
         }
       },
       compatibility: {
-        recommendedDsh: '0.1.7-rc.1',
-        supportedDshRange: '>=0.1.2-rc.1 <=0.1.7-rc.1',
-        adaptedVersions: ['0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
+        recommendedDsh: '0.1.7-rc.2',
+        supportedDshRange: '>=0.1.2-rc.1 <=0.1.7-rc.2',
+        adaptedVersions: ['0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
         rules: [
           {
             pattern: '<0.1.5-rc.1',
@@ -194,6 +236,7 @@ class VersionService {
               }
               this.cachedMeta = data;
               this.lastFetched = Date.now();
+              this._isRemoteMeta = true;
               return data;
             }
           }
@@ -205,6 +248,7 @@ class VersionService {
       // 所有远端通道未连通时，优雅回退本地元数据
       this.cachedMeta = local;
       this.lastFetched = Date.now();
+      this._isRemoteMeta = false;
       return local;
     })().finally(() => {
       this.inFlightFetch = null;
@@ -214,9 +258,10 @@ class VersionService {
   }
 
   evaluateTargetVersion(targetVersion, meta = null) {
-    const m = meta || this.cachedMeta || this.getLocalMeta();
+    const m = meta || this.getLiveMeta();
     const rules = m.compatibility?.rules || [];
     const adapted = m.compatibility?.adaptedVersions || [
+      '0.1.7-rc.2',
       '0.1.7-rc.1',
       '0.1.7-alpha.2',
       '0.1.7-alpha.1',
@@ -229,8 +274,10 @@ class VersionService {
 
     const isAdapted = adapted.includes(targetVersion);
 
-    // 匹配命中规则 (从高危到低危)
-    for (const rule of rules) {
+    // 匹配命中规则 (强制按从高危到低危排序，保证 danger 规则永远优先命中)
+    const severityWeights = { danger: 3, warning: 2, info: 1 };
+    const sortedRules = [...rules].sort((a, b) => (severityWeights[b.level] || 0) - (severityWeights[a.level] || 0));
+    for (const rule of sortedRules) {
       if (matchSemverPattern(targetVersion, rule.pattern)) {
         return {
           level: rule.level || 'warning',
@@ -246,8 +293,8 @@ class VersionService {
       return {
         level: 'warning',
         title: '未经特殊适配版本',
-        message: `目标版本 v${targetVersion} 尚未收录在当前镜像的官方深度适配列表中，建议优先拉取更新 Docker 镜像底座以获得官方优化。`,
-        action: 'recommend-docker-pull',
+        message: `目标版本 v${targetVersion} 尚未收录在官方深度适配列表中，若切换请留意官方变更说明。`,
+        action: '',
         isAdapted: false
       };
     }
@@ -255,7 +302,7 @@ class VersionService {
     return {
       level: 'success',
       title: '官方深度适配',
-      message: `目标版本 v${targetVersion} 为当前镜像官方深度适配版本。`,
+      message: `目标版本 v${targetVersion} 为官方深度适配版本，当前 Docker 镜像底座完全兼容，无需更新容器即可在线切换。`,
       action: 'online-switch',
       isAdapted: true
     };
@@ -283,7 +330,7 @@ class VersionService {
     if (dshManager) {
       try {
         currentDshVer = dshManager.getCurrentVersion();
-        const dshData = await dshManager.fetchAvailableVersions(false);
+        const dshData = await dshManager.fetchAvailableVersions(false, meta);
         latestDshVer = dshData.latest || '';
         const hasDshUpdate = Boolean(latestDshVer && isSemver(latestDshVer) && isSemver(currentDshVer)
           && compareSemver(latestDshVer, currentDshVer) > 0);
@@ -371,4 +418,19 @@ class VersionService {
   }
 }
 
-module.exports = new VersionService();
+const versionService = new VersionService();
+
+// ── 导出面 ────────────────────────────────────────────────────────────────
+// 向后兼容：默认导出仍是 VersionService 单例，
+//   const versionService = require('./version-service');
+//   versionService.getLiveMeta() / .check() / .evaluateTargetVersion() / ...
+// 全部保持 100% 可用。
+// 同时把纯函数挂载到单例上，使外部模块可解构复用：
+//   const { satisfiesRange, compareSemver } = require('./version-service');
+versionService.parseSemver = parseSemver;
+versionService.isSemver = isSemver;
+versionService.compareSemver = compareSemver;
+versionService.matchSemverPattern = matchSemverPattern;
+versionService.satisfiesRange = satisfiesRange;
+
+module.exports = versionService;

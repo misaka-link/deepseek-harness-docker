@@ -49,9 +49,9 @@ const bad = [
 for (const v of bad) ok(!isValidVersion(v), `拒绝: ${JSON.stringify(v)?.slice(0, 40)}`);
 
 console.log('\n=== C. resolveWithinDir 包含性 ===');
-const base = '/app/.dsh-versions-cache';
-ok(resolveWithinDir(base, '0.1.6-alpha.2') === '/app/.dsh-versions-cache/0.1.6-alpha.2', '正常版本落在目录内');
-ok(resolveWithinDir(base, 'a/../b') === '/app/.dsh-versions-cache/b', '内部 .. 归一化后仍在目录内');
+const base = '/root/.dsh-snapshots/versions';
+ok(resolveWithinDir(base, '0.1.6-alpha.2') === '/root/.dsh-snapshots/versions/0.1.6-alpha.2', '正常版本落在目录内');
+ok(resolveWithinDir(base, 'a/../b') === '/root/.dsh-snapshots/versions/b', '内部 .. 归一化后仍在目录内');
 for (const v of ['../../../root/.dsh/profiles/web', '/etc/passwd', '../../..']) {
   let threw = false;
   try { resolveWithinDir(base, v); } catch { threw = true; }

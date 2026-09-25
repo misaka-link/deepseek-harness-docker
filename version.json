@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.1.7-rc.1",
+    "dshVersion": "0.1.7-rc.2",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,23 +19,45 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.1.8",
-    "releaseDate": "2026-09-24",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.8",
-    "changelog": "内置官方 DSH 引擎更新至 @deepseek-ai/dsh@0.1.7-rc.1",
+    "version": "0.1.9",
+    "releaseDate": "2026-09-25",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.9",
+    "changelog": "云端动态适配矩阵与免更新镜像在线秒级切换；官方核心出厂内置升级至 @deepseek-ai/dsh@0.1.7-rc.2；Issue #7 完结：单槽位引擎回滚点治理与版本隔离免下载回切；配置快照版本元数据追溯与控制台直达导航",
     "changelogList": [
-      "内置官方 DSH 引擎更新至 @deepseek-ai/dsh@0.1.7-rc.1（兼容区间上界同步为 <=0.1.7-rc.1）"
+      "云端动态适配矩阵：解耦 DSH 核心更新与容器镜像更新，维护者在云端发布新版本适配规则后容器即时感知，消除误报并支持在线秒级切换",
+      "官方核心出厂内置升级至 @deepseek-ai/dsh@0.1.7-rc.2，深度适配 10 处补丁锚点，兼容上游动态工具更新与锁接管",
+      "高危破坏性大版本（Danger 级别，如 >=0.2.0）前后端纵深阻断，杜绝误操作导致容器崩溃",
+      "Issue #7 完结：单槽位引擎就地回滚点受保护保留，支持秒级就地撤销还原与 Node ABI 强校验",
+      "Issue #7 完结：版本归档目录迁移至持久化快照卷，容器重建后回切免下载；归档改为用户弹窗可选",
+      "配置快照版本元数据追溯：创建快照时自动捕获 DSH 与套件版本，控制台快照表格新增「创建环境版本」列并展示版本徽章",
+      "控制台 URL 深度导航：支持通过 ?tab=... 或 #tab-* 直达各功能面板与排障",
+      "修复版本库自动 GC 在切换成功后因未提前解除 installing 状态锁导致静默失败的缺陷"
     ],
     "dshChangelogList": [
-      "Web 侧边栏新增终端：多标签、Shell 选择，刷新后自动恢复",
-      "插件管理页支持安装、配置、启停与运行时卸载；插件安装源可选官方源 / 国内镜像 / 自定义源",
-      "新增插件与 Profile 版本兼容性预检：不兼容时说明原因，并可对精确版本授予豁免",
-      "侧边栏支持 Word / Excel / PowerPoint / CSV / TSV 预览；会话文件改动支持逐行与左右分栏审阅",
-      "会话归档支持置顶、筛选与恢复；MCP 升级官方 SDK v2，支持资源发现与 URI 模板",
-      "修复服务端重启后 Web 客户端假连接、pi-ai 大型流式工具参数阻塞进程、反向代理子路径访问等问题"
+      "官方动态工具更新（Dynamic Tool Updates），有效保护模型 KV Cache",
+      "支持文件锁接管（Lock Takeover）与调度插件默认休眠机制",
+      "新增插件与 Profile 版本兼容性预检，支持对精确版本授予豁免",
+      "侧边栏终端多标签恢复与会话归档置顶优化"
     ]
   },
   "history": {
+    "0.1.8": {
+      "version": "0.1.8",
+      "releaseDate": "2026-09-24",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.8",
+      "changelog": "内置官方 DSH 引擎更新至 @deepseek-ai/dsh@0.1.7-rc.1",
+      "changelogList": [
+        "内置官方 DSH 引擎更新至 @deepseek-ai/dsh@0.1.7-rc.1（兼容区间上界同步为 <=0.1.7-rc.1）"
+      ],
+      "dshChangelogList": [
+        "Web 侧边栏新增终端：多标签、Shell 选择，刷新后自动恢复",
+        "插件管理页支持安装、配置、启停与运行时卸载；插件安装源可选官方源 / 国内镜像 / 自定义源",
+        "新增插件与 Profile 版本兼容性预检：不兼容时说明原因，并可对精确版本授予豁免",
+        "侧边栏支持 Word / Excel / PowerPoint / CSV / TSV 预览；会话文件改动支持逐行与左右分栏审阅",
+        "会话归档支持置顶、筛选与恢复；MCP 升级官方 SDK v2，支持资源发现与 URI 模板",
+        "修复服务端重启后 Web 客户端假连接、pi-ai 大型流式工具参数阻塞进程、反向代理子路径访问等问题"
+      ]
+    },
     "0.1.7": {
       "version": "0.1.7",
       "releaseDate": "2026-09-23",
@@ -169,9 +191,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.1.7-rc.1",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-rc.1",
+    "recommendedDsh": "0.1.7-rc.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-rc.2",
     "adaptedVersions": [
+      "0.1.7-rc.2",
       "0.1.7-rc.1",
       "0.1.7-alpha.2",
       "0.1.7-alpha.1",

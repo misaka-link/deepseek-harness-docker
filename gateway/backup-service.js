@@ -1,12 +1,37 @@
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const {
+  readSidecar,
+  writeSidecarAtomic,
+  removeSidecar
+} = require('./snapshot-manifest');
 
 const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
 // M11：支持通过 DSH_HOME 迁移运行根目录（非 root 部署时指向 /home/<user>）
 const DSH_DIR = path.join(process.env.DSH_HOME || '/root', '.dsh');
 const DSH_PORT = Number(process.env.DSH_PORT) || 3079;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024; // 300MB
+
+function getCurrentDshVersion() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json', 'utf8'));
+    if (pkg.version) return pkg.version;
+  } catch {}
+  try {
+    const vMeta = JSON.parse(fs.readFileSync(path.join(__dirname, '../version.json'), 'utf8'));
+    if (vMeta?.supply?.dshVersion) return vMeta.supply.dshVersion;
+  } catch {}
+  return '0.1.7-rc.2';
+}
+
+function getCurrentProjectVersion() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+    if (pkg.version) return pkg.version;
+  } catch {}
+  return '0.1.9';
+}
 
 try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
 
@@ -257,6 +282,29 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
     fs.renameSync(tmpPath, finalPath);
     console.log(`[backup-service] ${taskDesc}创建成功: ${filename} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
 
+    const dshVersion = getCurrentDshVersion();
+    const projectVersion = getCurrentProjectVersion();
+    try {
+      writeSidecarAtomic(SNAPSHOTS_DIR, filename, {
+        meta: {
+          dshVersion,
+          projectVersion,
+          dockerSuiteVersion: projectVersion,
+          schemaVersion: 2,
+          configModel: 'patch-layer',
+          backupType: isConfigOnly ? 'config' : 'full',
+          createdAt: stat.mtime.toISOString(),
+          name: safeName
+        },
+        archive: {
+          sizeBytes: stat.size,
+          mtimeMs: Math.floor(stat.mtimeMs)
+        }
+      });
+    } catch (e) {
+      console.warn('[backup-service] 写入快照元数据 sidecar 失败:', e.message);
+    }
+
     return {
       ok: true,
       snapshot: {
@@ -266,6 +314,8 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
         sizeBytes: stat.size,
         sizeFormatted: `${(stat.size / 1024 / 1024).toFixed(2)} MB`,
         createdAt: stat.mtime.toISOString(),
+        dshVersion,
+        projectVersion,
         name: safeName
       }
     };
@@ -598,13 +648,27 @@ function listBackups() {
         const filePath = path.join(SNAPSHOTS_DIR, filename);
         const stat = fs.statSync(filePath);
         const isConfig = filename.startsWith('dsh-config-') || filename.includes('-config-') || filename.includes('_config_');
+        let dshVersion = null;
+        let projectVersion = null;
+        let configModel = null;
+        try {
+          const sc = readSidecar(SNAPSHOTS_DIR, filename);
+          if (sc && sc.meta) {
+            dshVersion = sc.meta.dshVersion || null;
+            projectVersion = sc.meta.projectVersion || sc.meta.dockerSuiteVersion || null;
+            configModel = sc.meta.configModel || null;
+          }
+        } catch {}
         return {
           filename,
           type: isConfig ? 'config' : 'full',
           typeLabel: isConfig ? '仅配置 (无会话)' : '完整备份',
           sizeBytes: stat.size,
           sizeFormatted: `${(stat.size / 1024 / 1024).toFixed(2)} MB`,
-          createdAt: stat.mtime.toISOString()
+          createdAt: stat.mtime.toISOString(),
+          dshVersion,
+          projectVersion,
+          configModel
         };
       } catch {
         return null;
@@ -630,6 +694,7 @@ function deleteBackup(filename) {
     const filePath = path.join(SNAPSHOTS_DIR, safeFilename);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
+      try { removeSidecar(SNAPSHOTS_DIR, safeFilename); } catch {}
       return { ok: true };
     }
     return { ok: false, error: '快照文件不存在' };

@@ -549,20 +549,104 @@ async function handleAdminApi(req, res, pathname, query) {
     if (subPath === '/api/version/check' && req.method === 'GET') {
       const force = query.get('refresh') === '1';
       const checkRes = await versionService.check(force, dshManager);
+      checkRes.isRemoteMeta = versionService.isUsingRemoteMeta();
       return sendJson(res, 200, checkRes);
     }
 
     // 2. DSH 版本列表
     if (subPath === '/api/dsh/versions' && req.method === 'GET') {
       const force = query.get('refresh') === '1';
-      const data = await dshManager.fetchAvailableVersions(force);
+      const meta = await versionService.fetchRemoteMeta(force);
+      const data = await dshManager.fetchAvailableVersions(force, meta);
       if (Array.isArray(data.versions)) {
         data.versionEvaluations = {};
         for (const v of data.versions) {
-          data.versionEvaluations[v] = versionService.evaluateTargetVersion(v);
+          data.versionEvaluations[v] = versionService.evaluateTargetVersion(v, meta);
         }
       }
+      data.isRemoteMeta = versionService.isUsingRemoteMeta();
+      data.compatibility = meta.compatibility || {};
       return sendJson(res, 200, data);
+    }
+
+    // 2.0 持久化版本库统计 / 清理 / 删除 (Issue #7)
+    if (subPath === '/api/dsh/versions/stats' && req.method === 'GET') {
+      return sendJson(res, 200, dshManager.getVersionsStoreStats());
+    }
+
+    if (subPath === '/api/dsh/versions/gc' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const keepN = Number(body && body.keepN) || undefined;
+      const r = dshManager.gcVersions({ keepN, dryRun: !!(body && body.dryRun === true) });
+      return sendJson(res, 200, r);
+    }
+
+    if (subPath.startsWith('/api/dsh/versions/') && req.method === 'DELETE') {
+      const ver = decodeURIComponent(subPath.slice('/api/dsh/versions/'.length));
+      if (!ver || ver.includes('/')) return sendJson(res, 400, { ok: false, error: '版本号不合法' });
+      const r = dshManager.deleteCachedVersion(ver);
+      return sendJson(res, r.ok ? 200 : 400, r);
+    }
+
+    // 2.05 就地回滚点管理与就地还原 (Issue #7 引擎回滚点治理)
+    if (subPath === '/api/dsh/rollback' && req.method === 'GET') {
+      const rb = dshManager.getRollbackPoint();
+      return sendJson(res, 200, { ok: true, exists: rb.exists, rollback: rb.exists ? rb : null, ...rb });
+    }
+
+    if (subPath === '/api/dsh/rollback' && req.method === 'DELETE') {
+      if (dshManager.installing) {
+        return sendJson(res, 409, { ok: false, error: '版本切换或还原进行中，禁止删除回滚点' });
+      }
+      const current = dshManager.getRollbackPoint();
+      if (!current.exists) {
+        return sendJson(res, 404, { ok: false, error: '回滚点不存在或已被清理' });
+      }
+      const r = dshManager.deleteRollbackPoint();
+      if (!r.ok) {
+        if (r.error && r.error.includes('进行中')) return sendJson(res, 409, r);
+        if (r.error && r.error.includes('不存在')) return sendJson(res, 404, r);
+        return sendJson(res, 500, r);
+      }
+      return sendJson(res, 200, r);
+    }
+
+    if (subPath === '/api/dsh/rollback/restore' && req.method === 'POST') {
+      if (dshManager.installing) {
+        return sendJson(res, 409, { ok: false, error: '已有版本切换或还原任务正在进行中' });
+      }
+      const current = dshManager.getRollbackPoint();
+      if (!current.exists) {
+        return sendJson(res, 404, { ok: false, error: '回滚点备件不存在，无法还原' });
+      }
+      if (!current.abiMatches) {
+        return sendJson(res, 400, { ok: false, error: `回滚点 Node ABI (${current.nodeAbi}) 与当前运行环境不匹配，无法还原` });
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive'
+      });
+
+      const sendEvt = (data) => {
+        try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
+      };
+
+      sendEvt({ type: 'log', message: `[就地还原] 开始还原核心引擎回滚点备件 (v${current.version || 'unknown'})...` });
+
+      const r = await dshManager.restoreRollbackPoint(
+        (prog) => {
+          sendEvt({ type: 'progress', ...prog });
+        },
+        (line) => {
+          sendEvt({ type: 'log', message: line });
+        }
+      );
+
+      sendEvt({ type: 'done', ...r });
+      res.end();
+      return;
     }
 
     // 2.1 DSH 实时日志与崩溃信息获取
@@ -589,6 +673,15 @@ async function handleAdminApi(req, res, pathname, query) {
         return sendJson(res, 400, { ok: false, error: '版本号格式不合法（仅允许形如 0.1.6-alpha.2 的版本号）' });
       }
 
+      // 安全闸门：拒绝在线热切换破坏性架构重构版本（danger 级别，如 >=0.2.0 底层重构）
+      const evalRes = versionService.evaluateTargetVersion(version);
+      if (evalRes && evalRes.level === 'danger') {
+        return sendJson(res, 400, {
+          ok: false,
+          error: evalRes.message || '该版本存在重大破坏性架构重构，禁止在线热切换，必须重新拉取最新 Docker 镜像。'
+        });
+      }
+
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
@@ -599,6 +692,10 @@ async function handleAdminApi(req, res, pathname, query) {
         try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
       };
 
+      // 切换前弹窗的勾选结果：是否归档当前引擎版本（默认勾选，用户可取消）
+      const archiveCurrent = body.archiveCurrent === true;
+      sendEvt({ type: 'log', message: `[切换选项] 归档当前引擎版本: ${archiveCurrent ? '是' : '否'}` });
+
       const r = await dshManager.installVersion(
         version,
         (prog) => {
@@ -606,7 +703,8 @@ async function handleAdminApi(req, res, pathname, query) {
         },
         (line) => {
           sendEvt({ type: 'log', message: line });
-        }
+        },
+        { archiveCurrent }
       );
 
       sendEvt({ type: 'done', ...r });

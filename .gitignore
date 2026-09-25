@@ -61,6 +61,8 @@ doc/preview-remote-*.png
 remote-test-*.png
 screenshot*.png
 .cache/
+.pnpm-store/
+gateway/pnpm-lock.yaml
 
 
 
