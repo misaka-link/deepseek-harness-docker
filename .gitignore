@@ -64,5 +64,25 @@ screenshot*.png
 .pnpm-store/
 gateway/pnpm-lock.yaml
 
+# doc/ 目录仅允许图片上传（产品策略：doc 只保留截图/图片，md、json、txt、patch 等一律不上传）
+doc/**
+!doc/**/
+!doc/**/*.png
+!doc/**/*.jpg
+!doc/**/*.jpeg
+!doc/**/*.gif
+!doc/**/*.webp
+!doc/**/*.svg
+!doc/**/*.bmp
+!doc/**/*.ico
+# 维持既有例外：本地审计 / E2E 产物与内网调试截图仍不上传
+doc/e2e/
+doc/compat/
+doc/**/remote-*.png
+!doc/**/remote-test-version-hub.png
+!doc/**/remote-test-confirm-modal.png
+doc/**/preview-remote-*.png
+!doc/**/preview-remote-admin-dropdown.png
+
 
 
