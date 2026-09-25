@@ -32,6 +32,7 @@ services:
       # - DSH_IDLE_TIMEOUT_MINUTES=30        # 浏览器桌面空闲休眠时间 (分钟，0为不休眠始终保持)
       # - DSH_DESKTOP_WIDTH=1920             # 虚拟桌面宽度分辨率
       # - DSH_DESKTOP_HEIGHT=1080            # 虚拟桌面高度分辨率
+      # - DSH_MAX_ARCHIVE_MEMBERS=1000000    # 快照还原/导入前的成员数上限 (默认 100 万；仅当快照确实超过此规模才需调高)
 
     # ── M11 容器加固 ─────────────────────────────────────────────
     # 1) 禁止提权（setuid/setgid 二进制无法获得新权限）

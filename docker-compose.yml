@@ -35,6 +35,7 @@ services:
       # - DSH_DESKTOP_HEIGHT=1080            # 虚拟桌面高度分辨率
       # - DSH_SCREENSHOT_QUALITY=high        # AI 截图默认画质 (high/medium/low)
       # - DSH_SCREENSHOT_DIR=                # AI 截图默认保存子目录 (相对工作区)
+      # - DSH_MAX_ARCHIVE_MEMBERS=1000000    # 快照还原/导入前的成员数上限 (默认 100 万；仅当快照确实超过此规模才需调高)
 
     # ── M11 容器加固 ─────────────────────────────────────────────
     # 1) 禁止提权（setuid/setgid 二进制无法获得新权限）

@@ -1,4 +1,5 @@
 const { spawn, spawnSync } = require('child_process');
+const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -65,11 +66,16 @@ function hasPigz() {
 
 /**
  * 异步执行 tar 命令，完全解耦 Node.js 主事件循环
+ *
+ * ⚠️ 本函数的 maxOutputBytes 只是「防止子进程吐出海量文本把父进程内存打满」的资源兜底，
+ * **不能**用来判定归档是否可信：合法快照的成员清单会随使用量无上限增长。
+ * 需要逐成员校验的场合（restore / import）请用 validateArchiveMembers()——它按行流式解析，
+ * 不设字节硬上限，因此不会误杀大快照（Issue #8）。
  */
 function runTarAsync(args, options = {}) {
-  // 轻微项：加超时与输出上限 —— 坏归档可能让 tar 长时间挂住或吐出海量清单把内存打满
   const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10 * 60 * 1000;
-  const maxOutputBytes = Number(options.maxOutputBytes) > 0 ? Number(options.maxOutputBytes) : 8 * 1024 * 1024;
+  // 给「捕获完整 stderr 用于报错」留足余量；真正的安全判定不依赖这个值
+  const maxOutputBytes = Number(options.maxOutputBytes) > 0 ? Number(options.maxOutputBytes) : 64 * 1024 * 1024;
   const spawnOptions = { ...options };
   delete spawnOptions.timeoutMs;
   delete spawnOptions.maxOutputBytes;
@@ -100,7 +106,7 @@ function runTarAsync(args, options = {}) {
         settled = true;
         clearTimeout(timer);
         try { child.kill('SIGKILL'); } catch {}
-        reject(new Error('tar 输出超过上限（可能是恶意/损坏归档）'));
+        reject(new Error(`tar 输出超过上限（已读 ${outBytes} 字节，上限 ${maxOutputBytes} 字节）: tar ${args.join(' ')}`));
         return;
       }
       if (isErr) stderr += chunk.toString('utf8');
@@ -135,62 +141,323 @@ const ALLOWED_LINK_PREFIXES = [
   '/opt/'
 ];
 
+// ── 归档校验（validateArchiveMembers）的资源上限 ──────────────────────────────
+// Issue #8 教训：**不能用「tar 清单输出字节数」去判定归档是否可信**。
+// 合法快照的成员数会随插件依赖、会话与附件持续增长（实测约 138~160 字节/成员），
+// v0.1.4~v0.1.9 用写死的 8 MiB 清单上限，使成员数超过约 5~6 万的正常快照被误判为「恶意/损坏」。
+// 现在改为「按行流式解析 + 只限制成员数」，内存 O(1)，上限宽松到不会误伤真实大快照。
+const DEFAULT_MAX_ARCHIVE_MEMBERS = Number(process.env.DSH_MAX_ARCHIVE_MEMBERS) > 0
+  ? Number(process.env.DSH_MAX_ARCHIVE_MEMBERS)
+  : 1000 * 1000;
+// 单行长度兜底：`tar -tv` 一行不会超过「PATH_MAX + 元数据」，超长说明输出已不可信
+const MAX_LISTING_LINE_BYTES = 64 * 1024;
+// 清单总字节兜底：仅用于兜住「tar 疯狂吐垃圾」的极端情况（流式解析本身不占内存）
+const DEFAULT_MAX_LISTING_BYTES = 512 * 1024 * 1024;
+// 链接成员的分隔文案：符号链接是 ` -> `（不本地化）；硬链接是本地化字符串。
+// 这里固定 spawn 的 LC_ALL=C，同时兼容 zh_CN 的 ` 连接到 `，避免再被 locale 咬一次。
+const LINK_SEPARATORS = [' -> ', ' link to ', ' 连接到 '];
+// 允许作为符号链接绝对目标前缀的「归档根」：快照里真实存在
+// `.dsh-module-fallback/node_modules/<pkg> -> <home>/.dsh/profiles/web/node_modules/<pkg>` 这类软链，
+// 其目标仍在被还原的树内，属合法成员（旧实现会整包拒收 → 老快照永远还原不了）。
+// 第 1 项 = 本次运行的 DSH home；第 2 项 = 「默认部署根」下的 .dsh，
+// 用于「从默认 root 部署迁移到自定义 DSH_HOME（非 root 部署）」后仍能还原旧快照；
+// 与 DSH_DIR 同样从 env 派生（可用 DSH_LEGACY_HOME 覆盖），不写死具体 home。
+const LEGACY_DSH_DIR = path.join(process.env.DSH_LEGACY_HOME || '/root', '.dsh');
+const ARCHIVE_ROOT_ABS_PREFIXES = Array.from(new Set([DSH_DIR + '/', LEGACY_DSH_DIR + '/']));
+// 纵深防御：追踪符号链接成员，拒绝任何位于符号链接之下的成员
+// （GNU tar 解压时会拒绝这种写法，但白名单不该依赖下游行为）；
+// 同时给追踪集合一个上限，避免病态归档用海量软链把内存顶爆。
+const MAX_TRACKED_SYMLINK_MEMBERS = 100 * 1000;
+
+/**
+ * 校验归档成员路径是否合法（必须位于 `.dsh/` 之下且不含 `..` / `.` / 空段）。
+ * @param {string} memberPath 归档内成员名
+ * @param {string} who 报错时的主语（如「归档成员」「归档硬链接目标」）
+ */
+function assertSafeMemberPath(memberPath, who) {
+  const clean = memberPath.replace(/\/+$/, '');
+  if (clean !== ALLOWED_ARCHIVE_PREFIX && !clean.startsWith(ALLOWED_ARCHIVE_PREFIX + '/')) {
+    throw new Error(`${who}超出允许范围（仅允许 ${ALLOWED_ARCHIVE_PREFIX}/ 之下）: ${String(memberPath).slice(0, 120)}`);
+  }
+  const segs = clean.split('/');
+  if (segs.some(s => s === '..' || s === '.' || s === '')) {
+    throw new Error(`${who}包含非法路径段: ${String(memberPath).slice(0, 120)}`);
+  }
+}
+
+/**
+ * 符号链接目标是否受控。
+ *  - 相对目标：归一化后必须仍在 `.dsh/` 之内；
+ *  - 绝对目标：**先归一化再比对前缀**（否则 `/opt/../etc/passwd` 这类目标能用 `startsWith`
+ *    骗过白名单），允许指向本项目合法的依赖安装位置，也允许指向**本归档自身的根**
+ *    （`$DSH_HOME/.dsh`）——目标仍在被还原的树内，且剩余部分仍按成员路径校验。
+ */
+function isAllowedSymlinkTarget(memberName, linkTarget) {
+  if (!linkTarget.startsWith('/')) {
+    return path.posix.normalize(path.posix.join(path.posix.dirname(memberName), linkTarget))
+      .startsWith(ALLOWED_ARCHIVE_PREFIX + '/');
+  }
+  const normalized = path.posix.normalize(linkTarget);
+  if (!normalized.startsWith('/')) return false;
+  if (ALLOWED_LINK_PREFIXES.some(p => normalized.startsWith(p))) return true;
+  for (const root of ARCHIVE_ROOT_ABS_PREFIXES) {
+    if (!normalized.startsWith(root)) continue;
+    const rel = normalized.slice(root.length);
+    if (!rel) return false;
+    try {
+      assertSafeMemberPath(ALLOWED_ARCHIVE_PREFIX + '/' + rel, '归档链接目标');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * 从 `tar -tv` 的成员名正文里切出「名字 + 链接目标」。
+ *
+ * ⚠️ 分隔符（` -> ` / ` link to ` / ` 连接到 `）是 tar 自己插入的普通文本，
+ * 而成员名或目标本身**也可能包含同样的字符串**——此时单行文本无法无歧义切分。
+ * 旧实现取「第一个」分隔符，会被 `.dsh/leak -> dummy -> /etc/passwd`
+ * 这类构造欺骗（名字被截断、真正的绝对目标被当成相对路径放行）。
+ * 因此这里改为：**出现多于一个分隔符就直接 fail-closed**（真实快照的成员名不含这些串）。
+ */
+function splitLinkMember(rawName) {
+  let count = 0;
+  let firstIdx = -1;
+  let firstSep = null;
+  for (const sep of LINK_SEPARATORS) {
+    let from = 0;
+    let idx;
+    while ((idx = rawName.indexOf(sep, from)) >= 0) {
+      count += 1;
+      if (firstIdx < 0 || idx < firstIdx) { firstIdx = idx; firstSep = sep; }
+      from = idx + sep.length;
+    }
+  }
+  if (count === 0) return { name: rawName, linkTarget: null, ambiguous: false };
+  if (count > 1) return { name: rawName, linkTarget: null, ambiguous: true };
+  return {
+    name: rawName.slice(0, firstIdx),
+    linkTarget: rawName.slice(firstIdx + firstSep.length),
+    ambiguous: false
+  };
+}
+
+/** 解析 `tar -tvzf` 的一行；非法成员直接抛错（fail-closed）。 */
+function classifyArchiveMemberLine(rawLine) {
+  const line = rawLine.replace(/\s+$/, '');
+  if (!line) return null;
+
+  const parts = line.trim().split(/\s+/);
+  // `-rw-r--r-- owner/group size date time name`
+  if (parts.length < 6) throw new Error(`无法解析归档成员: ${line.slice(0, 120)}`);
+
+  const typeChar = parts[0][0];
+  const rawName = parts.slice(5).join(' ');
+  const isLink = typeChar === 'l' || typeChar === 'h';
+
+  // 只有链接成员才做分隔符切分：普通成员名里若恰好含有 ` -> ` / ` link to `，
+  // 切分会把真实名字截断，从而可能**漏掉**名字后半段的 `..` 段。
+  let name = rawName;
+  let linkTarget = null;
+  if (isLink) {
+    const split = splitLinkMember(rawName);
+    if (split.ambiguous) {
+      throw new Error(`归档链接成员含多个链接分隔符，无法无歧义解析: ${rawName.slice(0, 120)}`);
+    }
+    name = split.name;
+    linkTarget = split.linkTarget;
+  }
+
+  if (isLink) {
+    if (!linkTarget) {
+      const kind = typeChar === 'h' ? '硬' : '符号';
+      throw new Error(`归档${kind}链接成员缺少目标（tar 输出格式无法识别）: ${name.slice(0, 120)}`);
+    }
+    assertSafeMemberPath(name, '归档链接成员');
+    // 归档根目录本身必须是目录，绝不能是链接成员：否则解压后 `.dsh` 会变成一个指向别处的软链，
+    // 而 restoreBackup 随后的「把 gateway.config.json 拷进 staging」等步骤会顺着它写出去。
+    if (name.replace(/\/+$/, '') === ALLOWED_ARCHIVE_PREFIX) {
+      throw new Error(`归档根目录 ${ALLOWED_ARCHIVE_PREFIX} 不得是链接成员: ${name.slice(0, 120)}`);
+    }
+    if (typeChar === 'h') {
+      // 硬链接的目标是「归档内已存在的成员」，把它当作普通成员名同样校验：
+      // 若目标逃出 `.dsh/` 或含 `..`，解压时可能被引导到归档之外。
+      assertSafeMemberPath(linkTarget, '归档硬链接目标');
+      return { type: 'hardlink', name, linkTarget };
+    }
+    if (!isAllowedSymlinkTarget(name, linkTarget)) {
+      throw new Error(`归档包含指向不允许位置的链接成员: ${name.slice(0, 60)} -> ${String(linkTarget).slice(0, 60)}`);
+    }
+    return { type: 'symlink', name };
+  }
+
+  if (typeChar !== '-' && typeChar !== 'd') {
+    throw new Error(`归档包含不允许的成员类型 (${typeChar})，仅允许普通文件、目录与受控链接: ${name.slice(0, 120)}`);
+  }
+  assertSafeMemberPath(name, '归档成员');
+  return { type: typeChar === 'd' ? 'dir' : 'file', name };
+}
+
 /**
  * 归档成员白名单校验（在解压/转正之前调用）。
  *
  * 阻断：绝对路径、`..` 段、超出 `.dsh/` 前缀的成员（如 `.ssh/authorized_keys`、`.bashrc`），
- * 以及符号链接 / 硬链接 / 设备 / FIFO 等非普通文件成员（防止解压时跟随链接写到目录外）。
+ * 以及设备 / FIFO 等非普通文件成员（防止解压时写到目录外）。
+ * 允许：普通文件 / 目录 / 符号链接（目标受限）/ 硬链接（目标必须仍是归档内的 `.dsh/` 成员）。
  * 失败即抛错，调用方不会执行任何解压动作（fail-closed）。
+ *
+ * 实现要点（Issue #8 修复）：
+ *  1. **按行流式解析** `tar -tvzf` 的 stdout，不再把整份清单缓冲进内存，也不再设字节数硬上限；
+ *     限制改为「成员数」，宽到不会误伤合法大快照（旧实现 8 MiB 上限会把 ≥5~6 万成员的正常快照判为损坏）。
+ *  2. spawn 时强制 `LC_ALL=C`：GNU tar 对硬链接打印的是本地化文案（C: ` link to ` / zh_CN: ` 连接到 `），
+ *     而旧代码只认符号链接的 ` -> `，导致**任何含硬链接的合法快照**都被误判为「链接成员缺少目标」。
+ *  3. 报错文案不再把「规模超限」说成「文件已损坏」，并在错误里带上实际计数，便于排障。
+ *
+ * @param {string} archivePath 归档路径
+ * @param {object} [opts] { maxMembers, maxListingBytes, timeoutMs }
+ * @returns {Promise<{members:number, listingBytes:number, hardLinks:number, symLinks:number}>}
  */
-async function validateArchiveMembers(archivePath) {
-  const res = await runTarAsync(['-tvzf', archivePath]);
-  if (res.code !== 0) {
-    throw new Error('归档文件损坏或不是合法的 tar.gz 文件: ' + (res.stderr || '未知错误'));
-  }
-  const lines = res.stdout.split('\n').map(l => l.replace(/\s+$/, '')).filter(Boolean);
-  if (lines.length === 0) throw new Error('归档内容为空');
+function validateArchiveMembers(archivePath, opts = {}) {
+  const maxMembers = Number(opts.maxMembers) > 0 ? Number(opts.maxMembers) : DEFAULT_MAX_ARCHIVE_MEMBERS;
+  const maxListingBytes = Number(opts.maxListingBytes) > 0 ? Number(opts.maxListingBytes) : DEFAULT_MAX_LISTING_BYTES;
+  const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 10 * 60 * 1000;
 
-  for (const line of lines) {
-    const parts = line.trim().split(/\s+/);
-    if (parts.length < 6) throw new Error(`无法解析归档成员: ${line.slice(0, 80)}`);
-    const typeChar = parts[0][0];
-    const rawName = parts.slice(5).join(' ');
+  return new Promise((resolve, reject) => {
+    const child = spawn('tar', ['--numeric-owner', '-tvzf', archivePath], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, LC_ALL: 'C', LANG: 'C', LANGUAGE: '' }
+    });
 
-    // 链接成员的 verbose 输出形如 `name -> target`
-    let name = rawName;
-    let linkTarget = null;
-    const arrow = rawName.indexOf(' -> ');
-    if (arrow >= 0) { name = rawName.slice(0, arrow); linkTarget = rawName.slice(arrow + 4); }
+    let settled = false;
+    let timer = null;
+    let members = 0;
+    let listingBytes = 0;
+    let hardLinks = 0;
+    let symLinks = 0;
+    let stderr = '';
+    let pending = '';
+    const decoder = new StringDecoder('utf8');
+    // 符号链接成员名 → 用于「成员不得位于符号链接之下」的纵深防御
+    const symlinkNames = new Set();
 
-    // 1) 所有成员（含链接）都必须位于 .dsh/ 之下，且不含非法路径段
-    const clean = name.replace(/\/+$/, '');
-    if (clean !== ALLOWED_ARCHIVE_PREFIX && !clean.startsWith(ALLOWED_ARCHIVE_PREFIX + '/')) {
-      throw new Error(`归档成员超出允许范围（仅允许 ${ALLOWED_ARCHIVE_PREFIX}/ 之下）: ${name.slice(0, 80)}`);
-    }
-    const segs = clean.split('/');
-    if (segs.some(s => s === '..' || s === '.' || s === '')) {
-      throw new Error(`归档成员包含非法路径段: ${name.slice(0, 80)}`);
-    }
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { child.kill('SIGKILL'); } catch {}
+      reject(err);
+    };
+    const succeed = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
 
-    // 2) 类型白名单：普通文件 / 目录 / 受控链接
-    if (typeChar === 'l' || typeChar === 'h') {
-      if (!linkTarget) throw new Error(`归档链接成员缺少目标: ${name.slice(0, 80)}`);
-      const okTarget = linkTarget.startsWith('/')
-        // 绝对目标：只允许指向本项目合法的依赖安装位置（快照里 node_modules 下的软链即如此）
-        ? ALLOWED_LINK_PREFIXES.some(p => linkTarget.startsWith(p))
-        // 相对目标：归一化后必须仍在 .dsh/ 之内
-        : path.posix.normalize(path.posix.join(path.posix.dirname(name), linkTarget))
-            .startsWith(ALLOWED_ARCHIVE_PREFIX + '/');
-      if (!okTarget) {
-        throw new Error(`归档包含指向不允许位置的链接成员: ${name.slice(0, 60)} -> ${String(linkTarget).slice(0, 60)}`);
+    timer = setTimeout(
+      () => fail(new Error(`归档校验超时（${Math.round(timeoutMs / 1000)}s）: ${path.basename(String(archivePath))}`)),
+      timeoutMs
+    );
+    if (timer.unref) timer.unref();
+
+    const handleLine = (rawLine) => {
+      if (settled) return;
+      const cls = classifyArchiveMemberLine(rawLine);
+      if (!cls) return;
+      members += 1;
+      if (members > maxMembers) {
+        // 这里是「规模」而不是「损坏」：文案必须让用户能分辨，并给出明确的自救路径
+        throw new Error(
+          `归档成员数超过上限（${members} > ${maxMembers}），已中止校验。` +
+          `该归档可能是合法但异常庞大的快照；如确认可信，请提高上限（环境变量 DSH_MAX_ARCHIVE_MEMBERS）或改用「仅配置」快照后重试。`
+        );
       }
-      continue;
-    }
-    if (typeChar !== '-' && typeChar !== 'd') {
-      throw new Error(`归档包含不允许的成员类型 (${typeChar})，仅允许普通文件、目录与受控链接: ${name.slice(0, 80)}`);
-    }
-  }
-  return { members: lines.length };
+
+      // 纵深防御：任何成员的祖先路径都不能是符号链接成员。
+      // GNU tar 解压时会拒绝这种写法（"无法 open: 不是目录"），但白名单不该把安全性
+      // 完全外包给下游，否则一旦换成其它解压实现就会出现写入树外的窗口。
+      if (symlinkNames.size > 0) {
+        const segs = cls.name.split('/');
+        // 从 i=1 起算：连 `.dsh` 自身也比对一次（根成员是链接已被上面直接拒掉，这里是第二道保险）
+        for (let i = 1; i < segs.length; i++) {
+          if (symlinkNames.has(segs.slice(0, i).join('/'))) {
+            throw new Error(`归档成员位于符号链接之下（解压时可能写到归档之外）: ${cls.name.slice(0, 120)}`);
+          }
+        }
+      }
+
+      if (cls.type === 'hardlink') {
+        // 指向符号链接的硬链接会「继承」符号链接语义；不登记的话，
+        // `.dsh/sym`（软链）→ `.dsh/h4 link to .dsh/sym` → `.dsh/h4/evil` 会绕过后面的祖先检查。
+        const target = cls.linkTarget ? cls.linkTarget.replace(/\/+$/, '') : null;
+        if (target && symlinkNames.has(target) && symlinkNames.size < MAX_TRACKED_SYMLINK_MEMBERS) {
+          symlinkNames.add(cls.name.replace(/\/+$/, ''));
+        }
+        hardLinks += 1;
+      } else if (cls.type === 'symlink') {
+        if (symlinkNames.size >= MAX_TRACKED_SYMLINK_MEMBERS) {
+          throw new Error(`归档符号链接成员过多（> ${MAX_TRACKED_SYMLINK_MEMBERS}），无法安全校验`);
+        }
+        symlinkNames.add(cls.name.replace(/\/+$/, ''));
+        symLinks += 1;
+      }
+    };
+
+    child.stdout.on('data', (chunk) => {
+      if (settled) return;
+      listingBytes += chunk.length;
+      if (listingBytes > maxListingBytes) {
+        return fail(new Error(
+          `归档清单输出异常增大（已读 ${listingBytes} 字节 > ${maxListingBytes} 字节兜底上限），已中止校验`
+        ));
+      }
+      pending += decoder.write(chunk);
+      let nl;
+      while ((nl = pending.indexOf('\n')) >= 0) {
+        const line = pending.slice(0, nl);
+        pending = pending.slice(nl + 1);
+        if (line.length > MAX_LISTING_LINE_BYTES) {
+          return fail(new Error(`归档成员行异常过长（${line.length} 字节），无法安全解析`));
+        }
+        try {
+          handleLine(line);
+        } catch (e) {
+          return fail(e);
+        }
+      }
+      if (pending.length > MAX_LISTING_LINE_BYTES) {
+        return fail(new Error(`归档成员行异常过长（>${MAX_LISTING_LINE_BYTES} 字节），无法安全解析`));
+      }
+    });
+
+    // stderr 只保留前 8 KiB 用于报错，避免坏归档吐垃圾把内存打满
+    child.stderr.on('data', (chunk) => {
+      if (stderr.length >= 8192) return;
+      stderr += chunk.toString('utf8').slice(0, 8192 - stderr.length);
+    });
+
+    child.on('error', (err) => fail(new Error('无法启动 tar 校验归档: ' + err.message)));
+
+    child.on('close', (code) => {
+      if (settled) return;
+      pending += decoder.end();
+      if (pending) {
+        try {
+          handleLine(pending);
+        } catch (e) {
+          return fail(e);
+        }
+      }
+      if (code !== 0) {
+        return fail(new Error('归档文件损坏或不是合法的 tar.gz 文件: ' + (stderr.trim() || `tar 退出码 ${code}`)));
+      }
+      if (members === 0) return fail(new Error('归档内容为空'));
+      succeed({ members, listingBytes, hardLinks, symLinks });
+    });
+  });
 }
 
 /**
@@ -722,6 +989,9 @@ module.exports = {
   getActiveTask,
   isBusy,
   validateArchiveMembers,
+  // 供回归测试直接做单元级断言（解析单行 / 单条路径）
+  classifyArchiveMemberLine,
+  assertSafeMemberPath,
   runTarAsync,
   SNAPSHOTS_DIR
 };
