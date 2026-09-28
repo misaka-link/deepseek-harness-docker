@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.1.7-rc.2",
+    "dshVersion": "0.2.0-rc.1",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,28 +19,45 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.1.9",
-    "releaseDate": "2026-09-25",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.9",
-    "changelog": "云端动态适配矩阵与免更新镜像在线秒级切换；官方核心出厂内置升级至 @deepseek-ai/dsh@0.1.7-rc.2；Issue #7 完结：单槽位引擎回滚点治理与版本隔离免下载回切；配置快照版本元数据追溯与控制台直达导航",
+    "version": "0.2.0",
+    "releaseDate": "2026-09-28",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.0",
+    "changelog": "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.1，兼容区间上界同步为 <=0.2.0-rc.1；破坏性阻断阈值由 >=0.2.0 调整为 >=0.3.0，0.2.x 线纳入深度适配；同步官方自动化能力外移、对话状态动画与 Linux 安装失败修复",
     "changelogList": [
-      "云端动态适配矩阵：解耦 DSH 核心更新与容器镜像更新，维护者在云端发布新版本适配规则后容器即时感知，消除误报并支持在线秒级切换",
-      "官方核心出厂内置升级至 @deepseek-ai/dsh@0.1.7-rc.2，深度适配 10 处补丁锚点，兼容上游动态工具更新与锁接管",
-      "高危破坏性大版本（Danger 级别，如 >=0.2.0）前后端纵深阻断，杜绝误操作导致容器崩溃",
-      "Issue #7 完结：单槽位引擎就地回滚点受保护保留，支持秒级就地撤销还原与 Node ABI 强校验",
-      "Issue #7 完结：版本归档目录迁移至持久化快照卷，容器重建后回切免下载；归档改为用户弹窗可选",
-      "配置快照版本元数据追溯：创建快照时自动捕获 DSH 与套件版本，控制台快照表格新增「创建环境版本」列并展示版本徽章",
-      "控制台 URL 深度导航：支持通过 ?tab=... 或 #tab-* 直达各功能面板与排障",
-      "修复版本库自动 GC 在切换成功后因未提前解除 installing 状态锁导致静默失败的缺陷"
+      "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.1，兼容区间上界同步为 <=0.2.0-rc.1",
+      "破坏性版本阻断阈值由 >=0.2.0 调整为 >=0.3.0：0.2.x 线已纳入深度适配，不再拦截在线切换"
     ],
     "dshChangelogList": [
-      "官方动态工具更新（Dynamic Tool Updates），有效保护模型 KV Cache",
-      "支持文件锁接管（Lock Takeover）与调度插件默认休眠机制",
-      "新增插件与 Profile 版本兼容性预检，支持对精确版本授予豁免",
-      "侧边栏终端多标签恢复与会话归档置顶优化"
+      "自动化任务改由可选插件包提供，内置自动化能力随之下线",
+      "对话新增状态动画与回合用时信息展示",
+      "插件管理界面与安装引导改进：安装来源选择与进度反馈更直观",
+      "修复 Safari 下流式输出无法正常刷新的问题",
+      "修复 Linux 平台缺少原生预构建包导致 npm 安装失败的问题"
     ]
   },
   "history": {
+    "0.1.9": {
+      "version": "0.1.9",
+      "releaseDate": "2026-09-25",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.1.9",
+      "changelog": "云端动态适配矩阵与免更新镜像在线秒级切换；官方核心出厂内置升级至 @deepseek-ai/dsh@0.1.7-rc.2；Issue #7 完结：单槽位引擎回滚点治理与版本隔离免下载回切；配置快照版本元数据追溯与控制台直达导航",
+      "changelogList": [
+        "云端动态适配矩阵：解耦 DSH 核心更新与容器镜像更新，维护者在云端发布新版本适配规则后容器即时感知，消除误报并支持在线秒级切换",
+        "官方核心出厂内置升级至 @deepseek-ai/dsh@0.1.7-rc.2，深度适配 10 处补丁锚点，兼容上游动态工具更新与锁接管",
+        "高危破坏性大版本（Danger 级别，如 >=0.2.0）前后端纵深阻断，杜绝误操作导致容器崩溃",
+        "Issue #7 完结：单槽位引擎就地回滚点受保护保留，支持秒级就地撤销还原与 Node ABI 强校验",
+        "Issue #7 完结：版本归档目录迁移至持久化快照卷，容器重建后回切免下载；归档改为用户弹窗可选",
+        "配置快照版本元数据追溯：创建快照时自动捕获 DSH 与套件版本，控制台快照表格新增「创建环境版本」列并展示版本徽章",
+        "控制台 URL 深度导航：支持通过 ?tab=... 或 #tab-* 直达各功能面板与排障",
+        "修复版本库自动 GC 在切换成功后因未提前解除 installing 状态锁导致静默失败的缺陷"
+      ],
+      "dshChangelogList": [
+        "官方动态工具更新（Dynamic Tool Updates），有效保护模型 KV Cache",
+        "支持文件锁接管（Lock Takeover）与调度插件默认休眠机制",
+        "新增插件与 Profile 版本兼容性预检，支持对精确版本授予豁免",
+        "侧边栏终端多标签恢复与会话归档置顶优化"
+      ]
+    },
     "0.1.8": {
       "version": "0.1.8",
       "releaseDate": "2026-09-24",
@@ -191,9 +208,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.1.7-rc.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.1.7-rc.2",
+    "recommendedDsh": "0.2.0-rc.1",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.0-rc.1",
     "adaptedVersions": [
+      "0.2.0-rc.1",
       "0.1.7-rc.2",
       "0.1.7-rc.1",
       "0.1.7-alpha.2",
@@ -218,10 +236,10 @@
         "message": "官方 0.1.7 起会话日志升级为 V4，且为单向迁移。降级到 0.1.6 及以下将无法读取已在 0.1.7 中新建或迁移的会话；如需回滚请连同数据卷快照一并恢复。"
       },
       {
-        "pattern": ">=0.2.0",
+        "pattern": ">=0.3.0",
         "level": "danger",
         "title": "底层协议重大重构 · 不再兼容在线切换",
-        "message": "官方 DSH 0.2.x 调整了底层 RPC 与连接鉴权体系，当前容器底层镜像无法直接在线热切换。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！",
+        "message": "目标版本已跨入官方下一轮破坏性重构（0.3.0 及以上）。该版本线可能调整底层 RPC 与连接鉴权体系，当前容器底层镜像无法保证在线热切换成功。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！",
         "action": "force-docker-pull"
       }
     ]

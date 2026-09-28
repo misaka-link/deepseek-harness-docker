@@ -99,7 +99,7 @@ class VersionService {
     } catch (e) {
       console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
     }
-    return '0.1.9';
+    return '0.2.0';
   }
 
   getLocalMeta() {
@@ -156,9 +156,9 @@ class VersionService {
         }
       },
       compatibility: {
-        recommendedDsh: '0.1.7-rc.2',
-        supportedDshRange: '>=0.1.2-rc.1 <=0.1.7-rc.2',
-        adaptedVersions: ['0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
+        recommendedDsh: '0.2.0-rc.1',
+        supportedDshRange: '>=0.1.2-rc.1 <=0.2.0-rc.1',
+        adaptedVersions: ['0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
         rules: [
           {
             pattern: '<0.1.5-rc.1',
@@ -173,10 +173,10 @@ class VersionService {
             message: '官方 0.1.7 起会话日志升级为 V4，且为单向迁移。降级到 0.1.6 及以下将无法读取已在 0.1.7 中新建或迁移的会话；如需回滚请连同数据卷快照一并恢复。'
           },
           {
-            pattern: '>=0.2.0',
+            pattern: '>=0.3.0',
             level: 'danger',
-            title: '底层架构重大重构 · 不再兼容在线切换',
-            message: '官方 DSH 0.2.x 调整了底层架构与通信协议，当前 Docker 镜像底座无法直接在线热切换。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！',
+            title: '底层协议重大重构 · 不再兼容在线切换',
+            message: '目标版本已跨入官方下一轮破坏性重构（0.3.0 及以上）。该版本线可能调整底层 RPC 与连接鉴权体系，当前容器底层镜像无法保证在线热切换成功。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！',
             action: 'force-docker-pull'
           }
         ]
@@ -261,6 +261,7 @@ class VersionService {
     const m = meta || this.getLiveMeta();
     const rules = m.compatibility?.rules || [];
     const adapted = m.compatibility?.adaptedVersions || [
+      '0.2.0-rc.1',
       '0.1.7-rc.2',
       '0.1.7-rc.1',
       '0.1.7-alpha.2',

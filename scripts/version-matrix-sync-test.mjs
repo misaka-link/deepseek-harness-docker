@@ -33,7 +33,7 @@ const uniq = (a) => [...new Set(a)];
 console.log('\n=== A. version.json 自身一致性 ===');
 ok(typeof recommended === 'string' && recommended.length > 0, `recommendedDsh 已定义 (${recommended})`);
 ok(adapted.includes(recommended), `adaptedVersions 包含 recommendedDsh (${recommended})`);
-ok(adapted.includes('0.1.7-rc.1') && adapted.includes('0.1.7-alpha.2') && adapted.includes('0.1.7-alpha.1'), 'adaptedVersions 包含 0.1.7-rc.1 / 0.1.7-alpha.2 / 0.1.7-alpha.1');
+ok(adapted.includes('0.1.7-rc.2') && adapted.includes('0.1.7-rc.1') && adapted.includes('0.1.7-alpha.2') && adapted.includes('0.1.7-alpha.1'), 'adaptedVersions 包含 0.1.7-rc.2 / 0.1.7-rc.1 / 0.1.7-alpha.2 / 0.1.7-alpha.1');
 ok(meta?.supply?.dshVersion && adapted.includes(meta.supply.dshVersion), `supply.dshVersion 在已适配列表内 (${meta?.supply?.dshVersion})`);
 
 console.log('\n=== B. dsh-manager.js 兜底清单必须与 version.json 同步 ===');
@@ -61,7 +61,7 @@ for (const [i, raw] of fbLists.entries()) {
 }
 for (const re of [/recommendedDsh \|\| '([^']+)'/, /supportedDshRange \|\| '([^']+)'/]) {
   const all = [...adminSrc.matchAll(new RegExp(re.source, 'g'))].map(m => m[1]);
-  ok(all.length > 0 && all.every(v => !v.includes('0.1.6-alpha.2')), `前端兜底不含旧值 0.1.6-alpha.2 (命中 ${all.length} 处)`);
+  ok(all.length > 0 && all.every(v => !v.includes('0.1.7-rc.2') && !v.includes('<=0.1.7-rc.2')), `前端兜底不含旧推荐值或旧区间 (命中 ${all.length} 处)`);
 }
 const recPattern = new RegExp(`compat\\.recommendedDsh \\|\\| '(?!${recommended.replace(/\\./g, '\\.')})`);
 ok(!recPattern.test(adminSrc), `recommendedDsh 兜底为 ${recommended}`);
@@ -69,7 +69,7 @@ const chipCount = (adminSrc.match(new RegExp(`>${recommended.replace(/\./g, '\\.
 ok(chipCount >= 2, `静态适配 chips 含 ${recommended} (${chipCount} 处)`);
 // 回归：升级推荐核心时必须「置顶新增」而不是「替换掉」上一版推荐，
 // 否则冷启动静态页面（API 返回前）会漏展示上一版已深度适配的核心。
-const prevRecommended = '0.1.7-rc.1';
+const prevRecommended = '0.1.7-rc.2';
 const prevChipCount = (adminSrc.match(new RegExp(`>${prevRecommended.replace(/\./g, '\\.')}</span>`, 'g')) || []).length;
 ok(prevChipCount >= 2, `静态适配 chips 保留上一推荐版本 ${prevRecommended} (${prevChipCount} 处)`);
 

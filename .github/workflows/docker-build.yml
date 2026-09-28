@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.1.9)'
+        description: 'Project version tag (e.g. 0.2.0)'
         required: false
-        default: '0.1.9'
+        default: '0.2.0'
   push:
     branches:
       - main
