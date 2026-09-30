@@ -2526,6 +2526,56 @@
       };
     }
 
+    // ── P2（Issue #9）：长任务 SSE 用「空闲超时」取代「总时长超时」 ──────────────
+    // 背景：全站 fetch 默认 20s 超时，会让「在线切换核心版本」「就地还原回滚点」这类
+    // 动辄几十秒~几分钟的 SSE 任务在第 20 秒被前端主动 abort（报 "signal timed out"），
+    // 而后端其实仍在正常执行。这里给 SSE 单独一条通道：
+    //   · 自建 AbortController 并显式传 signal（从而绕过全站默认超时）；
+    //   · 后端每 2s 就有心跳/进度，只要 60s 内有任意下行数据就继续等待；
+    //   · 真断流时由调用方「降级提示 + 轮询状态」，而不是把任务判死。
+    const SSE_IDLE_TIMEOUT_MS = 60000;
+    async function openSseStream(url, init = {}) {
+      const controller = new AbortController();
+      let idleTimer = null;
+      const arm = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, SSE_IDLE_TIMEOUT_MS);
+      };
+      arm();
+      try {
+        const response = await fetch(url, { ...init, signal: controller.signal });
+        return { response, onData: arm, close: () => clearTimeout(idleTimer) };
+      } catch (e) {
+        clearTimeout(idleTimer);
+        throw e;
+      }
+    }
+
+    // SSE 断流后的降级：任务可能仍在后台继续 → 提示 + 轮询确认终态（绝不直接判失败）
+    async function recoverAfterStreamBreak(kind, targetVersion) {
+      const label = kind === 'rollback' ? '回滚点还原' : '核心版本切换';
+      appendLog(`⚠️ [通信中断] 与网关的流式连接已中断；后台的「${label}」任务可能仍在继续执行，请勿重复点击。`);
+      updateProgressUI(3, 5, 60, '通信中断，后台任务可能仍在继续…', 'install');
+      showToast('与网关的连接已中断，后台任务可能仍在运行，正在自动确认状态…', 'warning');
+      for (let i = 1; i <= 40; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          await loadStatus();
+          await loadVersions();
+          await loadRollbackStatus();
+          const running = currentData && currentData.dsh && currentData.dsh.version;
+          if (running && (!targetVersion || running === targetVersion)) {
+            updateProgressUI(5, 5, 100, `🎉 已完成！当前运行核心: v${running}`, 'install');
+            appendLog(`✔ 已确认后台任务完成，当前运行核心: v${running}`);
+            showToast(`已完成，当前运行核心: v${running}`, 'success');
+            return;
+          }
+        } catch (e) { /* 网关重启窗口内忽略 */ }
+      }
+      appendLog('ℹ️ 暂未探测到目标版本就绪；请稍后刷新页面，或查看容器日志确认最终结果（后台任务不受本次断流影响）。');
+      showToast('连接中断且暂未确认到结果，请稍后刷新页面查看状态', 'warning');
+    }
+
     function switchTab(tabId, evt) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -3975,6 +4025,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       appendLog(`[${new Date().toLocaleTimeString()}] 开始执行 DSH 核心版本切换 -> v${version}`);
       appendLog(`[${new Date().toLocaleTimeString()}] 切换选项: 归档当前引擎=${archiveEngine ? '是' : '否'}, 导出配置快照=${wantConfigSnapshot ? '是' : '否'}`);
 
+      let sse = null; // P2：SSE 流句柄（用于空闲超时与断流降级）
       try {
         // 可选：导出配置与会话快照（用户数据）
         if (wantConfigSnapshot) {
@@ -3999,12 +4050,13 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           }
         }
 
-        // 发起安装切换 SSE 流
-        const response = await fetch(`${adminBase}/api/dsh/install`, {
+        // 发起安装切换 SSE 流（P2：不套用全站 20s 默认超时，改用空闲超时）
+        sse = await openSseStream(`${adminBase}/api/dsh/install`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ version, archiveCurrent: archiveEngine })
         });
+        const response = sse.response;
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -4013,6 +4065,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          sse.onData();
           buffer += decoder.decode(value, { stream: true });
 
           const chunks = buffer.split('\n\n');
@@ -4062,9 +4115,16 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           }
         }
       } catch (err) {
-        appendLog(`❌ 网络通信异常: ${err.message}`);
-        updateProgressUI(1, 5, 0, `通信异常: ${err.message}`, 'rollback');
+        if (sse) {
+          // 流已建立后中断：任务很可能仍在后台继续 —— 降级提示 + 轮询确认，不判死
+          await recoverAfterStreamBreak('install', version);
+        } else {
+          appendLog(`❌ 网络通信异常: ${err.message}`);
+          updateProgressUI(1, 5, 0, `通信异常: ${err.message}`, 'rollback');
+          showToast('网络通信异常: ' + err.message, 'error');
+        }
       } finally {
+        if (sse) sse.close();
         if (installBtn) installBtn.disabled = false;
         await loadStatus();
         await loadVersions();
@@ -4750,11 +4810,14 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       appendLog('======================================================================');
       appendLog('[' + new Date().toLocaleTimeString() + '] 开始就地还原核心引擎回滚点备件 -> v' + targetVer);
 
+      let sse = null; // P2：SSE 流句柄（用于空闲超时与断流降级）
       try {
-        const response = await fetch(`${adminBase}/api/dsh/rollback/restore`, {
+        // P2：SSE 长任务不套用全站 20s 默认超时，改用空闲超时
+        sse = await openSseStream(`${adminBase}/api/dsh/rollback/restore`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
+        const response = sse.response;
 
         if (!response.ok && (!response.headers.get('content-type') || !response.headers.get('content-type').includes('text/event-stream'))) {
           const errData = await response.json().catch(() => ({}));
@@ -4768,6 +4831,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         while (true) {
           const res = await reader.read();
           if (res.done) break;
+          sse.onData();
           buffer += decoder.decode(res.value, { stream: true });
 
           const chunks = buffer.split('\n\n');
@@ -4820,10 +4884,16 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           }
         }
       } catch (err) {
-        appendLog('❌ 网络通信异常: ' + err.message);
-        updateProgressUI(1, 5, 0, '通信异常: ' + err.message, 'rollback');
-        showToast('还原异常: ' + err.message, 'error');
+        if (sse) {
+          // 流已建立后中断：后台任务可能仍在继续 —— 降级提示 + 轮询确认
+          await recoverAfterStreamBreak('rollback', targetVer);
+        } else {
+          appendLog('❌ 网络通信异常: ' + err.message);
+          updateProgressUI(1, 5, 0, '通信异常: ' + err.message, 'rollback');
+          showToast('还原异常: ' + err.message, 'error');
+        }
       } finally {
+        if (sse) sse.close();
         if (installBtn) installBtn.disabled = false;
         await loadStatus();
         await loadRollbackStatus();
