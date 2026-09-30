@@ -803,11 +803,29 @@ async function handleAdminApi(req, res, pathname, query) {
       }
     }
 
+    if (subPath === '/api/snapshots/inspect' && req.method === 'GET') {
+      const file = query.get('file') || '';
+      if (!file) {
+        return sendJson(res, 400, { ok: false, error: '缺少 file 参数' });
+      }
+      try {
+        const r = await backupService.inspectSnapshot(file);
+        return sendJson(res, r.ok ? 200 : 404, r);
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: safeErrMsg(err) });
+      }
+    }
+
     if (subPath === '/api/snapshots/restore' && req.method === 'POST') {
       const body = await readJsonBody(req);
+      const mode = (body && body.mode) || 'full';
+      if (mode !== 'full' && mode !== 'config-only') {
+        return sendJson(res, 400, { ok: false, error: `非法还原模式: ${mode} (仅支持 'full' 或 'config-only')` });
+      }
       try {
-        // Issue #9：还原会自动兼容老快照里"逃出归档根"的相对软链，调用方无需传任何额外参数
-        const r = await backupService.restoreBackup(body.filename, dshManager);
+        // Issue #9：支持 mode: 'full' | 'config-only' 恢复范围选择，不传默认 'full'；
+        // 还原会自动兼容老快照里"逃出归档根"的相对软链
+        const r = await backupService.restoreBackup(body.filename, dshManager, { mode });
         return sendJson(res, 200, r);
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: safeErrMsg(err) });
