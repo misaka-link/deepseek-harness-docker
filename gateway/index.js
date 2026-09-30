@@ -802,10 +802,8 @@ async function handleAdminApi(req, res, pathname, query) {
     if (subPath === '/api/snapshots/restore' && req.method === 'POST') {
       const body = await readJsonBody(req);
       try {
-        const r = await backupService.restoreBackup(body.filename, dshManager, {
-          // Issue #9「兼容还原」：把老快照里"逃出归档根"的相对软链改写为等价绝对软链后再切换
-          repairRelativeLinks: body.repairRelativeLinks === true
-        });
+        // Issue #9：还原会自动兼容老快照里"逃出归档根"的相对软链，调用方无需传任何额外参数
+        const r = await backupService.restoreBackup(body.filename, dshManager);
         return sendJson(res, 200, r);
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: safeErrMsg(err) });

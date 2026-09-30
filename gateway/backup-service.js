@@ -488,7 +488,7 @@ function validateArchiveMembers(archivePath, opts = {}) {
 }
 
 /**
- * Issue #9：还原时修复"逃出归档根"的相对软链（供控制台「兼容还原」使用）。
+ * Issue #9：还原时**自动**修复"逃出归档根"的相对软链（老版本快照兼容，用户无需任何额外操作）。
  *
  * 老快照里 pnpm 为 `link:` 依赖生成的是**相对**软链，例如
  *   .dsh/profiles/web/node_modules/dshmarket -> ../../../../../usr/local/lib/node_modules/dshmarket
@@ -682,10 +682,13 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
  * 异步非阻塞恢复配置快照
  * @param {string} filename 快照文件名
  * @param {object} dshManager DSH 进程管理器
- * @param {object} [opts] { repairRelativeLinks?: boolean } —— Issue #9「兼容还原」：
- *        在 staging 内把"逃出归档根"的相对软链改写为等价绝对软链后再切换，使还原结果与部署深度无关。
+ *
+ * Issue #9：还原**自动**兼容老快照 —— 老版本（0.1.x 时代）里 pnpm 为 `link:` 依赖生成的
+ * 相对软链在归档视图下会"逃出 `.dsh/` 根"（校验层已按真实还原落点放行）；这里再自动把它们
+ * 改写为等价绝对软链后再切换，使还原结果与部署路径深度无关（换镜像 / 换挂载路径都能正常解析）。
+ * 全程在 staging 沙箱内完成，用户无需任何额外操作。
  */
-async function restoreBackup(filename, dshManager, opts = {}) {
+async function restoreBackup(filename, dshManager) {
   if (activeTask) {
     throw new Error(`当前正在执行 ${activeTask.label} 操作，请稍候再试`);
   }
@@ -760,12 +763,11 @@ async function restoreBackup(filename, dshManager, opts = {}) {
       if (fs.existsSync(cur)) { try { fs.copyFileSync(cur, path.join(stagedDsh, keep)); } catch {} }
     }
 
-    // 3.1 Issue #9「兼容还原」：把逃出归档根的相对软链改写为等价绝对软链。
-    //     必须在原子切换之前、且只在 staging 内操作（现网完全不受影响）。
-    let linkRepair = null;
-    if (opts && opts.repairRelativeLinks) {
-      linkRepair = repairEscapingRelativeLinks(stagedDsh);
-      console.log(`[backup-service] 兼容还原：相对软链改写 ${linkRepair.repaired} 条（保持原样 ${linkRepair.kept} 条）`);
+    // 3.1 Issue #9：自动把"逃出归档根"的相对软链改写为等价绝对软链（仅限白名单目标）。
+    //     全程在 staging 内、原子切换之前完成，现网完全不受影响；用户无需任何额外操作。
+    const linkRepair = repairEscapingRelativeLinks(stagedDsh);
+    if (linkRepair.repaired > 0) {
+      console.log(`[backup-service] 已自动修复老快照中的相对软链 ${linkRepair.repaired} 条（保持原样 ${linkRepair.kept} 条）`);
       for (const s of linkRepair.samples) console.log(`[backup-service]   · ${s}`);
     }
 
@@ -851,7 +853,7 @@ async function restoreBackup(filename, dshManager, opts = {}) {
     // 成功：清理回滚点
     try { fs.rmSync(rollbackRoot, { recursive: true, force: true }); } catch {}
     console.log(`[backup-service] 快照 ${safeFilename} 还原完成，DSH 服务就绪状态: ${dshReady}`);
-    return { ok: true, filename: safeFilename, dshReady, repairedLinks: linkRepair ? linkRepair.repaired : 0 };
+    return { ok: true, filename: safeFilename, dshReady, repairedLinks: linkRepair.repaired };
   } catch (err) {
     // 失败：若已切换过且回滚点仍在，尽力恢复还原前的配置并重新拉起
     try {
@@ -1085,7 +1087,7 @@ module.exports = {
   getActiveTask,
   isBusy,
   validateArchiveMembers,
-  // 供回归测试直接做单元级断言（解析单行 / 单条路径 / 兼容还原的相对软链修复）
+  // 供回归测试直接做单元级断言（解析单行 / 单条路径 / 老快照相对软链自动修复）
   classifyArchiveMemberLine,
   assertSafeMemberPath,
   repairEscapingRelativeLinks,
