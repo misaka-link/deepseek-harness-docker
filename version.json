@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.0-rc.1",
+    "dshVersion": "0.2.0-rc.2",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,23 +19,41 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.2.0",
-    "releaseDate": "2026-09-28",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.0",
-    "changelog": "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.1，兼容区间上界同步为 <=0.2.0-rc.1；破坏性阻断阈值由 >=0.2.0 调整为 >=0.3.0，0.2.x 线纳入深度适配；同步官方自动化能力外移、对话状态动画与 Linux 安装失败修复",
+    "version": "0.2.1",
+    "releaseDate": "2026-09-30",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.1",
+    "changelog": "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2；已适配版本矩阵置顶新增 0.2.0-rc.2 并保留 0.2.0-rc.1 历史项，推荐核心同步指向 rc.2",
     "changelogList": [
-      "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.1，兼容区间上界同步为 <=0.2.0-rc.1",
-      "破坏性版本阻断阈值由 >=0.2.0 调整为 >=0.3.0：0.2.x 线已纳入深度适配，不再拦截在线切换"
+      "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2",
+      "已适配版本矩阵置顶新增 0.2.0-rc.2（保留 0.2.0-rc.1 及其后历史项），推荐核心与前端兜底同步指向 rc.2，消除后台「未经深度适配」误报"
     ],
     "dshChangelogList": [
-      "自动化任务改由可选插件包提供，内置自动化能力随之下线",
-      "对话新增状态动画与回合用时信息展示",
-      "插件管理界面与安装引导改进：安装来源选择与进度反馈更直观",
-      "修复 Safari 下流式输出无法正常刷新的问题",
-      "修复 Linux 平台缺少原生预构建包导致 npm 安装失败的问题"
+      "模型选择器支持搜索：模型较多时可按名称模糊匹配并用键盘选择",
+      "第三方模型目录与兼容适配升级至 pi-ai 0.87.1：部分旧模型 ID 被移除，已保存的模型选择可能需要重新选择",
+      "修复切换会话或返回对话后计划审阅无法打开、「查看全文」消失的问题",
+      "修复设置页关闭「显示代码工作视图」后无法调整 Agent 预设的问题",
+      "精简插件安装引导：区分已安装、不兼容与内置插件的升级提示",
+      "优化聊天耗时、过程信息、字号与深色主题样式，并降低动画运行开销"
     ]
   },
   "history": {
+    "0.2.0": {
+      "version": "0.2.0",
+      "releaseDate": "2026-09-28",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.0",
+      "changelog": "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.1，兼容区间上界同步为 <=0.2.0-rc.1；破坏性阻断阈值由 >=0.2.0 调整为 >=0.3.0，0.2.x 线纳入深度适配；同步官方自动化能力外移、对话状态动画与 Linux 安装失败修复",
+      "changelogList": [
+        "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.1，兼容区间上界同步为 <=0.2.0-rc.1",
+        "破坏性版本阻断阈值由 >=0.2.0 调整为 >=0.3.0：0.2.x 线已纳入深度适配，不再拦截在线切换"
+      ],
+      "dshChangelogList": [
+        "自动化任务改由可选插件包提供，内置自动化能力随之下线",
+        "对话新增状态动画与回合用时信息展示",
+        "插件管理界面与安装引导改进：安装来源选择与进度反馈更直观",
+        "修复 Safari 下流式输出无法正常刷新的问题",
+        "修复 Linux 平台缺少原生预构建包导致 npm 安装失败的问题"
+      ]
+    },
     "0.1.9": {
       "version": "0.1.9",
       "releaseDate": "2026-09-25",
@@ -208,9 +226,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.0-rc.1",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.0-rc.1",
+    "recommendedDsh": "0.2.0-rc.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.0-rc.2",
     "adaptedVersions": [
+      "0.2.0-rc.2",
       "0.2.0-rc.1",
       "0.1.7-rc.2",
       "0.1.7-rc.1",

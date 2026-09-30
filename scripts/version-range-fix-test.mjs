@@ -2,7 +2,7 @@
  * 快速回归测试：gateway/version-service.js 复合区间求值 + 导出面改造。
  *
  * 覆盖：
- *   1. satisfiesRange 对 `>=0.1.2-rc.1 <=0.2.0-rc.1` 的判定（0.2.0-rc.1 IN；0.1.7-rc.2 IN；0.2.0 / 0.2.1 / 0.3.0 OUT）
+ *   1. satisfiesRange 对 `>=0.1.2-rc.1 <=0.2.0-rc.2` 的判定（0.2.0-rc.2 IN；0.2.0-rc.1 IN；0.1.7-rc.2 IN；0.2.0 / 0.2.1 / 0.3.0 OUT）
  *   2. matchSemverPattern 复合 AND 区间修复（0.2.0 / 0.3.0 不再被误判为 true）
  *   3. 单 term 表达式与多空格切分、isSemver 对 pre-release 的支持
  *   4. 向后兼容：单例默认导出（getLiveMeta / evaluateTargetVersion / check 等仍可用）
@@ -25,7 +25,7 @@ const ok = (cond, msg) => {
 };
 const eq = (actual, expected, msg) => ok(actual === expected, `${msg} (期望 ${expected}，实际 ${actual})`);
 
-const RANGE = '>=0.1.2-rc.1 <=0.2.0-rc.1';
+const RANGE = '>=0.1.2-rc.1 <=0.2.0-rc.2';
 
 // ── 单例默认导出（向后兼容路径） ──────────────────────────────────────────
 const versionService = require('../gateway/version-service');
@@ -53,6 +53,7 @@ ok(satisfiesRange === versionService.satisfiesRange, '解构函数与单例属�
 
 console.log('\n=== C. satisfiesRange 复合区间判定（核心修复） ===');
 eq(satisfiesRange('0.2.0-rc.1', RANGE), true,  '0.2.0-rc.1 IN');
+eq(satisfiesRange('0.2.0-rc.2', RANGE), true,  '0.2.0-rc.2 IN（区间上界，闭区间）');
 eq(satisfiesRange('0.1.7-rc.2', RANGE), true,  '0.1.7-rc.2 IN');
 eq(satisfiesRange('0.2.0',      RANGE), false, '0.2.0 OUT');
 eq(satisfiesRange('0.2.1',      RANGE), false, '0.2.1 OUT');
@@ -102,8 +103,10 @@ eq(danger.level, 'danger', '0.3.0 → danger 规则命中');
 eq(danger.action, 'force-docker-pull', '0.3.0 → force-docker-pull');
 const okRc1 = versionService.evaluateTargetVersion('0.2.0-rc.1');
 eq(okRc1.level, 'success', '0.2.0-rc.1 → 官方深度适配 success');
-const okRc2 = versionService.evaluateTargetVersion('0.1.7-rc.2');
-eq(okRc2.level, 'success', '0.1.7-rc.2 → 官方深度适配 success');
+const okRc17 = versionService.evaluateTargetVersion('0.1.7-rc.2');
+eq(okRc17.level, 'success', '0.1.7-rc.2 → 官方深度适配 success');
+const okRc2 = versionService.evaluateTargetVersion('0.2.0-rc.2');
+eq(okRc2.level, 'success', '0.2.0-rc.2 → 官方深度适配 success');
 const warnLow = versionService.evaluateTargetVersion('0.1.4');
 eq(warnLow.level, 'warning', '0.1.4 → warning（降级格式风险）');
 
