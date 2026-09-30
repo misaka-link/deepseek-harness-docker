@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { validateArchiveMembers, classifyArchiveMemberLine } = require(path.join(here, '../gateway/backup-service.js'));
+const { validateArchiveMembers, classifyArchiveMemberLine, repairEscapingRelativeLinks } = require(path.join(here, '../gateway/backup-service.js'));
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-arch-'));
 let pass = 0, fail = 0;
@@ -416,6 +416,26 @@ async function main() {
     { name: '.dsh/hl/evil.txt', typeflag: '0', data: 'x' }
   ]);
   await expectReject(relHard, '经硬链接继承的逃逸软链之下的成员');
+
+  // ---- T. Issue #9「兼容还原」：把逃出归档根的相对软链改写为绝对软链 ----
+  console.log('\n=== T. Issue #9 兼容还原：相对软链改写 ===');
+  const repairRoot = path.join(TMP, 'repair-stage', '.dsh');
+  const mkParent = (p) => fs.mkdirSync(path.dirname(p), { recursive: true });
+  const dshmarketPath = path.join(repairRoot, 'profiles/web/node_modules/dshmarket');
+  mkParent(dshmarketPath);
+  fs.symlinkSync(relDshmarket, dshmarketPath);
+  const evilLinkPath = path.join(repairRoot, 'evil');
+  mkParent(evilLinkPath);
+  fs.symlinkSync('../../../../etc/passwd', evilLinkPath);
+  const innerLinkPath = path.join(repairRoot, 'profiles/web/node_modules/.bin/katex');
+  mkParent(innerLinkPath);
+  fs.symlinkSync('../katex/cli.js', innerLinkPath);
+
+  const rep = repairEscapingRelativeLinks(repairRoot);
+  ok(rep.repaired === 1, `只改写白名单内的逃逸相对软链（repaired=${rep.repaired}, kept=${rep.kept}）`);
+  ok(fs.readlinkSync(dshmarketPath) === '/usr/local/lib/node_modules/dshmarket', '改写结果为等价绝对软链');
+  ok(fs.readlinkSync(evilLinkPath) === '../../../../etc/passwd', '非白名单目标保持原样（fail-closed）');
+  ok(fs.readlinkSync(innerLinkPath) === '../katex/cli.js', '归档内部相对软链保持原样（未误改）');
 
   fs.rmSync(TMP, { recursive: true, force: true });
   console.log(`\n===== 汇总: 通过 ${pass} / 失败 ${fail} =====`);
