@@ -626,7 +626,9 @@ async function handleAdminApi(req, res, pathname, query) {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive'
+        'Connection': 'keep-alive',
+        // P2（Issue #9）：禁止反向代理缓冲，保证进度/日志实时逐条下发（Nginx 等）
+        'X-Accel-Buffering': 'no'
       });
 
       const sendEvt = (data) => {
@@ -685,7 +687,9 @@ async function handleAdminApi(req, res, pathname, query) {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive'
+        'Connection': 'keep-alive',
+        // P2（Issue #9）：禁止反向代理缓冲，保证进度/日志实时逐条下发（Nginx 等）
+        'X-Accel-Buffering': 'no'
       });
 
       const sendEvt = (data) => {
