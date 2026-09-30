@@ -164,6 +164,11 @@ const LINK_SEPARATORS = [' -> ', ' link to ', ' 连接到 '];
 // 与 DSH_DIR 同样从 env 派生（可用 DSH_LEGACY_HOME 覆盖），不写死具体 home。
 const LEGACY_DSH_DIR = path.join(process.env.DSH_LEGACY_HOME || '/root', '.dsh');
 const ARCHIVE_ROOT_ABS_PREFIXES = Array.from(new Set([DSH_DIR + '/', LEGACY_DSH_DIR + '/']));
+// Issue #9：相对软链目标按「真实还原落点」换算时使用的归档根候选（当前 home + 默认部署根）。
+// 老快照里 pnpm 为 `link:` 依赖生成的相对软链会"向上逃出归档根"，但按落点换算后指向的
+// 正是白名单目录（如 /usr/local/lib/node_modules/...），与写成绝对路径完全等价。
+const ARCHIVE_ROOT_BASES = Array.from(new Set([DSH_DIR, LEGACY_DSH_DIR]));
+const toPosix = (p) => String(p).replace(/\\/g, '/');
 // 纵深防御：追踪符号链接成员，拒绝任何位于符号链接之下的成员
 // （GNU tar 解压时会拒绝这种写法，但白名单不该依赖下游行为）；
 // 同时给追踪集合一个上限，避免病态归档用海量软链把内存顶爆。
@@ -186,23 +191,17 @@ function assertSafeMemberPath(memberPath, who) {
 }
 
 /**
- * 符号链接目标是否受控。
- *  - 相对目标：归一化后必须仍在 `.dsh/` 之内；
- *  - 绝对目标：**先归一化再比对前缀**（否则 `/opt/../etc/passwd` 这类目标能用 `startsWith`
- *    骗过白名单），允许指向本项目合法的依赖安装位置，也允许指向**本归档自身的根**
- *    （`$DSH_HOME/.dsh`）——目标仍在被还原的树内，且剩余部分仍按成员路径校验。
+ * 绝对软链目标是否受控：**先归一化再比对前缀**（否则 `/opt/../etc/passwd` 这类目标能用
+ * `startsWith` 骗过白名单），允许指向本项目合法的依赖安装位置，也允许指向**本归档自身的根**
+ * （`$DSH_HOME/.dsh`）——目标仍在被还原的树内，且剩余部分仍按成员路径校验。
+ * @param {string} absPath 已归一化的绝对路径
  */
-function isAllowedSymlinkTarget(memberName, linkTarget) {
-  if (!linkTarget.startsWith('/')) {
-    return path.posix.normalize(path.posix.join(path.posix.dirname(memberName), linkTarget))
-      .startsWith(ALLOWED_ARCHIVE_PREFIX + '/');
-  }
-  const normalized = path.posix.normalize(linkTarget);
-  if (!normalized.startsWith('/')) return false;
-  if (ALLOWED_LINK_PREFIXES.some(p => normalized.startsWith(p))) return true;
+function isAllowedAbsoluteLinkTarget(absPath) {
+  if (!absPath.startsWith('/')) return false;
+  if (ALLOWED_LINK_PREFIXES.some(p => absPath.startsWith(p))) return true;
   for (const root of ARCHIVE_ROOT_ABS_PREFIXES) {
-    if (!normalized.startsWith(root)) continue;
-    const rel = normalized.slice(root.length);
+    if (!absPath.startsWith(root)) continue;
+    const rel = absPath.slice(root.length);
     if (!rel) return false;
     try {
       assertSafeMemberPath(ALLOWED_ARCHIVE_PREFIX + '/' + rel, '归档链接目标');
@@ -212,6 +211,34 @@ function isAllowedSymlinkTarget(memberName, linkTarget) {
     }
   }
   return false;
+}
+
+/**
+ * 符号链接目标是否受控。
+ *  - 相对目标：
+ *      1. 归一化后仍在 `.dsh/` 之内（归档内部相对引用）→ 放行；
+ *      2. **Issue #9**：老快照里由 pnpm 为 `link:` 依赖生成的相对软链会"向上逃出归档根"
+ *         （例：`.dsh/profiles/web/node_modules/dshmarket -> ../../../../../usr/local/lib/node_modules/dshmarket`）。
+ *         它在真实还原落点上指向的正是白名单目录，与"写成绝对路径"**信任等级完全等价**，
+ *         因此这里按真实落点解析成绝对路径后，套用与绝对目标同一套白名单（不新增任何信任面）。
+ *  - 绝对目标：先归一化再比对前缀。
+ * 注意：解析基准取 `ARCHIVE_ROOT_BASES`（当前 DSH home + 默认部署根），
+ * 换算失败的相对目标（例如逃到 /etc）仍会被 `isAllowedAbsoluteLinkTarget` 拒绝 → 保持 fail-closed。
+ */
+function isAllowedSymlinkTarget(memberName, linkTarget) {
+  if (!linkTarget.startsWith('/')) {
+    const insideArchive = path.posix.normalize(path.posix.join(path.posix.dirname(memberName), linkTarget));
+    if (insideArchive.startsWith(ALLOWED_ARCHIVE_PREFIX + '/')) return true;
+    // 逃出归档根的相对目标 → 按真实还原落点换算为绝对路径，再走同一套白名单
+    const memberDirInArchive = path.posix.dirname(memberName);
+    for (const base of ARCHIVE_ROOT_BASES) {
+      const memberDirAbs = path.posix.join(toPosix(path.posix.dirname(toPosix(base))), memberDirInArchive);
+      const resolved = path.posix.resolve(memberDirAbs, linkTarget);
+      if (isAllowedAbsoluteLinkTarget(resolved)) return true;
+    }
+    return false;
+  }
+  return isAllowedAbsoluteLinkTarget(path.posix.normalize(linkTarget));
 }
 
 /**
@@ -461,6 +488,62 @@ function validateArchiveMembers(archivePath, opts = {}) {
 }
 
 /**
+ * Issue #9：还原时**自动**修复"逃出归档根"的相对软链（老版本快照兼容，用户无需任何额外操作）。
+ *
+ * 老快照里 pnpm 为 `link:` 依赖生成的是**相对**软链，例如
+ *   .dsh/profiles/web/node_modules/dshmarket -> ../../../../../usr/local/lib/node_modules/dshmarket
+ * 它只在「DSH home 恰好是 /root/.dsh 这种两层深度」时解析正确；换部署路径或再次打包就会漂移。
+ * 这里在 staging 沙箱内把它**原地改写为等价绝对软链**（仅在解析结果命中既有白名单时），
+ * 使还原后的树与目录深度无关 —— 换镜像 / 换挂载路径都能正常解析。
+ *
+ * 安全性：只改写 `isAllowedAbsoluteLinkTarget()` 放行的目标，其余一律保持原样；
+ * 遍历不跟随软链（Dirent 对软链不会判定为目录），因此不存在遍历逃逸。
+ *
+ * @param {string} stagedDsh staging 目录里的 `.dsh` 绝对路径
+ * @returns {{repaired:number, kept:number, samples:string[]}}
+ */
+function repairEscapingRelativeLinks(stagedDsh) {
+  const report = { repaired: 0, kept: 0, samples: [] };
+  const stack = [stagedDsh];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      const p = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        let target = null;
+        try { target = fs.readlinkSync(p); } catch { continue; }
+        if (!target || target.startsWith('/')) continue; // 绝对目标由校验层白名单负责，无需改写
+        const memberName = ALLOWED_ARCHIVE_PREFIX + '/' + toPosix(path.relative(stagedDsh, p));
+        const insideArchive = path.posix.normalize(path.posix.join(path.posix.dirname(memberName), target));
+        if (insideArchive.startsWith(ALLOWED_ARCHIVE_PREFIX + '/')) continue; // 归档内部相对引用，无需改写
+        const memberDirInArchive = path.posix.dirname(memberName);
+        let resolved = null;
+        for (const base of ARCHIVE_ROOT_BASES) {
+          const candidate = path.posix.resolve(
+            path.posix.join(toPosix(path.posix.dirname(toPosix(base))), memberDirInArchive), target);
+          if (isAllowedAbsoluteLinkTarget(candidate)) { resolved = candidate; break; }
+        }
+        if (!resolved) { report.kept += 1; continue; } // 非白名单目标：保持原样（校验层本就会拒包）
+        try {
+          fs.unlinkSync(p);
+          fs.symlinkSync(resolved, p);
+          report.repaired += 1;
+          if (report.samples.length < 20) report.samples.push(`${memberName} -> ${resolved}`);
+        } catch (e) {
+          report.kept += 1;
+          console.warn(`[backup-service] 相对软链改写失败（保持原样）: ${memberName}: ${e.message}`);
+        }
+      } else if (entry.isDirectory()) {
+        stack.push(p);
+      }
+    }
+  }
+  return report;
+}
+
+/**
  * 异步非阻塞创建配置快照
  * @param {string|object} nameOrOpts - 快照备注名或参数对象 { name, type }
  * @param {string} [backupType='full'] - 备份类型: 'full' (完整备份) 或 'config' (仅配置无会话)
@@ -597,6 +680,13 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
 
 /**
  * 异步非阻塞恢复配置快照
+ * @param {string} filename 快照文件名
+ * @param {object} dshManager DSH 进程管理器
+ *
+ * Issue #9：还原**自动**兼容老快照 —— 老版本（0.1.x 时代）里 pnpm 为 `link:` 依赖生成的
+ * 相对软链在归档视图下会"逃出 `.dsh/` 根"（校验层已按真实还原落点放行）；这里再自动把它们
+ * 改写为等价绝对软链后再切换，使还原结果与部署路径深度无关（换镜像 / 换挂载路径都能正常解析）。
+ * 全程在 staging 沙箱内完成，用户无需任何额外操作。
  */
 async function restoreBackup(filename, dshManager) {
   if (activeTask) {
@@ -671,6 +761,14 @@ async function restoreBackup(filename, dshManager) {
     for (const keep of ['gateway.config.json', '.session_secret']) {
       const cur = path.join(DSH_DIR, keep);
       if (fs.existsSync(cur)) { try { fs.copyFileSync(cur, path.join(stagedDsh, keep)); } catch {} }
+    }
+
+    // 3.1 Issue #9：自动把"逃出归档根"的相对软链改写为等价绝对软链（仅限白名单目标）。
+    //     全程在 staging 内、原子切换之前完成，现网完全不受影响；用户无需任何额外操作。
+    const linkRepair = repairEscapingRelativeLinks(stagedDsh);
+    if (linkRepair.repaired > 0) {
+      console.log(`[backup-service] 已自动修复老快照中的相对软链 ${linkRepair.repaired} 条（保持原样 ${linkRepair.kept} 条）`);
+      for (const s of linkRepair.samples) console.log(`[backup-service]   · ${s}`);
     }
 
     // 4. 原子切换：注意 /root/.dsh 是 Docker 卷挂载点，整体 rename 会 EBUSY，
@@ -755,7 +853,7 @@ async function restoreBackup(filename, dshManager) {
     // 成功：清理回滚点
     try { fs.rmSync(rollbackRoot, { recursive: true, force: true }); } catch {}
     console.log(`[backup-service] 快照 ${safeFilename} 还原完成，DSH 服务就绪状态: ${dshReady}`);
-    return { ok: true, filename: safeFilename, dshReady };
+    return { ok: true, filename: safeFilename, dshReady, repairedLinks: linkRepair.repaired };
   } catch (err) {
     // 失败：若已切换过且回滚点仍在，尽力恢复还原前的配置并重新拉起
     try {
@@ -989,9 +1087,10 @@ module.exports = {
   getActiveTask,
   isBusy,
   validateArchiveMembers,
-  // 供回归测试直接做单元级断言（解析单行 / 单条路径）
+  // 供回归测试直接做单元级断言（解析单行 / 单条路径 / 老快照相对软链自动修复）
   classifyArchiveMemberLine,
   assertSafeMemberPath,
+  repairEscapingRelativeLinks,
   runTarAsync,
   SNAPSHOTS_DIR
 };

@@ -806,6 +806,7 @@ async function handleAdminApi(req, res, pathname, query) {
     if (subPath === '/api/snapshots/restore' && req.method === 'POST') {
       const body = await readJsonBody(req);
       try {
+        // Issue #9：还原会自动兼容老快照里"逃出归档根"的相对软链，调用方无需传任何额外参数
         const r = await backupService.restoreBackup(body.filename, dshManager);
         return sendJson(res, 200, r);
       } catch (err) {

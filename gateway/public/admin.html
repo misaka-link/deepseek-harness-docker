@@ -4619,7 +4619,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         confirmClass: 'btn-danger',
         bodyHtml: `<div class="notice-card notice-warning" style="margin:0;">${NOTICE_ICON.warning}` +
           `<div><div style="font-weight:700;margin-bottom:2px;">将覆盖现有配置并重启 DSH</div>` +
-          `<div>从快照 <code>${escapeHtml(filename)}</code> 恢复：现有 <code>/root/.dsh</code> 会被覆盖，DSH 服务将重新拉起（约 20~40 秒）。</div></div></div>`
+          `<div>从快照 <code>${escapeHtml(filename)}</code> 恢复：现有 <code>/root/.dsh</code> 会被覆盖，DSH 服务将重新拉起（约 20~40 秒）。<br/>老版本快照里的相对软链会被<b>自动修复</b>，无需任何额外操作。</div></div></div>`
       });
       if (!confirmed) return;
       updateTaskBanner({ label: '还原快照并重启' });
@@ -4629,12 +4629,16 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename }),
-          signal: AbortSignal.timeout(180000)
+          // 大快照（含大量依赖/会话）还原可能超过 3 分钟，给足超时避免误报「网络异常」
+          signal: AbortSignal.timeout(600000)
         });
         let data = null;
         try { data = await res.json(); } catch (e) { /* 非 JSON 响应 */ }
         if (res.ok && data && data.ok) {
-          showToast('快照还原成功，DSH 服务已重新就绪！', 'success');
+          const fixed = Number(data.repairedLinks) || 0;
+          showToast(fixed > 0
+            ? `快照还原成功（已自动修复 ${fixed} 条老版本相对软链），DSH 服务已重新就绪！`
+            : '快照还原成功，DSH 服务已重新就绪！', 'success');
           await loadStatus();
         } else {
           showToast('快照还原失败: ' + ((data && data.error) || ('HTTP ' + res.status)), 'error');

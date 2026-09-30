@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { validateArchiveMembers, classifyArchiveMemberLine } = require(path.join(here, '../gateway/backup-service.js'));
+const { validateArchiveMembers, classifyArchiveMemberLine, repairEscapingRelativeLinks } = require(path.join(here, '../gateway/backup-service.js'));
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-arch-'));
 let pass = 0, fail = 0;
@@ -313,6 +313,129 @@ async function main() {
     await validateArchiveMembers(rootDir);
     ok(true, '正常的 `.dsh/` 目录成员照常放行（未误伤）');
   } catch (e) { ok(false, '正常的 `.dsh/` 目录成员被误拒: ' + e.message); }
+
+  // ---- S. Issue #9：相对软链目标"逃出归档根"（pnpm 为 `link:` 依赖生成的相对软链）----
+  // 老快照里 `.dsh/profiles/web/node_modules/<pkg>` 是 pnpm 用相对目标建的软链，
+  // 在归档视图下会向上逃出 `.dsh/` 根；但按真实还原落点换算后指向的正是白名单目录，
+  // 与"写成绝对路径"信任等级等价 → 必须放行（旧实现 100% 误杀）。
+  console.log('\n=== S. Issue #9：逃出归档根的相对软链 ===');
+  const relDshmarket = '../../../../../usr/local/lib/node_modules/dshmarket';
+  const relOk = path.join(TMP, 'rel-ok.tar.gz');
+  writeRawTarGz(relOk, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/profiles/', typeflag: '5' },
+    { name: '.dsh/profiles/web/', typeflag: '5' },
+    { name: '.dsh/profiles/web/node_modules/', typeflag: '5' },
+    { name: '.dsh/profiles/web/node_modules/dshmarket', typeflag: '2', linkname: relDshmarket }
+  ]);
+  try {
+    const r = await validateArchiveMembers(relOk);
+    ok(r.symLinks === 1, `逃出归档根但命中依赖白名单的相对软链被放行（symLinks=${r.symLinks}）`);
+  } catch (e) { ok(false, '逃出归档根但命中依赖白名单的相对软链被误拒: ' + e.message); }
+
+  const relOpt = path.join(TMP, 'rel-opt.tar.gz');
+  writeRawTarGz(relOpt, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/bin/', typeflag: '5' },
+    { name: '.dsh/bin/helper', typeflag: '2', linkname: '../../../opt/tools/helper' }
+  ]);
+  try {
+    const r = await validateArchiveMembers(relOpt);
+    ok(r.symLinks === 1, `逃出归档根并命中 /opt/ 白名单的相对软链被放行（symLinks=${r.symLinks}）`);
+  } catch (e) { ok(false, '/opt/ 白名单相对软链被误拒: ' + e.message); }
+
+  const relDeep = path.join(TMP, 'rel-deep.tar.gz');
+  writeRawTarGz(relDeep, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/profiles/web/node_modules/dshmarket', typeflag: '2', linkname: '../../../../../../../../../../usr/local/lib/node_modules/dshmarket' }
+  ]);
+  try {
+    const r = await validateArchiveMembers(relDeep);
+    ok(r.symLinks === 1, `超深 .. 在系统根截断后仍解析到白名单 → 放行（symLinks=${r.symLinks}）`);
+  } catch (e) { ok(false, '超深 .. 合法相对软链被误拒: ' + e.message); }
+
+  const relInside = path.join(TMP, 'rel-inside.tar.gz');
+  writeRawTarGz(relInside, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/profiles/web/node_modules/', typeflag: '5' },
+    { name: '.dsh/profiles/web/node_modules/foo', typeflag: '2', linkname: '../bar' }
+  ]);
+  try {
+    const r = await validateArchiveMembers(relInside);
+    ok(r.symLinks === 1, `归档内部相对软链（未逃出）照常放行（symLinks=${r.symLinks}）`);
+  } catch (e) { ok(false, '归档内部相对软链被误拒: ' + e.message); }
+
+  const relBack = path.join(TMP, 'rel-back.tar.gz');
+  writeRawTarGz(relBack, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/a/', typeflag: '5' },
+    { name: '.dsh/a/link', typeflag: '2', linkname: '../../../root/.dsh/profiles/web' }
+  ]);
+  try {
+    const r = await validateArchiveMembers(relBack);
+    ok(r.symLinks === 1, `逃出后又相对回指归档自身根 → 放行（symLinks=${r.symLinks}）`);
+  } catch (e) { ok(false, '回指归档自身根的相对软链被误拒: ' + e.message); }
+
+  // 反例：逃逸相对软链**必须**仍然 fail-closed
+  const relEtc = path.join(TMP, 'rel-etc.tar.gz');
+  writeRawTarGz(relEtc, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/profiles/web/node_modules/evil', typeflag: '2', linkname: relDshmarket.replace('/usr/local/lib/node_modules/dshmarket', '/etc/passwd') }
+  ]);
+  await expectReject(relEtc, '相对逃逸指向 /etc/passwd');
+
+  const relShadow = path.join(TMP, 'rel-shadow.tar.gz');
+  writeRawTarGz(relShadow, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/bin/evil', typeflag: '2', linkname: '../../../opt/../etc/shadow' }
+  ]);
+  await expectReject(relShadow, '相对逃逸借 /opt/ 前缀回溯到 /etc/shadow');
+
+  const relSsh = path.join(TMP, 'rel-ssh.tar.gz');
+  writeRawTarGz(relSsh, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/evil', typeflag: '2', linkname: '../../../../root/.ssh/id_rsa' }
+  ]);
+  await expectReject(relSsh, '相对逃逸指向 /root/.ssh/id_rsa');
+
+  // 反例：成员嵌在"已放行的逃逸相对软链"之下（纵深防御必须仍然生效）
+  const relNest = path.join(TMP, 'rel-nest.tar.gz');
+  writeRawTarGz(relNest, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/link', typeflag: '2', linkname: relDshmarket },
+    { name: '.dsh/link/pwned.js', typeflag: '0', data: 'x' }
+  ]);
+  await expectReject(relNest, '普通成员位于已放行逃逸软链之下');
+
+  // 反例：硬链接"继承"逃逸软链语义后再放子成员
+  const relHard = path.join(TMP, 'rel-hard.tar.gz');
+  writeRawTarGz(relHard, [
+    { name: '.dsh/', typeflag: '5' },
+    { name: '.dsh/sym', typeflag: '2', linkname: relDshmarket },
+    { name: '.dsh/hl', typeflag: '1', linkname: '.dsh/sym' },
+    { name: '.dsh/hl/evil.txt', typeflag: '0', data: 'x' }
+  ]);
+  await expectReject(relHard, '经硬链接继承的逃逸软链之下的成员');
+
+  // ---- T. Issue #9「兼容还原」：把逃出归档根的相对软链改写为绝对软链 ----
+  console.log('\n=== T. Issue #9 兼容还原：相对软链改写 ===');
+  const repairRoot = path.join(TMP, 'repair-stage', '.dsh');
+  const mkParent = (p) => fs.mkdirSync(path.dirname(p), { recursive: true });
+  const dshmarketPath = path.join(repairRoot, 'profiles/web/node_modules/dshmarket');
+  mkParent(dshmarketPath);
+  fs.symlinkSync(relDshmarket, dshmarketPath);
+  const evilLinkPath = path.join(repairRoot, 'evil');
+  mkParent(evilLinkPath);
+  fs.symlinkSync('../../../../etc/passwd', evilLinkPath);
+  const innerLinkPath = path.join(repairRoot, 'profiles/web/node_modules/.bin/katex');
+  mkParent(innerLinkPath);
+  fs.symlinkSync('../katex/cli.js', innerLinkPath);
+
+  const rep = repairEscapingRelativeLinks(repairRoot);
+  ok(rep.repaired === 1, `只改写白名单内的逃逸相对软链（repaired=${rep.repaired}, kept=${rep.kept}）`);
+  ok(fs.readlinkSync(dshmarketPath) === '/usr/local/lib/node_modules/dshmarket', '改写结果为等价绝对软链');
+  ok(fs.readlinkSync(evilLinkPath) === '../../../../etc/passwd', '非白名单目标保持原样（fail-closed）');
+  ok(fs.readlinkSync(innerLinkPath) === '../katex/cli.js', '归档内部相对软链保持原样（未误改）');
 
   fs.rmSync(TMP, { recursive: true, force: true });
   console.log(`\n===== 汇总: 通过 ${pass} / 失败 ${fail} =====`);

@@ -27,6 +27,18 @@ PNPM_VERSION="${PNPM_VERSION:-${PINNED_PNPM:-12.5.1}}"
 echo " 供应链固定版本: DSH=${DSH_VERSION}  pnpm=${PNPM_VERSION}"
 if [ -z "${DSH_VERSION}" ]; then echo "错误: 未能确定 DSH 版本" >&2; exit 1; fi
 
+# ── 追加镜像标签（Issue #9）─────────────────────────────────────
+# 用途：为特定问题 / 特定用户单独构建测试镜像，不影响 :latest 与正式发布标签。
+# 用法：EXTRA_TAGS="issue9-fix" ./build.sh
+#       EXTRA_TAGS="issue9-fix-market" ./build.sh --market
+# 多个标签用空格分隔；每个标签同时打本地名与 ghcr.io 名。
+EXTRA_TAGS="${EXTRA_TAGS:-}"
+EXTRA_TAG_ARGS=""
+for _t in ${EXTRA_TAGS}; do
+  EXTRA_TAG_ARGS="${EXTRA_TAG_ARGS} -t ${IMAGE_NAME}:${_t} -t ghcr.io/misaka-link/${IMAGE_NAME}:${_t}"
+  echo " 追加标签: ${IMAGE_NAME}:${_t}  /  ghcr.io/misaka-link/${IMAGE_NAME}:${_t}"
+done
+
 if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; then
   echo "========================================================="
   echo " 构建包含预装插件清单的 Market 镜像: ${IMAGE_NAME}:latest-market"
@@ -49,6 +61,7 @@ if [ "$1" = "--market" ] || [ "$1" = "-m" ] || [ "$PREINSTALL_PLUGINS" = "1" ]; 
     -t "${IMAGE_NAME}:dsh-${DSH_VERSION}-market" \
     -t "${IMAGE_NAME}:${PROJ_VER}-market" \
     -t "${IMAGE_NAME}:v${PROJ_VER}-market" \
+    ${EXTRA_TAG_ARGS} \
     .
   echo ">>> 成功产出镜像: ${IMAGE_NAME}:latest-market (附加 DSH:${DSH_VERSION}-market 与 项目:${PROJ_VER}-market)"
   echo ">>> 可使用 'docker compose -f docker-compose.market.yml up -d' 启动测试"
@@ -73,6 +86,7 @@ else
     -t "${IMAGE_NAME}:dsh-${DSH_VERSION}" \
     -t "${IMAGE_NAME}:${PROJ_VER}" \
     -t "${IMAGE_NAME}:v${PROJ_VER}" \
+    ${EXTRA_TAG_ARGS} \
     .
   echo ">>> 成功产出镜像: ${IMAGE_NAME}:latest (附加 DSH:${DSH_VERSION} 与 项目:${PROJ_VER})"
   echo ">>> 可使用 'docker compose up -d' 启动测试"
