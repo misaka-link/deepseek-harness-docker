@@ -22,9 +22,12 @@
     "version": "0.2.1",
     "releaseDate": "2026-09-30",
     "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.1",
-    "changelog": "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2；已适配版本矩阵置顶新增 0.2.0-rc.2 并保留 0.2.0-rc.1 历史项，推荐核心同步指向 rc.2",
+    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2；快照还原范围可选（仅恢复配置/完整全量还原）与老版本快照全自动还原；修复长任务 SSE「signal timed out」误报；适配矩阵置顶新增 0.2.0-rc.2 并保留历史项",
     "changelogList": [
-      "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2",
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2",
+      "快照还原范围可选（Issue #9）：控制台可选择「仅恢复配置（保留现网会话）」或「完整全量还原」，并按现网会话状态给出默认值与覆盖风险提示",
+      "老版本快照还原全自动（Issue #9）：控制台点「还原」即自动修复「逃出归档根」的相对软链，前端还原等待超时放宽至 600s",
+      "修复长任务 SSE 误报（Issue #9）：切换核心版本/就地还原改用空闲超时通道，消除「通信异常: signal timed out」误报",
       "已适配版本矩阵置顶新增 0.2.0-rc.2（保留 0.2.0-rc.1 及其后历史项），推荐核心与前端兜底同步指向 rc.2，消除后台「未经深度适配」误报"
     ],
     "dshChangelogList": [
