@@ -600,6 +600,11 @@
       border: 1px solid #bfdbfe;
       color: #1e40af;
     }
+    .notice-success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
 
     /* ============================================================
        日志终端：自动滚动开关 (Auto-scroll switch)
@@ -2161,6 +2166,81 @@
       <div class="modal-actions">
         <button class="btn" onclick="closeCreateSnapshotModal()">取消</button>
         <button class="btn btn-primary" id="btnSubmitCreateSnapshot" onclick="submitCreateSnapshot()">开始打包备份</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 还原快照范围选择模态框 (Issue #9) -->
+  <div class="modal-overlay" id="snapshotRestoreModal" style="display:none;">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header" style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-weight:700; font-size:16px;">还原快照与恢复范围选择</span>
+        <button class="btn" style="padding:2px 8px; font-size:14px; border:none; background:none; cursor:pointer;" onclick="closeRestoreSnapshotModal()">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px; margin-bottom:16px;">
+        <!-- 快照元信息卡片 -->
+        <div style="font-size:12px; color:var(--text-muted); background:var(--bg-main); padding:10px 12px; border-radius:var(--radius-md); border:1px solid #e2e8f0; display:flex; flex-direction:column; gap:6px;">
+          <div style="line-height:1.4;"><b>目标快照：</b><code id="restoreSnapshotFilename" style="color:var(--text-main); font-weight:600; word-break:break-all;"></code></div>
+          <div id="restoreSnapshotMetaLine" style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:11px;">
+            <span>快照内容：<span id="restoreSnapshotTypeBadge">探测中...</span></span>
+            <span id="restoreSnapshotCurrentSessions">现网会话：探测中...</span>
+          </div>
+        </div>
+
+        <!-- 现网会话覆盖预警（当 hasSessions === true && current.sessionCount > 0 时强提示） -->
+        <div class="notice-card notice-danger" id="restoreLiveConflictWarning" style="display:none; margin:0; border-left:4px solid #ef4444;">
+          <span style="display:inline-flex; flex-shrink:0; margin-top:2px;">
+            <svg style="width:20px;height:20px;color:#ef4444;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </span>
+          <div id="restoreLiveConflictText" style="line-height:1.5;"></div>
+        </div>
+
+        <!-- 恢复范围二元选择 -->
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600; margin-bottom:8px;">恢复选项与数据范围</label>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <!-- ⚡ 仅恢复配置（保护当前会话） -->
+            <label id="restoreCardConfig" style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:var(--radius-md); cursor:pointer; background:var(--bg-main); transition:all 0.2s;">
+              <input type="radio" name="restoreScopeMode" value="config-only" style="margin-top:3px; cursor:pointer;" />
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:13px; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+                  <span>⚡ 仅恢复配置（保护当前会话）</span>
+                  <span style="font-size:10px; background:#dcfce7; color:#15803d; padding:1px 6px; border-radius:4px; font-weight:700;">保护数据</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.4;">
+                  只恢复模型凭据、插件与系统设置；<b>当前会话与附件完整保留</b>。
+                </div>
+              </div>
+            </label>
+
+            <!-- 📦 完整全量还原（覆盖现有数据） -->
+            <label id="restoreCardFull" style="display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:var(--radius-md); cursor:pointer; background:var(--bg-main); transition:all 0.2s;">
+              <input type="radio" name="restoreScopeMode" value="full" style="margin-top:3px; cursor:pointer;" />
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:13px; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+                  <span>📦 完整全量还原（覆盖现有数据）</span>
+                  <span id="restoreBadgeFull" style="display:none; font-size:10px; background:#fee2e2; color:#b91c1c; padding:1px 6px; border-radius:4px; font-weight:700;">该快照不含会话</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.4;">
+                  配置 + 会话 + 附件整体替换，不可逆。
+                </div>
+                <div id="restoreFullDisabledHint" style="display:none; font-size:11px; color:#ef4444; margin-top:4px; font-weight:600;">
+                  该快照不含会话数据
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 动态风险提示卡 -->
+        <div id="restoreRiskCard" class="notice-card notice-info" style="margin:0;">
+          <span id="restoreRiskIcon" style="display:inline-flex; flex-shrink:0;"></span>
+          <div id="restoreRiskText"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeRestoreSnapshotModal()">取消</button>
+        <button class="btn btn-primary" id="btnSubmitRestoreSnapshot" onclick="submitRestoreSnapshot()" disabled>请选择恢复范围</button>
       </div>
     </div>
   </div>
@@ -4198,7 +4278,8 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
     const NOTICE_ICON = {
       info: '<svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
       warning: '<svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-      danger: '<svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>'
+      danger: '<svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>',
+      success: '<svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px;color:#16a34a;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
     };
 
     let _actionConfirmResolver = null;
@@ -4610,35 +4691,221 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       }
     }
 
+    let _restoreTarget = null; // { filename, inspectData }
+
     async function restoreSnapshot(filename) {
-      // P12/P15：统一走 askConfirm + showToast（不再用原生 confirm/alert）
-      const confirmed = await askConfirm({
-        title: '还原配置快照',
-        icon: CONFIRM_ICON.warning,
-        confirmText: '确认还原',
-        confirmClass: 'btn-danger',
-        bodyHtml: `<div class="notice-card notice-warning" style="margin:0;">${NOTICE_ICON.warning}` +
-          `<div><div style="font-weight:700;margin-bottom:2px;">将覆盖现有配置并重启 DSH</div>` +
-          `<div>从快照 <code>${escapeHtml(filename)}</code> 恢复：现有 <code>/root/.dsh</code> 会被覆盖，DSH 服务将重新拉起（约 20~40 秒）。<br/>老版本快照里的相对软链会被<b>自动修复</b>，无需任何额外操作。</div></div></div>`
+      updateTaskBanner({ label: '正在探测快照内容...' });
+      let inspectData = null;
+      try {
+        const res = await fetch(`${adminBase}/api/snapshots/inspect?file=${encodeURIComponent(filename)}`, {
+          signal: AbortSignal.timeout(8000)
+        });
+        if (res.ok) {
+          inspectData = await res.json();
+        }
+      } catch (err) {
+        console.warn('[restore] 探测快照失败，优雅降级为未知模式:', err);
+      } finally {
+        updateTaskBanner(null);
+      }
+      openRestoreSnapshotModal(filename, inspectData);
+    }
+
+    function openRestoreSnapshotModal(filename, inspectData) {
+      _restoreTarget = { filename, inspectData };
+
+      const fnEl = document.getElementById('restoreSnapshotFilename');
+      if (fnEl) fnEl.textContent = filename;
+
+      const inspectOk = inspectData && inspectData.ok !== false;
+      const hasSessions = inspectOk && typeof inspectData.hasSessions === 'boolean'
+        ? inspectData.hasSessions
+        : null;
+      const sessionCount = (inspectOk && inspectData.current && typeof inspectData.current.sessionCount === 'number')
+        ? inspectData.current.sessionCount
+        : null;
+
+      // 更新快照元信息展示
+      const typeBadge = document.getElementById('restoreSnapshotTypeBadge');
+      if (typeBadge) {
+        if (hasSessions === false) {
+          typeBadge.innerHTML = '<span style="color:#b45309;font-weight:600;">⚡ 仅配置快照 (无会话)</span>';
+        } else if (hasSessions === true) {
+          typeBadge.innerHTML = '<span style="color:#0369a1;font-weight:600;">📦 全量快照 (含会话数据)</span>';
+        } else {
+          typeBadge.innerHTML = '<span style="color:var(--text-muted);">未知 (未探测到内容)</span>';
+        }
+      }
+
+      const curSessionsSpan = document.getElementById('restoreSnapshotCurrentSessions');
+      if (curSessionsSpan) {
+        if (sessionCount !== null) {
+          curSessionsSpan.innerHTML = `现网已有会话: <b style="color:${sessionCount > 0 ? '#b91c1c' : 'inherit'};">${sessionCount}</b> 个`;
+        } else {
+          curSessionsSpan.textContent = '现网已有会话: 未知';
+        }
+      }
+
+      // 重置单选态与禁用态
+      const radioConfig = document.querySelector('input[name="restoreScopeMode"][value="config-only"]');
+      const radioFull = document.querySelector('input[name="restoreScopeMode"][value="full"]');
+      const cardConfig = document.getElementById('restoreCardConfig');
+      const cardFull = document.getElementById('restoreCardFull');
+      const fullDisabledHint = document.getElementById('restoreFullDisabledHint');
+      const badgeFull = document.getElementById('restoreBadgeFull');
+      const conflictWarn = document.getElementById('restoreLiveConflictWarning');
+      const conflictText = document.getElementById('restoreLiveConflictText');
+
+      if (radioConfig) { radioConfig.checked = false; radioConfig.disabled = false; }
+      if (radioFull) { radioFull.checked = false; radioFull.disabled = false; }
+      if (cardConfig) { cardConfig.style.opacity = '1'; cardConfig.style.cursor = 'pointer'; }
+      if (cardFull) { cardFull.style.opacity = '1'; cardFull.style.cursor = 'pointer'; }
+      if (fullDisabledHint) fullDisabledHint.style.display = 'none';
+      if (badgeFull) badgeFull.style.display = 'none';
+      if (conflictWarn) conflictWarn.style.display = 'none';
+
+      // 上下文感知决策（对抗性复核结论）：
+      // 1. 快照 hasSessions === false（纯配置快照）
+      //    → 锁定为「仅恢复配置」，把"完整还原"置灰并提示"该快照不含会话数据"
+      if (hasSessions === false) {
+        if (radioConfig) radioConfig.checked = true;
+        if (radioFull) radioFull.disabled = true;
+        if (cardFull) {
+          cardFull.style.opacity = '0.55';
+          cardFull.style.cursor = 'not-allowed';
+        }
+        if (fullDisabledHint) fullDisabledHint.style.display = 'block';
+        if (badgeFull) badgeFull.style.display = 'inline-block';
+      }
+      // 2. hasSessions === true 且 current.sessionCount === 0（新容器/迁移）
+      //    → 默认选中「完整全量还原」
+      else if (hasSessions === true && sessionCount === 0) {
+        if (radioFull) radioFull.checked = true;
+      }
+      // 3. hasSessions === true 且 current.sessionCount > 0
+      //    → 不预设任何默认，确认按钮在显式选择前保持 disabled，弹窗内显示危险提示
+      else if (hasSessions === true && sessionCount > 0) {
+        if (conflictWarn) conflictWarn.style.display = 'flex';
+        if (conflictText) {
+          conflictText.innerHTML = `<div><div style="font-weight:700;margin-bottom:2px;">⚠️ 覆盖风险预警</div>` +
+            `<div>现网已有 <b>${sessionCount}</b> 个会话，完整还原会覆盖它们！若需保留现有会话与附件，请选择「仅恢复配置」。</div></div>`;
+        }
+      }
+      // 4. 降级模式（探测失败/未知）
+      //    → 保持均可选，不预设默认，强制显式选择
+      else {
+        // radioConfig.checked = false, radioFull.checked = false
+      }
+
+      updateRestoreModalUI();
+      document.getElementById('snapshotRestoreModal').style.display = 'flex';
+    }
+
+    function updateRestoreModalUI() {
+      const selected = document.querySelector('input[name="restoreScopeMode"]:checked');
+      const mode = selected ? selected.value : null;
+      const inspectData = _restoreTarget?.inspectData;
+      const sessionCount = (inspectData?.current && typeof inspectData.current.sessionCount === 'number')
+        ? inspectData.current.sessionCount
+        : null;
+
+      const cardConfig = document.getElementById('restoreCardConfig');
+      const cardFull = document.getElementById('restoreCardFull');
+      const riskCard = document.getElementById('restoreRiskCard');
+      const riskIcon = document.getElementById('restoreRiskIcon');
+      const riskText = document.getElementById('restoreRiskText');
+      const submitBtn = document.getElementById('btnSubmitRestoreSnapshot');
+      const isFullDisabled = document.querySelector('input[name="restoreScopeMode"][value="full"]')?.disabled;
+
+      // 卡片边框与背景高亮
+      if (cardConfig) {
+        cardConfig.style.borderColor = mode === 'config-only' ? 'var(--primary, #2563eb)' : '#e2e8f0';
+        cardConfig.style.background = mode === 'config-only' ? '#f0fdf4' : 'var(--bg-main)';
+      }
+      if (cardFull && !isFullDisabled) {
+        cardFull.style.borderColor = mode === 'full' ? '#ef4444' : '#e2e8f0';
+        cardFull.style.background = mode === 'full' ? '#fef2f2' : 'var(--bg-main)';
+      }
+
+      if (mode === 'config-only') {
+        riskCard.className = 'notice-card notice-success';
+        riskIcon.innerHTML = NOTICE_ICON.success;
+        const retainMsg = sessionCount !== null && sessionCount > 0
+          ? `当前 <b>${sessionCount}</b> 个会话与附件完整保留。`
+          : '当前所有会话与附件完整保留。';
+        riskText.innerHTML = `<div><div style="font-weight:700;margin-bottom:2px;">安全模式：保护现有会话数据</div>` +
+          `<div>仅恢复模型凭据、插件装配与系统设置；${retainMsg}</div></div>`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = '确认仅恢复配置';
+        submitBtn.className = 'btn btn-primary';
+      } else if (mode === 'full') {
+        riskCard.className = 'notice-card notice-danger';
+        riskIcon.innerHTML = NOTICE_ICON.danger;
+        const overwriteMsg = sessionCount !== null && sessionCount > 0
+          ? `快照内的配置、会话、附件将完整替换现网内容，现网现有的 <b>${sessionCount}</b> 个会话将被彻底覆盖且不可逆！`
+          : '快照内的配置、会话、附件将完整替换现网内容，不可逆。';
+        riskText.innerHTML = `<div><div style="font-weight:700;margin-bottom:2px;">⚠️ 覆盖风险预警</div>` +
+          `<div>${overwriteMsg} DSH 服务将重新拉起（约 20~40 秒）。</div></div>`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = '确认覆盖并完整还原';
+        submitBtn.className = 'btn btn-danger';
+      } else {
+        // 未选择
+        riskCard.className = 'notice-card notice-warning';
+        riskIcon.innerHTML = NOTICE_ICON.warning;
+        if (sessionCount !== null && sessionCount > 0) {
+          riskText.innerHTML = `<div><div style="font-weight:700;margin-bottom:2px;">请显式选择恢复范围</div>` +
+            `<div>现网已有 <b>${sessionCount}</b> 个会话，完整还原会覆盖它们。请在上方二选一后再继续。</div></div>`;
+        } else {
+          riskText.innerHTML = `<div><div style="font-weight:700;margin-bottom:2px;">请选择恢复范围</div>` +
+            `<div>请根据需要选择「仅恢复配置」或「完整全量还原」。</div></div>`;
+        }
+        submitBtn.disabled = true;
+        submitBtn.textContent = '请选择恢复范围';
+        submitBtn.className = 'btn';
+      }
+    }
+
+    function closeRestoreSnapshotModal() {
+      const modal = document.getElementById('snapshotRestoreModal');
+      if (modal) modal.style.display = 'none';
+      _restoreTarget = null;
+    }
+
+    async function submitRestoreSnapshot() {
+      const selected = document.querySelector('input[name="restoreScopeMode"]:checked');
+      if (!selected) return;
+      const mode = selected.value;
+      const target = _restoreTarget;
+      if (!target || !target.filename) return;
+      const filename = target.filename;
+
+      closeRestoreSnapshotModal();
+      updateTaskBanner({
+        label: mode === 'config-only' ? '仅恢复配置并重启 DSH' : '还原完整快照并重启 DSH'
       });
-      if (!confirmed) return;
-      updateTaskBanner({ label: '还原快照并重启' });
 
       try {
         const res = await fetch(`${adminBase}/api/snapshots/restore`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename }),
-          // 大快照（含大量依赖/会话）还原可能超过 3 分钟，给足超时避免误报「网络异常」
+          body: JSON.stringify({ filename, mode }),
           signal: AbortSignal.timeout(600000)
         });
         let data = null;
-        try { data = await res.json(); } catch (e) { /* 非 JSON 响应 */ }
+        try { data = await res.json(); } catch (e) {}
+
         if (res.ok && data && data.ok) {
           const fixed = Number(data.repairedLinks) || 0;
-          showToast(fixed > 0
-            ? `快照还原成功（已自动修复 ${fixed} 条老版本相对软链），DSH 服务已重新就绪！`
-            : '快照还原成功，DSH 服务已重新就绪！', 'success');
+          const respMode = data.mode || mode;
+          if (respMode === 'config-only') {
+            const linkMsg = fixed > 0 ? `（已自动修复 ${fixed} 条老版本相对软链）` : '';
+            showToast(`配置还原成功（已保留当前会话），DSH 已就绪！${linkMsg}`, 'success');
+          } else {
+            showToast(fixed > 0
+              ? `快照还原成功（已自动修复 ${fixed} 条老版本相对软链），DSH 服务已重新就绪！`
+              : '快照还原成功，DSH 服务已重新就绪！', 'success');
+          }
           await loadStatus();
         } else {
           showToast('快照还原失败: ' + ((data && data.error) || ('HTTP ' + res.status)), 'error');
@@ -4650,6 +4917,21 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         await loadSnapshots();
       }
     }
+
+    (function bindRestoreScopeModal() {
+      const modal = document.getElementById('snapshotRestoreModal');
+      if (!modal) return;
+      const radios = modal.querySelectorAll('input[name="restoreScopeMode"]');
+      radios.forEach(r => {
+        r.addEventListener('change', () => updateRestoreModalUI());
+      });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeRestoreSnapshotModal();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') closeRestoreSnapshotModal();
+      });
+    })();
 
     async function deleteSnapshot(filename) {
       const confirmed = await askConfirm({

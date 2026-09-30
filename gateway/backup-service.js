@@ -1,12 +1,17 @@
 const { spawn, spawnSync } = require('child_process');
 const { StringDecoder } = require('string_decoder');
+const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const {
   readSidecar,
   writeSidecarAtomic,
-  removeSidecar
+  removeSidecar,
+  inspectArchive
 } = require('./snapshot-manifest');
+
+// Issue #9: 统一数据类目录单一事实源（创建侧仅配置模式排除项与还原侧仅配置模式保留项共用）
+const DATA_ENTRIES = ['sessions', 'attachments', 'storages', 'plugin-data', 'logs', 'cache'];
 
 const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
 // M11：支持通过 DSH_HOME 迁移运行根目录（非 root 部署时指向 /home/<user>）
@@ -592,14 +597,13 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
       '--exclude=.dsh/gateway.config.json'
     ];
 
-    // 仅配置模式：完全排除所有对话会话历史、多媒体附件及会话投影缓存，仅保留配置、模型凭据与插件
+    // 仅配置模式：完全排除所有数据类条目（对话会话、附件、工作区索引与存储、插件数据、日志与缓存）
+    // 统一复用 DATA_ENTRIES 常量；此处将历史仅排除 session_projcache* 修正为排除整个 storages，
+    // 修正历史口径以彻底杜绝 config 快照携带 storages/workspace.json 冲掉现网会话索引的问题；full 快照打包内容保持不变。
     if (isConfigOnly) {
-      tarArgs.push(
-        '--exclude=.dsh/sessions',
-        '--exclude=.dsh/attachments',
-        '--exclude=.dsh/storages/session_projcache',
-        '--exclude=.dsh/storages/session_projcache_archive_manager_v2'
-      );
+      for (const entry of DATA_ENTRIES) {
+        tarArgs.push(`--exclude=.dsh/${entry}`);
+      }
     }
 
     if (isMultiThread) {
@@ -682,15 +686,24 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
  * 异步非阻塞恢复配置快照
  * @param {string} filename 快照文件名
  * @param {object} dshManager DSH 进程管理器
+ * @param {object} [opts] 还原选项 { mode: 'full' | 'config-only' }
  *
- * Issue #9：还原**自动**兼容老快照 —— 老版本（0.1.x 时代）里 pnpm 为 `link:` 依赖生成的
- * 相对软链在归档视图下会"逃出 `.dsh/` 根"（校验层已按真实还原落点放行）；这里再自动把它们
- * 改写为等价绝对软链后再切换，使还原结果与部署路径深度无关（换镜像 / 换挂载路径都能正常解析）。
- * 全程在 staging 沙箱内完成，用户无需任何额外操作。
+ * Issue #9：
+ * 1. 恢复范围可选：mode 为 'full'（整包替换，默认保持 100% 向后兼容）或 'config-only'（仅恢复配置并保留现网会话/附件/数据）。
+ * 2. 还原**自动**兼容老快照 —— 老版本（0.1.x 时代）里 pnpm 为 `link:` 依赖生成的
+ *    相对软链在归档视图下会"逃出 `.dsh/` 根"（校验层已按真实还原落点放行）；这里再自动把它们
+ *    改写为等价绝对软链后再切换，使还原结果与部署路径深度无关（换镜像 / 换挂载路径都能正常解析）。
+ * 3. 失败精确逆向回滚：在 config-only 下禁止 clearDir 全清以保护原地保留的数据条目，只清理从 staging
+ *    搬入的条目再回搬 rollbackRoot。
  */
-async function restoreBackup(filename, dshManager) {
+async function restoreBackup(filename, dshManager, opts = {}) {
   if (activeTask) {
     throw new Error(`当前正在执行 ${activeTask.label} 操作，请稍候再试`);
+  }
+
+  const mode = (opts && opts.mode) ? opts.mode : 'full';
+  if (mode !== 'full' && mode !== 'config-only') {
+    throw new Error(`非法还原模式: ${mode} (仅支持 'full' 或 'config-only')`);
   }
 
   const safeFilename = path.basename(filename || '');
@@ -703,10 +716,112 @@ async function restoreBackup(filename, dshManager) {
     throw new Error('快照文件不存在: ' + safeFilename);
   }
 
-  activeTask = { type: 'restore', label: '恢复快照', startedAt: Date.now() };
-  console.log(`[backup-service] 开始安全还原快照: ${safeFilename}...`);
+  activeTask = { type: 'restore', label: `恢复快照(${mode === 'config-only' ? '仅配置' : '全量'})`, startedAt: Date.now() };
+  console.log(`[backup-service] 开始安全还原快照: ${safeFilename} (模式: ${mode})...`);
 
   let rollbackRoot = null; // 还原前的配置回滚点（供失败时回滚）
+  let stagedItems = [];    // 记录从 staging 搬入的相对路径，供精确逆向回滚
+  const isPreserved = (relPath) => {
+    if (relPath === '.restore-staging' || relPath === '.restore-rollback') return true;
+    if (mode === 'config-only') {
+      const top = relPath.split(/[/\\]/)[0];
+      if (DATA_ENTRIES.includes(top)) return true;
+      const parts = relPath.split(/[/\\]/);
+      if (parts.includes('node_modules')) return true;
+    }
+    return false;
+  };
+
+  const hasPreservedDescendant = (dir, currentRel, shouldSkip) => {
+    try {
+      const children = fs.readdirSync(dir);
+      for (const child of children) {
+        const childRel = currentRel ? path.join(currentRel, child) : child;
+        if (shouldSkip(childRel)) return true;
+        const childPath = path.join(dir, child);
+        try {
+          if (fs.lstatSync(childPath).isDirectory()) {
+            if (hasPreservedDescendant(childPath, childRel, shouldSkip)) return true;
+          }
+        } catch {}
+      }
+    } catch {}
+    return false;
+  };
+
+  const moveChildren = (from, to, shouldSkip = () => false, relBase = '') => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const entry of fs.readdirSync(from)) {
+      const rel = relBase ? path.join(relBase, entry) : entry;
+      if (shouldSkip(rel)) continue;
+
+      const srcPath = path.join(from, entry);
+      const dstPath = path.join(to, entry);
+      let stat;
+      try {
+        stat = fs.lstatSync(srcPath);
+      } catch {
+        continue;
+      }
+
+      if (stat.isDirectory()) {
+        if (fs.existsSync(dstPath)) {
+          moveChildren(srcPath, dstPath, shouldSkip, rel);
+          try { fs.rmdirSync(srcPath); } catch {}
+        } else if (hasPreservedDescendant(srcPath, rel, shouldSkip)) {
+          fs.mkdirSync(dstPath, { recursive: true });
+          moveChildren(srcPath, dstPath, shouldSkip, rel);
+          try { fs.rmdirSync(srcPath); } catch {}
+        } else {
+          fs.renameSync(srcPath, dstPath);
+        }
+      } else {
+        fs.renameSync(srcPath, dstPath);
+      }
+    }
+  };
+
+  function listAllRelPaths(dir, base = '') {
+    let list = [];
+    if (!fs.existsSync(dir)) return list;
+    for (const f of fs.readdirSync(dir)) {
+      const rel = base ? path.join(base, f) : f;
+      const full = path.join(dir, f);
+      try {
+        const isDir = fs.lstatSync(full).isDirectory();
+        list.push({ rel, isDir });
+        if (isDir) {
+          list = list.concat(listAllRelPaths(full, rel));
+        }
+      } catch {}
+    }
+    return list;
+  }
+
+  const rollback = () => {
+    if (!rollbackRoot || !fs.existsSync(rollbackRoot)) return;
+    console.warn('[backup-service] 正在精确逆向回滚到还原前的配置...');
+    // 1. 只清理从 staging 搬入到 DSH_DIR 的条目，绝对不碰任何 preserved 保护项
+    const sortedStaged = [...stagedItems].sort((a, b) => b.rel.length - a.rel.length);
+    for (const item of sortedStaged) {
+      if (isPreserved(item.rel)) continue;
+      const targetPath = path.join(DSH_DIR, item.rel);
+      if (!fs.existsSync(targetPath)) continue;
+      if (item.isDir) {
+        try {
+          if (fs.readdirSync(targetPath).length === 0) {
+            fs.rmdirSync(targetPath);
+          }
+        } catch {}
+      } else {
+        try { fs.rmSync(targetPath, { force: true }); } catch {}
+      }
+    }
+    // 2. 将 rollbackRoot 里的旧配置条目搬回现网
+    moveChildren(rollbackRoot, DSH_DIR, () => false);
+    try { fs.rmSync(rollbackRoot, { recursive: true, force: true }); } catch {}
+  };
+
   try {
     // 1. 预先校验快照完整性 + 成员白名单，防损坏/恶意归档破坏现有环境
     await validateArchiveMembers(snapshotPath);
@@ -745,6 +860,16 @@ async function restoreBackup(filename, dshManager) {
     } else {
       extractArgs.push('-z');
     }
+
+    // config-only 模式解压阶段排除数据类目录与 profiles/*/node_modules
+    // 严禁尾部斜杠，实测带斜杠会导致 GNU tar 排除失效
+    if (mode === 'config-only') {
+      for (const entry of DATA_ENTRIES) {
+        extractArgs.push(`--exclude=.dsh/${entry}`);
+      }
+      extractArgs.push('--exclude=.dsh/profiles/*/node_modules', '--exclude=*/node_modules');
+    }
+
     extractArgs.push('-xf', snapshotPath, '-C', stagingRoot);
     const extractRes = await runTarAsync(extractArgs);
     if (extractRes.code !== 0) {
@@ -757,6 +882,32 @@ async function restoreBackup(filename, dshManager) {
       fs.rmSync(stagingRoot, { recursive: true, force: true });
       throw new Error('快照内容异常：未找到 .dsh 目录，已中止（现网未受影响）');
     }
+
+    // 3.0 沙箱清扫（第二道防线）：config-only 模式下若 staging 里仍存在 DATA_ENTRIES 或 node_modules，强行 rmSync 清理
+    if (mode === 'config-only') {
+      // 策略：不向全新环境引入快照中的旧 storages/workspace.json。
+      // 理由：在 config-only 模式下会话数据被完全排除，旧 workspace.json 中记录的 sessionIds 等索引在没有对应会话文件时会成为死索引，由 DSH 自行初始化空白的 workspace.json 更加安全干净。
+      for (const entry of DATA_ENTRIES) {
+        const p = path.join(stagedDsh, entry);
+        if (fs.existsSync(p)) {
+          fs.rmSync(p, { recursive: true, force: true });
+        }
+      }
+      const profilesDir = path.join(stagedDsh, 'profiles');
+      if (fs.existsSync(profilesDir)) {
+        for (const child of fs.readdirSync(profilesDir)) {
+          if (child === 'node_modules') {
+            fs.rmSync(path.join(profilesDir, child), { recursive: true, force: true });
+          } else {
+            const subNm = path.join(profilesDir, child, 'node_modules');
+            if (fs.existsSync(subNm)) {
+              fs.rmSync(subNm, { recursive: true, force: true });
+            }
+          }
+        }
+      }
+    }
+
     // 快照刻意排除了网关自有的 gateway.config.json（含 authToken）与 .session_secret，这里从现网带过去
     for (const keep of ['gateway.config.json', '.session_secret']) {
       const cur = path.join(DSH_DIR, keep);
@@ -771,30 +922,18 @@ async function restoreBackup(filename, dshManager) {
       for (const s of linkRepair.samples) console.log(`[backup-service]   · ${s}`);
     }
 
+    // 记录 staging 中的所有条目，供切换或探活失败时精确逆向回滚
+    stagedItems = listAllRelPaths(stagedDsh);
+
     // 4. 原子切换：注意 /root/.dsh 是 Docker 卷挂载点，整体 rename 会 EBUSY，
-    //    因此改为"逐子项搬移"——现网内容先搬到回滚点，再把 staging 内容搬入。
-    const SKIP = new Set(['.restore-staging', '.restore-rollback']);
-    const moveChildren = (from, to) => {
-      fs.mkdirSync(to, { recursive: true });
-      for (const entry of fs.readdirSync(from)) {
-        if (SKIP.has(entry)) continue;
-        fs.renameSync(path.join(from, entry), path.join(to, entry));
-      }
-    };
-    const clearDir = (dir) => {
-      for (const entry of fs.readdirSync(dir)) {
-        if (SKIP.has(entry)) continue;
-        fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
-      }
-    };
+    //    因此改为"逐子项搬移"——现网内容先搬到回滚点（config-only 时数据目录和 node_modules 原地保留），再把 staging 内容搬入。
     try {
-      moveChildren(DSH_DIR, rollbackRoot); // 现网 → 回滚点
-      moveChildren(stagedDsh, DSH_DIR);    // staging → 现网
+      moveChildren(DSH_DIR, rollbackRoot, isPreserved); // 现网 → 回滚点 (保留项跳过不搬)
+      moveChildren(stagedDsh, DSH_DIR, () => false);     // staging → 现网
       console.log(`[backup-service] 配置已原子切换（旧配置备份于 ${rollbackRoot}，成功后自动清理）`);
     } catch (switchErr) {
       try {
-        clearDir(DSH_DIR);
-        moveChildren(rollbackRoot, DSH_DIR);
+        rollback();
       } catch (rb) {
         console.error('[backup-service] 切换失败后的即时回滚异常:', rb.message);
       }
@@ -806,6 +945,7 @@ async function restoreBackup(filename, dshManager) {
     const webProfileDir = path.join(DSH_DIR, 'profiles', 'web');
 
     // 5. 若解压后 node_modules 为空（轻量清单备份），自动依据 package.json 补全
+    // 仅当切换后现网 profiles/web/node_modules 缺失时才走 pnpm install（config-only 原地保留了 node_modules，不会误触发）
     const targetNodeModules = path.join(webProfileDir, 'node_modules');
     const targetPkgJson = path.join(webProfileDir, 'package.json');
     if (fs.existsSync(targetPkgJson) && (!fs.existsSync(targetNodeModules) || fs.readdirSync(targetNodeModules).length === 0)) {
@@ -852,21 +992,24 @@ async function restoreBackup(filename, dshManager) {
 
     // 成功：清理回滚点
     try { fs.rmSync(rollbackRoot, { recursive: true, force: true }); } catch {}
-    console.log(`[backup-service] 快照 ${safeFilename} 还原完成，DSH 服务就绪状态: ${dshReady}`);
-    return { ok: true, filename: safeFilename, dshReady, repairedLinks: linkRepair.repaired };
+
+    const preservedCount = mode === 'config-only'
+      ? DATA_ENTRIES.filter(e => fs.existsSync(path.join(DSH_DIR, e))).length +
+        (fs.existsSync(path.join(DSH_DIR, 'profiles', 'web', 'node_modules')) ? 1 : 0)
+      : 0;
+
+    if (mode === 'config-only') {
+      console.log(`[backup-service] 快照 ${safeFilename} 还原完成 (模式: ${mode}，已保留 ${preservedCount} 项数据/依赖目录)，DSH 服务就绪状态: ${dshReady}`);
+    } else {
+      console.log(`[backup-service] 快照 ${safeFilename} 还原完成 (模式: ${mode})，DSH 服务就绪状态: ${dshReady}`);
+    }
+
+    return { ok: true, filename: safeFilename, mode, dshReady, repairedLinks: linkRepair.repaired };
   } catch (err) {
     // 失败：若已切换过且回滚点仍在，尽力恢复还原前的配置并重新拉起
     try {
       if (rollbackRoot && fs.existsSync(rollbackRoot)) {
-        console.warn('[backup-service] 还原失败，正在回滚到还原前的配置...');
-        const skip = new Set(['.restore-staging', '.restore-rollback']);
-        for (const entry of fs.readdirSync(DSH_DIR)) {
-          if (skip.has(entry)) continue;
-          fs.rmSync(path.join(DSH_DIR, entry), { recursive: true, force: true });
-        }
-        for (const entry of fs.readdirSync(rollbackRoot)) {
-          fs.renameSync(path.join(rollbackRoot, entry), path.join(DSH_DIR, entry));
-        }
+        rollback();
         if (dshManager && typeof dshManager.boot === 'function') {
           await dshManager.boot().catch(() => {});
         }
@@ -985,6 +1128,9 @@ async function importBackupStreamImpl(req, rawFilename, resolve, reject) {
           const stat = fs.statSync(finalPath);
           console.log(`[backup-service] 成功导入快照: ${filename} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
 
+          // 异步推断并写入元数据 sidecar（不阻塞上传响应）
+          inspectArchive(finalPath, { filename, snapshotsDir: SNAPSHOTS_DIR }).catch(() => {});
+
           resolve({
             ok: true,
             snapshot: {
@@ -1012,7 +1158,7 @@ function listBackups() {
       try {
         const filePath = path.join(SNAPSHOTS_DIR, filename);
         const stat = fs.statSync(filePath);
-        const isConfig = filename.startsWith('dsh-config-') || filename.includes('-config-') || filename.includes('_config_');
+        let backupType = null;
         let dshVersion = null;
         let projectVersion = null;
         let configModel = null;
@@ -1022,8 +1168,18 @@ function listBackups() {
             dshVersion = sc.meta.dshVersion || null;
             projectVersion = sc.meta.projectVersion || sc.meta.dockerSuiteVersion || null;
             configModel = sc.meta.configModel || null;
+            if (sc.meta.backupType) {
+              backupType = sc.meta.backupType;
+            }
           }
         } catch {}
+        // 优先使用 sidecar 元数据记录的真实类型；仅在 sidecar 缺失时按文件名弱提示兜底
+        if (!backupType) {
+          backupType = (filename.startsWith('dsh-config-') || filename.includes('-config-') || filename.includes('_config_'))
+            ? 'config'
+            : 'full';
+        }
+        const isConfig = backupType === 'config';
         return {
           filename,
           type: isConfig ? 'config' : 'full',
@@ -1048,6 +1204,150 @@ function listBackups() {
   } catch (err) {
     return { ok: false, error: err.message, snapshots: [], activeTask: getActiveTask() };
   }
+}
+
+/**
+ * 流式扫描快照归档成员，判定是否包含会话目录 (.dsh/sessions) 与附件目录 (.dsh/attachments)
+ * 当两者均判定存在时立即提前终止 tar 进程，尽可能降低大归档检视耗时与 I/O 消耗。
+ * @param {string} archivePath 归档绝对路径
+ * @returns {Promise<{ hasSessions: boolean, hasAttachments: boolean }>}
+ */
+function scanArchiveContents(archivePath) {
+  return new Promise((resolve, reject) => {
+    let hasSessions = false;
+    let hasAttachments = false;
+    const isMultiThread = hasPigz();
+    const args = isMultiThread ? ['-I', 'pigz', '-tf', archivePath] : ['-tzf', archivePath];
+    const proc = spawn('tar', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, LC_ALL: 'C', LANG: 'C', LANGUAGE: '' }
+    });
+    const rl = readline.createInterface({ input: proc.stdout });
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try { rl.close(); } catch {}
+      try { proc.kill('SIGTERM'); } catch {}
+      resolve({ hasSessions, hasAttachments });
+    };
+
+    rl.on('line', (rawLine) => {
+      const line = rawLine.trim().replace(/^\.\//, '').replace(/\/+$/, '');
+      if (line === '.dsh/sessions' || line.startsWith('.dsh/sessions/')) {
+        hasSessions = true;
+      }
+      if (line === '.dsh/attachments' || line.startsWith('.dsh/attachments/')) {
+        hasAttachments = true;
+      }
+      if (hasSessions && hasAttachments) {
+        finish();
+      }
+    });
+
+    proc.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      try { rl.close(); } catch {}
+      reject(err);
+    });
+
+    proc.on('close', () => {
+      if (!settled) {
+        settled = true;
+        try { rl.close(); } catch {}
+        resolve({ hasSessions, hasAttachments });
+      }
+    });
+  });
+}
+
+/**
+ * 统计当前系统运行目录 (DSH_DIR/sessions) 下的会话数量
+ * 遵循真实结构：/root/.dsh/sessions/<workspaceId>/<sessionId> 或直接存储的 session 目录
+ * @param {string} sessionsDir sessions 根目录绝对路径
+ * @returns {number}
+ */
+function countCurrentSessions(sessionsDir) {
+  if (!fs.existsSync(sessionsDir)) return 0;
+  let count = 0;
+  try {
+    const entries = fs.readdirSync(sessionsDir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
+      // 若直接以 session- 开头，计为单个会话
+      if (ent.name.startsWith('session-')) {
+        count++;
+        continue;
+      }
+      // 否则为 workspace 目录，遍历统计内部会话子目录
+      const subDir = path.join(sessionsDir, ent.name);
+      try {
+        const subEntries = fs.readdirSync(subDir, { withFileTypes: true });
+        for (const subEnt of subEntries) {
+          if (!subEnt.isDirectory() || subEnt.name.startsWith('.')) continue;
+          count++;
+        }
+      } catch {}
+    }
+  } catch {}
+  return count;
+}
+
+/**
+ * 只读探测快照属性（供恢复范围选择弹窗决策）
+ * 返回快照是否含会话/附件、基于内容的快照类型、以及当前环境会话数
+ * @param {string} filename 快照文件名
+ */
+async function inspectSnapshot(filename) {
+  const safeFilename = path.basename(filename || '');
+  if (!safeFilename.endsWith('.tar.gz') || safeFilename.includes('..')) {
+    return { ok: false, error: '非法快照文件名' };
+  }
+  const filePath = path.join(SNAPSHOTS_DIR, safeFilename);
+  if (!fs.existsSync(filePath)) {
+    return { ok: false, error: '快照文件不存在: ' + safeFilename };
+  }
+
+  const { hasSessions, hasAttachments } = await scanArchiveContents(filePath);
+  const backupType = hasSessions ? 'full' : 'config';
+  const sessionCount = countCurrentSessions(path.join(DSH_DIR, 'sessions'));
+
+  // 顺带打标或更新 sidecar，使后续 listBackups 也能 O(1) 准确感知推断出的 backupType
+  try {
+    const sc = readSidecar(SNAPSHOTS_DIR, safeFilename);
+    const stat = fs.statSync(filePath);
+    if (sc && sc.meta) {
+      if (sc.meta.backupType !== backupType) {
+        sc.meta.backupType = backupType;
+        writeSidecarAtomic(SNAPSHOTS_DIR, safeFilename, sc);
+      }
+    } else {
+      writeSidecarAtomic(SNAPSHOTS_DIR, safeFilename, {
+        meta: {
+          backupType,
+          name: safeFilename.replace(/\.tar\.gz$/i, ''),
+          createdAt: stat.mtime.toISOString()
+        },
+        archive: {
+          sizeBytes: stat.size,
+          mtimeMs: Math.floor(stat.mtimeMs)
+        }
+      });
+    }
+  } catch {}
+
+  return {
+    ok: true,
+    filename: safeFilename,
+    hasSessions,
+    hasAttachments,
+    backupType,
+    current: {
+      sessionCount
+    }
+  };
 }
 
 function deleteBackup(filename) {
@@ -1092,5 +1392,9 @@ module.exports = {
   assertSafeMemberPath,
   repairEscapingRelativeLinks,
   runTarAsync,
+  scanArchiveContents,
+  countCurrentSessions,
+  inspectSnapshot,
+  DATA_ENTRIES,
   SNAPSHOTS_DIR
 };

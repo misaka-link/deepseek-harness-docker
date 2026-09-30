@@ -315,8 +315,10 @@ function inferFromMembers(members, filename = '') {
     signals.push('仅见 profiles/ 目录，无法判定世代');
   }
 
-  // 文件名时间戳（backupType + createdAt 兜底）
-  const backupType = /(^|[-_])config([-_]|\.)/.test(filename) ? 'config' : 'full';
+  // 快照类型判定：基于内容事实优先（含会话为 full，无会话为 config）；文件名仅在无成员时作兜底弱提示
+  const backupType = (members && members.length > 0)
+    ? (hasSessions ? 'full' : 'config')
+    : (/(^|[-_])config([-_]|\.)/.test(filename) ? 'config' : 'full');
 
   return {
     inferred: true,
