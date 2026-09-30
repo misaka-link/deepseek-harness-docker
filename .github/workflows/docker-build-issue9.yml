@@ -1,4 +1,4 @@
-name: Build Issue #9 Test Image
+name: "Build Issue #9 Test Image"
 
 # 用途（Issue #9）：
 #   为「老快照里 pnpm `link:` 依赖生成的相对软链被归档校验误杀」单独构建一个**独立标签**的测试镜像，
