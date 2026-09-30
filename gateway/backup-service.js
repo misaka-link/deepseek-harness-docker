@@ -164,6 +164,11 @@ const LINK_SEPARATORS = [' -> ', ' link to ', ' 连接到 '];
 // 与 DSH_DIR 同样从 env 派生（可用 DSH_LEGACY_HOME 覆盖），不写死具体 home。
 const LEGACY_DSH_DIR = path.join(process.env.DSH_LEGACY_HOME || '/root', '.dsh');
 const ARCHIVE_ROOT_ABS_PREFIXES = Array.from(new Set([DSH_DIR + '/', LEGACY_DSH_DIR + '/']));
+// Issue #9：相对软链目标按「真实还原落点」换算时使用的归档根候选（当前 home + 默认部署根）。
+// 老快照里 pnpm 为 `link:` 依赖生成的相对软链会"向上逃出归档根"，但按落点换算后指向的
+// 正是白名单目录（如 /usr/local/lib/node_modules/...），与写成绝对路径完全等价。
+const ARCHIVE_ROOT_BASES = Array.from(new Set([DSH_DIR, LEGACY_DSH_DIR]));
+const toPosix = (p) => String(p).replace(/\\/g, '/');
 // 纵深防御：追踪符号链接成员，拒绝任何位于符号链接之下的成员
 // （GNU tar 解压时会拒绝这种写法，但白名单不该依赖下游行为）；
 // 同时给追踪集合一个上限，避免病态归档用海量软链把内存顶爆。
@@ -186,23 +191,17 @@ function assertSafeMemberPath(memberPath, who) {
 }
 
 /**
- * 符号链接目标是否受控。
- *  - 相对目标：归一化后必须仍在 `.dsh/` 之内；
- *  - 绝对目标：**先归一化再比对前缀**（否则 `/opt/../etc/passwd` 这类目标能用 `startsWith`
- *    骗过白名单），允许指向本项目合法的依赖安装位置，也允许指向**本归档自身的根**
- *    （`$DSH_HOME/.dsh`）——目标仍在被还原的树内，且剩余部分仍按成员路径校验。
+ * 绝对软链目标是否受控：**先归一化再比对前缀**（否则 `/opt/../etc/passwd` 这类目标能用
+ * `startsWith` 骗过白名单），允许指向本项目合法的依赖安装位置，也允许指向**本归档自身的根**
+ * （`$DSH_HOME/.dsh`）——目标仍在被还原的树内，且剩余部分仍按成员路径校验。
+ * @param {string} absPath 已归一化的绝对路径
  */
-function isAllowedSymlinkTarget(memberName, linkTarget) {
-  if (!linkTarget.startsWith('/')) {
-    return path.posix.normalize(path.posix.join(path.posix.dirname(memberName), linkTarget))
-      .startsWith(ALLOWED_ARCHIVE_PREFIX + '/');
-  }
-  const normalized = path.posix.normalize(linkTarget);
-  if (!normalized.startsWith('/')) return false;
-  if (ALLOWED_LINK_PREFIXES.some(p => normalized.startsWith(p))) return true;
+function isAllowedAbsoluteLinkTarget(absPath) {
+  if (!absPath.startsWith('/')) return false;
+  if (ALLOWED_LINK_PREFIXES.some(p => absPath.startsWith(p))) return true;
   for (const root of ARCHIVE_ROOT_ABS_PREFIXES) {
-    if (!normalized.startsWith(root)) continue;
-    const rel = normalized.slice(root.length);
+    if (!absPath.startsWith(root)) continue;
+    const rel = absPath.slice(root.length);
     if (!rel) return false;
     try {
       assertSafeMemberPath(ALLOWED_ARCHIVE_PREFIX + '/' + rel, '归档链接目标');
@@ -212,6 +211,34 @@ function isAllowedSymlinkTarget(memberName, linkTarget) {
     }
   }
   return false;
+}
+
+/**
+ * 符号链接目标是否受控。
+ *  - 相对目标：
+ *      1. 归一化后仍在 `.dsh/` 之内（归档内部相对引用）→ 放行；
+ *      2. **Issue #9**：老快照里由 pnpm 为 `link:` 依赖生成的相对软链会"向上逃出归档根"
+ *         （例：`.dsh/profiles/web/node_modules/dshmarket -> ../../../../../usr/local/lib/node_modules/dshmarket`）。
+ *         它在真实还原落点上指向的正是白名单目录，与"写成绝对路径"**信任等级完全等价**，
+ *         因此这里按真实落点解析成绝对路径后，套用与绝对目标同一套白名单（不新增任何信任面）。
+ *  - 绝对目标：先归一化再比对前缀。
+ * 注意：解析基准取 `ARCHIVE_ROOT_BASES`（当前 DSH home + 默认部署根），
+ * 换算失败的相对目标（例如逃到 /etc）仍会被 `isAllowedAbsoluteLinkTarget` 拒绝 → 保持 fail-closed。
+ */
+function isAllowedSymlinkTarget(memberName, linkTarget) {
+  if (!linkTarget.startsWith('/')) {
+    const insideArchive = path.posix.normalize(path.posix.join(path.posix.dirname(memberName), linkTarget));
+    if (insideArchive.startsWith(ALLOWED_ARCHIVE_PREFIX + '/')) return true;
+    // 逃出归档根的相对目标 → 按真实还原落点换算为绝对路径，再走同一套白名单
+    const memberDirInArchive = path.posix.dirname(memberName);
+    for (const base of ARCHIVE_ROOT_BASES) {
+      const memberDirAbs = path.posix.join(toPosix(path.posix.dirname(toPosix(base))), memberDirInArchive);
+      const resolved = path.posix.resolve(memberDirAbs, linkTarget);
+      if (isAllowedAbsoluteLinkTarget(resolved)) return true;
+    }
+    return false;
+  }
+  return isAllowedAbsoluteLinkTarget(path.posix.normalize(linkTarget));
 }
 
 /**

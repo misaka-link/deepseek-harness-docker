@@ -1,0 +1,100 @@
+name: Build Issue #9 Test Image
+
+# 用途（Issue #9）：
+#   为「老快照里 pnpm `link:` 依赖生成的相对软链被归档校验误杀」单独构建一个**独立标签**的测试镜像，
+#   让反馈用户可以 `docker pull` 直接验证修复，**不影响** :latest / :latest-market 与正式发布流程。
+#
+# 触发：
+#   1) 推送到 fix/issue-9-* 分支（本分支）自动构建；
+#   2) 手动 workflow_dispatch（可自定义标签名）。
+#
+# 产出标签（ghcr.io/misaka-link/deepseek-harness-docker）：
+#   :issue9-fix          （纯净版）
+#   :issue9-fix-market   （预装插件商店版）
+#
+# 本地等价构建（无需 CI）：
+#   EXTRA_TAGS="issue9-fix" ./build.sh
+#   EXTRA_TAGS="issue9-fix-market" ./build.sh --market
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '额外镜像标签基础名（默认 issue9-fix，会派生 :<tag> 与 :<tag>-market）'
+        required: false
+        default: 'issue9-fix'
+  push:
+    branches:
+      - 'fix/issue-9-*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build & Push (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: base
+            preinstall_plugins: "0"
+            suffix: ""
+          - variant: market
+            preinstall_plugins: "1"
+            suffix: "-market"
+
+    steps:
+      - name: Checkout repository
+        # 供应链安全：固定到 commit SHA（tag 可被移动）
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve tag & DSH version
+        id: meta
+        run: |
+          set -euo pipefail
+          BASE_TAG="${{ github.event.inputs.tag }}"
+          [ -z "${BASE_TAG}" ] && BASE_TAG="issue9-fix"
+          IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/deepseek-harness-docker"
+          DSH_VERSION=$(node -e "process.stdout.write(require('./version.json').supply.dshVersion||'')")
+          if [ -z "${DSH_VERSION}" ]; then
+            echo "错误: version.json#supply.dshVersion 未设置" >&2
+            exit 1
+          fi
+          echo "dsh_version=${DSH_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${IMAGE_NAME}:${BASE_TAG}${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo ">>> 本次构建标签: ${IMAGE_NAME}:${BASE_TAG}${{ matrix.suffix }}（内置 DSH ${DSH_VERSION}）"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          # 生成 SLSA provenance 与 SBOM（供应链可追溯）
+          provenance: mode=max
+          sbom: true
+          # 每次构建唯一，强制 Dockerfile 预装层缓存失效（与正式发布流程保持一致）
+          build-args: |
+            NODE_IMAGE=node:24-trixie
+            NOVNC_ASSET_REVISION=1.6.0
+            PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
+            DSH_VERSION=${{ steps.meta.outputs.dsh_version }}
+            MARKET_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
+            USE_CHINA_MIRROR=0
+          tags: ${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
