@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.1`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.2`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.0-rc.2`、`:0.2.0-rc.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.1`、`:0.2.1-market`），精确锁定本容器套件自身的版本。
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.1-alpha.1`、`:0.2.1-alpha.1-market`），精确锁定底层 DSH 官方引擎；  
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.2`、`:0.2.2-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -38,7 +38,7 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 静态资源版本化隔离，配合 `dsh-browser-desktop` 插件，AI 可自主操控网页与实时截屏 |
 
-| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.0-rc.2) |
+| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.1-alpha.1) |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，完美支持 DeepSeek-V41-Flash 等最新模型 |
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.0-rc.2`<br>(`...:dsh-0.2.0-rc.2`) | `...:0.2.1`<br>(`...:v0.2.1`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.0-rc.2-market`<br>(`...:dsh-0.2.0-rc.2-market`) | `...:0.2.1-market`<br>(`...:v0.2.1-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.1-alpha.1`<br>(`...:dsh-0.2.1-alpha.1`) | `...:0.2.2`<br>(`...:v0.2.2`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.1-alpha.1-market`<br>(`...:dsh-0.2.1-alpha.1-market`) | `...:0.2.2-market`<br>(`...:v0.2.2-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.0-rc.2` 或项目版本 `:0.2.1`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-alpha.1` 或项目版本 `:0.2.2`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,7 +88,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.0-rc.2-market` 或项目版本 `:0.2.1-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-alpha.1-market` 或项目版本 `:0.2.2-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -168,6 +168,12 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.2.2
+- 🔼 **内置 DSH 版本更新至 `@deepseek-ai/dsh@0.2.1-alpha.1`**，兼容区间上界同步为 `<=0.2.1-alpha.1`，推荐核心同步指向 `0.2.1-alpha.1`。
+- 📦 **官方 0.2.1-alpha.1 用户可见变更**：新增实验性 Claude Code Mods 兼容层；插件管理页新增「让 Agent 创建插件」入口；新会话支持预填提示并在切换工作区时保留文件与会话引用；新增可选开发者工具包（原始日志、消息分组定位与内嵌调试）；Web 新增 `--public-url` 公共访问地址（支持路径前缀反代）；Markdown 预览结构化展示 YAML frontmatter；修复目标编辑多行/中文输入、任务停止消息滞留、改动记录展开异常及插件样式隔离等问题。
+- ⚠️ **官方 0.2.1-alpha.1 破坏性变更**：移除 runtime invariant 插件与各包 `./invariant` 导出；输入区统计拆分为 `activity` / `usage` 两个入口（覆盖旧 `stats` 的插件需更新注册 ID）；子路径插件不再读取独立 `package.json`；自动化任务改为 Web 内置能力。
+- 🧹 **升级残留清理**：profile 幽灵 bundle 清理清单新增 `dsh-experimental-schedule-bundle`（0.2.1-alpha.1 起自动化任务内建进 Web），老数据卷升级后不再出现 `skipping profile bundle` 告警。
 
 ### v0.2.1
 - 🔼 **内置 DSH 版本更新至 `@deepseek-ai/dsh@0.2.0-rc.2`**，兼容区间上界同步为 `<=0.2.0-rc.2`。

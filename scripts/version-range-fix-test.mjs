@@ -2,8 +2,8 @@
  * 快速回归测试：gateway/version-service.js 复合区间求值 + 导出面改造。
  *
  * 覆盖：
- *   1. satisfiesRange 对 `>=0.1.2-rc.1 <=0.2.0-rc.2` 的判定（0.2.0-rc.2 IN；0.2.0-rc.1 IN；0.1.7-rc.2 IN；0.2.0 / 0.2.1 / 0.3.0 OUT）
- *   2. matchSemverPattern 复合 AND 区间修复（0.2.0 / 0.3.0 不再被误判为 true）
+ *   1. satisfiesRange 对 `>=0.1.2-rc.1 <=0.2.1-alpha.1` 的判定（0.2.1-alpha.1 IN；0.2.0-rc.2 IN；0.2.0-rc.1 IN；0.1.7-rc.2 IN；0.2.1 / 0.2.2 / 0.3.0 OUT）
+ *   2. matchSemverPattern 复合 AND 区间修复（0.2.2 / 0.3.0 不再被误判为 true）
  *   3. 单 term 表达式与多空格切分、isSemver 对 pre-release 的支持
  *   4. 向后兼容：单例默认导出（getLiveMeta / evaluateTargetVersion / check 等仍可用）
  *   5. 新增能力：解构导出（{ satisfiesRange, compareSemver } 等）
@@ -25,7 +25,7 @@ const ok = (cond, msg) => {
 };
 const eq = (actual, expected, msg) => ok(actual === expected, `${msg} (期望 ${expected}，实际 ${actual})`);
 
-const RANGE = '>=0.1.2-rc.1 <=0.2.0-rc.2';
+const RANGE = '>=0.1.2-rc.1 <=0.2.1-alpha.1';
 
 // ── 单例默认导出（向后兼容路径） ──────────────────────────────────────────
 const versionService = require('../gateway/version-service');
@@ -53,10 +53,12 @@ ok(satisfiesRange === versionService.satisfiesRange, '解构函数与单例属�
 
 console.log('\n=== C. satisfiesRange 复合区间判定（核心修复） ===');
 eq(satisfiesRange('0.2.0-rc.1', RANGE), true,  '0.2.0-rc.1 IN');
-eq(satisfiesRange('0.2.0-rc.2', RANGE), true,  '0.2.0-rc.2 IN（区间上界，闭区间）');
+eq(satisfiesRange('0.2.1-alpha.1', RANGE), true,  '0.2.1-alpha.1 IN（区间上界，闭区间）');
+eq(satisfiesRange('0.2.0-rc.2', RANGE), true,  '0.2.0-rc.2 IN（上一版推荐，仍在区间内）');
 eq(satisfiesRange('0.1.7-rc.2', RANGE), true,  '0.1.7-rc.2 IN');
-eq(satisfiesRange('0.2.0',      RANGE), false, '0.2.0 OUT');
-eq(satisfiesRange('0.2.1',      RANGE), false, '0.2.1 OUT');
+eq(satisfiesRange('0.2.0',      RANGE), true,  '0.2.0 IN（<=0.2.1-alpha.1，上界抬升后纳入）');
+eq(satisfiesRange('0.2.1',      RANGE), false, '0.2.1 OUT（正式版高于 0.2.1-alpha.1）');
+eq(satisfiesRange('0.2.2',      RANGE), false, '0.2.2 OUT');
 eq(satisfiesRange('0.3.0',      RANGE), false, '0.3.0 OUT');
 // 边界补充
 eq(satisfiesRange('0.1.2-rc.1', RANGE), true,  '0.1.2-rc.1 IN（闭区间下界）');
@@ -71,8 +73,9 @@ eq(satisfiesRange('0.2.0-rc.1', ''), false, '空区间 → false');
 eq(satisfiesRange('', RANGE), false, '空版本 → false');
 
 console.log('\n=== D. matchSemverPattern 复合 AND 修复 ===');
-eq(matchSemverPattern('0.2.0', RANGE), false, 'matchSemverPattern(0.2.0, 复合区间) 修复为 false');
+eq(matchSemverPattern('0.2.0', RANGE), true, 'matchSemverPattern(0.2.0, 复合区间) = true（上界抬升后纳入）');
 eq(matchSemverPattern('0.2.1', RANGE), false, 'matchSemverPattern(0.2.1, 复合区间) 修复为 false');
+eq(matchSemverPattern('0.2.2', RANGE), false, 'matchSemverPattern(0.2.2, 复合区间) 修复为 false');
 eq(matchSemverPattern('0.3.0', RANGE), false, 'matchSemverPattern(0.3.0, 复合区间) 修复为 false');
 eq(matchSemverPattern('0.2.0-rc.1', RANGE), true, 'matchSemverPattern(0.2.0-rc.1, 复合区间) = true');
 eq(matchSemverPattern('0.1.7-rc.2', RANGE), true, 'matchSemverPattern(0.1.7-rc.2, 复合区间) = true');
@@ -84,9 +87,9 @@ eq(matchSemverPattern('0.2.0', '>=0.3.0'), false, '单 term >=0.3.0：0.2.0 不�
 eq(matchSemverPattern('0.1.5-rc.2', '=0.1.5-rc.2'), true, '单 term = 精确匹配');
 eq(matchSemverPattern('0.1.5-rc.2', '0.1.5-rc.2'), true, '裸版本号精确匹配');
 // 多空格 / Tab 切分
-eq(matchSemverPattern('0.2.0', '>=0.1.2-rc.1    <=0.2.0-rc.1'), false, '多空格切分：0.2.0 OUT');
-eq(satisfiesRange('0.2.0', '\t>=0.1.2-rc.1\t<=0.2.0-rc.1\n'), false, 'Tab/换行切分：0.2.0 OUT');
-eq(satisfiesRange('0.2.0-rc.1', '  >=0.1.2-rc.1   <=0.2.0-rc.1  '), true, '首尾空白容错：0.2.0-rc.1 IN');
+eq(matchSemverPattern('0.2.2', '>=0.1.2-rc.1    <=0.2.1-alpha.1'), false, '多空格切分：0.2.2 OUT');
+eq(satisfiesRange('0.2.2', '\t>=0.1.2-rc.1\t<=0.2.1-alpha.1\n'), false, 'Tab/换行切分：0.2.2 OUT');
+eq(satisfiesRange('0.2.1-alpha.1', '  >=0.1.2-rc.1   <=0.2.1-alpha.1  '), true, '首尾空白容错：0.2.1-alpha.1 IN');
 
 console.log('\n=== E. isSemver 对 pre-release 的支持 ===');
 ok(isSemver('0.2.0-rc.1'), 'isSemver("0.2.0-rc.1") = true');
@@ -107,6 +110,9 @@ const okRc17 = versionService.evaluateTargetVersion('0.1.7-rc.2');
 eq(okRc17.level, 'success', '0.1.7-rc.2 → 官方深度适配 success');
 const okRc2 = versionService.evaluateTargetVersion('0.2.0-rc.2');
 eq(okRc2.level, 'success', '0.2.0-rc.2 → 官方深度适配 success');
+const okA1 = versionService.evaluateTargetVersion('0.2.1-alpha.1');
+eq(okA1.level, 'success', '0.2.1-alpha.1 → 官方深度适配 success');
+eq(okA1.isAdapted, true, '0.2.1-alpha.1 → isAdapted=true');
 const warnLow = versionService.evaluateTargetVersion('0.1.4');
 eq(warnLow.level, 'warning', '0.1.4 → warning（降级格式风险）');
 

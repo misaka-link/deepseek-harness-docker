@@ -4,6 +4,31 @@
 
 ---
 
+## [v0.2.2] - 2026-10-04
+
+### 🔼 核心适配
+- **内置 DSH 版本升级至 `@deepseek-ai/dsh@0.2.1-alpha.1`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-alpha.1`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 顶部置顶纳入 `0.2.1-alpha.1`，支持区间上界同步扩展为 `<=0.2.1-alpha.1`，推荐核心版本同步指向 `0.2.1-alpha.1`。
+- **控制台与网关版本感知**：`gateway/version-service.js` 本地工程版本升至 `0.2.2`；`dsh-manager.js`、`version-service.js` 与管理控制台兜底版本矩阵同步置顶 `0.2.1-alpha.1`，消除控制台未适配告警。
+- **profile 幽灵 bundle 清理对齐上游**：`scripts/stale-bundles.cjs` 已知下线清单新增 `@deepseek-ai/dsh-experimental-schedule-bundle`（0.2.1-alpha.1 起自动化任务内建进 `dsh-web-app`），老数据卷 profile 的残留条目按上游同一口径清理，消除 `skipping profile bundle` 告警。
+
+### 📦 官方 0.2.1-alpha.1 用户可见变更
+- **新增实验性 Claude Code Mods 兼容层**：验证 CC Mods API 能力大致为 DSH 插件子集。
+- **插件创造模式**：插件管理页新增「让 Agent 创建插件」入口，可保留当前草稿直接进入创造模式。
+- **输入与工作区上下文保留**：新会话支持预填未发送的提示；恢复草稿或切换工作区时完整保留文件、目录与会话引用。
+- **可选开发者工具组合包**：新增会话原始日志、聊天分组与正文双向定位、内嵌 Host 调试工具。
+- **反向代理公共地址**：Web 新增 `--public-url`，可指定展示、打开及提供给模型的对外访问地址（含路径前缀）。
+- **Markdown 结构化预览**：Markdown 预览组件将 YAML frontmatter 自动渲染为清晰字段列表。
+- **官方缺陷修复**：修复目标编辑多行与中文输入、任务停止后消息滞留、Bash/PowerShell/文件改动记录无法展开、插件启停误移除其他插件样式、登录无响应提示、Windows 桌面端端口等缺陷。
+
+### ⚠️ 官方 0.2.1-alpha.1 破坏性变更
+- **移除运行时 invariant 插件与各包 `./invariant` 导出**：依赖该诊断入口的扩展与自定义 profile 需调整。
+- **输入区统计扩展拆分**：由单一 `stats` 拆分为 `activity` 与 `usage` 两个入口，覆盖旧 `stats` 整行的插件需更新注册 ID。
+- **子路径插件不再读取独立 `package.json`**：显示文本与图标须通过对应子路径导出。
+- **自动化任务改为 Web 内置能力**：提醒工具按模式提供，旧实验组合包选择自动清理。
+
+---
+
 ## [v0.2.1] - 2026-09-30
 
 ### 🔼 核心适配

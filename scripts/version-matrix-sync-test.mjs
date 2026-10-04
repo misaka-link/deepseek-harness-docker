@@ -33,7 +33,9 @@ const uniq = (a) => [...new Set(a)];
 console.log('\n=== A. version.json 自身一致性 ===');
 ok(typeof recommended === 'string' && recommended.length > 0, `recommendedDsh 已定义 (${recommended})`);
 ok(adapted.includes(recommended), `adaptedVersions 包含 recommendedDsh (${recommended})`);
-ok(adapted.includes('0.2.0-rc.2'), 'adaptedVersions 包含 0.2.0-rc.2');
+ok(adapted[0] === recommended, `adaptedVersions 置顶项为 recommendedDsh (${adapted[0]})`);
+ok(adapted.includes('0.2.1-alpha.1'), 'adaptedVersions 包含 0.2.1-alpha.1');
+ok(adapted.includes('0.2.0-rc.2'), 'adaptedVersions 保留上一版 0.2.0-rc.2');
 ok(adapted.includes('0.1.7-rc.2') && adapted.includes('0.1.7-rc.1') && adapted.includes('0.1.7-alpha.2') && adapted.includes('0.1.7-alpha.1'), 'adaptedVersions 包含 0.1.7-rc.2 / 0.1.7-rc.1 / 0.1.7-alpha.2 / 0.1.7-alpha.1');
 ok(meta?.supply?.dshVersion && adapted.includes(meta.supply.dshVersion), `supply.dshVersion 在已适配列表内 (${meta?.supply?.dshVersion})`);
 
@@ -43,12 +45,19 @@ ok(Boolean(dmBlock), '找到 DEFAULT_ADAPTED_VERSIONS 定义');
 const dmList = dmBlock ? uniq([...dmBlock[1].matchAll(/'([^']+)'/g)].map(m => m[1])) : [];
 for (const v of adapted) ok(dmList.includes(v), `dsh-manager 兜底包含 ${v}`);
 ok(dmList.includes(recommended), `dsh-manager 兜底包含 recommendedDsh (${recommended})`);
+ok(JSON.stringify(dmList) === JSON.stringify(adapted), 'dsh-manager 兜底清单与 version.json 逐字节一致');
 
-console.log('\n=== C. version-service.js 兜底清单必须包含 recommendedDsh ===');
+console.log('\n=== C. version-service.js 兜底清单必须与 version.json 同步 ===');
 const vsBlock = vsSrc.match(/adaptedVersions:\s*\[([\s\S]*?)\]/);
 const vsList = vsBlock ? uniq([...vsBlock[1].matchAll(/'([^']+)'/g)].map(m => m[1])) : [];
-ok(vsList.includes(recommended), `version-service 兜底包含 recommendedDsh (${recommended})`);
-ok(!vsList.length || vsList.every(v => adapted.includes(v)), 'version-service 兜底无多余版本');
+ok(vsList.includes(recommended), `version-service getLocalMeta 兜底包含 recommendedDsh (${recommended})`);
+ok(!vsList.length || vsList.every(v => adapted.includes(v)), 'version-service getLocalMeta 兜底无多余版本');
+ok(JSON.stringify(vsList) === JSON.stringify(adapted), 'version-service getLocalMeta 兜底清单与 version.json 逐字节一致');
+
+const vsEvalBlock = vsSrc.match(/const adapted = m\.compatibility\?\.adaptedVersions \|\| \[([\s\S]*?)\];/);
+const vsEvalList = vsEvalBlock ? uniq([...vsEvalBlock[1].matchAll(/'([^']+)'/g)].map(m => m[1])) : [];
+ok(vsEvalList.includes(recommended), `version-service evaluateTargetVersion 兜底包含 recommendedDsh (${recommended})`);
+ok(JSON.stringify(vsEvalList) === JSON.stringify(adapted), 'version-service evaluateTargetVersion 兜底清单与 version.json 逐字节一致');
 
 console.log('\n=== D. admin.html 前端兜底 / 静态默认值 ===');
 const fbLists = [
@@ -59,10 +68,11 @@ ok(fbLists.length >= 3, `找到 ${fbLists.length} 处 adaptedVersions 兜底数�
 for (const [i, raw] of fbLists.entries()) {
   const list = uniq([...raw.matchAll(/'([^']+)'/g)].map(m => m[1]));
   ok(list.includes(recommended), `admin.html 兜底#${i + 1} 包含 recommendedDsh`);
+  ok(JSON.stringify(list) === JSON.stringify(adapted), `admin.html 兜底#${i + 1} 与 version.json 逐字节一致`);
 }
 for (const re of [/recommendedDsh \|\| '([^']+)'/, /supportedDshRange \|\| '([^']+)'/]) {
   const all = [...adminSrc.matchAll(new RegExp(re.source, 'g'))].map(m => m[1]);
-  ok(all.length > 0 && all.every(v => !v.includes('0.2.0-rc.1') && !v.includes('<=0.2.0-rc.1')), `前端兜底不含旧推荐值或旧区间 (命中 ${all.length} 处)`);
+  ok(all.length > 0 && all.every(v => !v.includes('0.2.0-rc.2') && !v.includes('<=0.2.0-rc.2')), `前端兜底不含上一版推荐值或旧区间 (命中 ${all.length} 处)`);
 }
 const recPattern = new RegExp(`compat\\.recommendedDsh \\|\\| '(?!${recommended.replace(/\\./g, '\\.')})`);
 ok(!recPattern.test(adminSrc), `recommendedDsh 兜底为 ${recommended}`);
@@ -70,7 +80,7 @@ const chipCount = (adminSrc.match(new RegExp(`>${recommended.replace(/\./g, '\\.
 ok(chipCount >= 2, `静态适配 chips 含 ${recommended} (${chipCount} 处)`);
 // 回归：升级推荐核心时必须「置顶新增」而不是「替换掉」上一版推荐，
 // 否则冷启动静态页面（API 返回前）会漏展示上一版已深度适配的核心。
-const prevRecommended = '0.2.0-rc.1';
+const prevRecommended = '0.2.0-rc.2';
 const prevChipCount = (adminSrc.match(new RegExp(`>${prevRecommended.replace(/\./g, '\\.')}</span>`, 'g')) || []).length;
 ok(prevChipCount >= 2, `静态适配 chips 保留上一推荐版本 ${prevRecommended} (${prevChipCount} 处)`);
 

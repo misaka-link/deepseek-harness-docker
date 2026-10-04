@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.0-rc.2",
+    "dshVersion": "0.2.1-alpha.1",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,27 +19,51 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.2.1",
-    "releaseDate": "2026-09-30",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.1",
-    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2；快照还原范围可选（仅恢复配置/完整全量还原）与老版本快照全自动还原；修复长任务 SSE「signal timed out」误报；适配矩阵置顶新增 0.2.0-rc.2 并保留历史项",
+    "version": "0.2.2",
+    "releaseDate": "2026-10-04",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.2",
+    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.1，兼容区间上界同步为 <=0.2.1-alpha.1；适配矩阵置顶新增 0.2.1-alpha.1；profile 幽灵 bundle 清理清单对齐上游（schedule-bundle 退役）；同步官方 0.2.1-alpha.1 破坏性变更（移除 runtime invariant 与 ./invariant 导出、子路径插件不再读取独立 package.json、输入区统计拆分为 activity/usage）",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2",
-      "快照还原范围可选（Issue #9）：控制台可选择「仅恢复配置（保留现网会话）」或「完整全量还原」，并按现网会话状态给出默认值与覆盖风险提示",
-      "老版本快照还原全自动（Issue #9）：控制台点「还原」即自动修复「逃出归档根」的相对软链，前端还原等待超时放宽至 600s",
-      "修复长任务 SSE 误报（Issue #9）：切换核心版本/就地还原改用空闲超时通道，消除「通信异常: signal timed out」误报",
-      "已适配版本矩阵置顶新增 0.2.0-rc.2（保留 0.2.0-rc.1 及其后历史项），推荐核心与前端兜底同步指向 rc.2，消除后台「未经深度适配」误报"
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.1，兼容区间上界同步为 <=0.2.1-alpha.1",
+      "已适配版本矩阵置顶新增 0.2.1-alpha.1（保留 0.2.0-rc.2 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.1",
+      "profile 幽灵 bundle 清理清单新增 @deepseek-ai/dsh-experimental-schedule-bundle（0.2.1-alpha.1 起自动化任务内建进 dsh-web-app），老数据卷残留条目按上游同一口径清理"
     ],
     "dshChangelogList": [
-      "模型选择器支持搜索：模型较多时可按名称模糊匹配并用键盘选择",
-      "第三方模型目录与兼容适配升级至 pi-ai 0.87.1：部分旧模型 ID 被移除，已保存的模型选择可能需要重新选择",
-      "修复切换会话或返回对话后计划审阅无法打开、「查看全文」消失的问题",
-      "修复设置页关闭「显示代码工作视图」后无法调整 Agent 预设的问题",
-      "精简插件安装引导：区分已安装、不兼容与内置插件的升级提示",
-      "优化聊天耗时、过程信息、字号与深色主题样式，并降低动画运行开销"
+      "新增实验性 Claude Code Mods 兼容层，验证 CC Mods API 能力大致为 DSH 插件子集",
+      "插件管理页新增「让 Agent 创建插件」入口，保留草稿进入创造模式",
+      "新会话支持预填未发送的提示；恢复草稿或切换工作区时保留文件、目录与会话引用",
+      "Web 支持通过 --public-url 指定对外访问地址，支持带路径前缀的反向代理入口",
+      "新增可选开发者工具组合包：会话原始日志、聊天分组与正文双向定位、内嵌 Host 调试工具",
+      "Markdown 文件预览将 YAML frontmatter 显示为清晰字段列表",
+      "破坏性变更：移除运行时 invariant 插件与各包 ./invariant 导出，依赖该诊断入口的扩展与自定义 profile 需调整",
+      "输入区统计扩展拆分为 activity 与 usage 两个独立入口，覆盖旧 stats 整行的插件需更新注册 ID",
+      "子路径插件不再读取独立 package.json，显示文本与图标须通过对应子路径导出",
+      "自动化任务改为 Web 内置能力（提醒工具按模式提供），旧实验组合包选择自动清理",
+      "修复目标编辑多行/中文输入、任务停止后消息滞留、部分 Bash/PowerShell/文件改动记录无法展开、插件启停移除他插件样式、登录无响应提示、Windows 桌面端端口等问题"
     ]
   },
   "history": {
+    "0.2.1": {
+      "version": "0.2.1",
+      "releaseDate": "2026-09-30",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.1",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2；快照还原范围可选（仅恢复配置/完整全量还原）与老版本快照全自动还原；修复长任务 SSE「signal timed out」误报；适配矩阵置顶新增 0.2.0-rc.2 并保留历史项",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.0-rc.2，兼容区间上界同步为 <=0.2.0-rc.2",
+        "快照还原范围可选（Issue #9）：控制台可选择「仅恢复配置（保留现网会话）」或「完整全量还原」，并按现网会话状态给出默认值与覆盖风险提示",
+        "老版本快照还原全自动（Issue #9）：控制台点「还原」即自动修复「逃出归档根」的相对软链，前端还原等待超时放宽至 600s",
+        "修复长任务 SSE 误报（Issue #9）：切换核心版本/就地还原改用空闲超时通道，消除「通信异常: signal timed out」误报",
+        "已适配版本矩阵置顶新增 0.2.0-rc.2（保留 0.2.0-rc.1 及其后历史项），推荐核心与前端兜底同步指向 rc.2，消除后台「未经深度适配」误报"
+      ],
+      "dshChangelogList": [
+        "模型选择器支持搜索：模型较多时可按名称模糊匹配并用键盘选择",
+        "第三方模型目录与兼容适配升级至 pi-ai 0.87.1：部分旧模型 ID 被移除，已保存的模型选择可能需要重新选择",
+        "修复切换会话或返回对话后计划审阅无法打开、「查看全文」消失的问题",
+        "修复设置页关闭「显示代码工作视图」后无法调整 Agent 预设的问题",
+        "精简插件安装引导：区分已安装、不兼容与内置插件的升级提示",
+        "优化聊天耗时、过程信息、字号与深色主题样式，并降低动画运行开销"
+      ]
+    },
     "0.2.0": {
       "version": "0.2.0",
       "releaseDate": "2026-09-28",
@@ -229,9 +253,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.0-rc.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.0-rc.2",
+    "recommendedDsh": "0.2.1-alpha.1",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-alpha.1",
     "adaptedVersions": [
+      "0.2.1-alpha.1",
       "0.2.0-rc.2",
       "0.2.0-rc.1",
       "0.1.7-rc.2",

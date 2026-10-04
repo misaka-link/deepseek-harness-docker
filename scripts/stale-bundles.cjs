@@ -44,10 +44,14 @@ const DEFAULT_PROTECTED_BUNDLES = Object.freeze([
  *     `@deepseek-ai/dsh-experimental-agent-team-profile`（其 README 明确要求从
  *     `dsh.profile.bundles` 删除独立条目）。
  *   - `@deepseek-ai/dsh-settings-file`：0.1.7 起移除。
+ *   - `@deepseek-ai/dsh-experimental-schedule-bundle`：0.2.1-alpha.1 起退役，
+ *     自动化任务内建进 `dsh-web-app`（上游 `dsh-app-boot` 的 `RETIRED_BUNDLES`
+ *     亦会剔除；此处与之对齐，使老数据卷 profile 清理口径一致）。
  */
 const KNOWN_REMOVED_BUNDLES = Object.freeze([
   '@deepseek-ai/dsh-experimental-agent-team-web-profile',
-  '@deepseek-ai/dsh-settings-file'
+  '@deepseek-ai/dsh-settings-file',
+  '@deepseek-ai/dsh-experimental-schedule-bundle'
 ]);
 
 /** DSH 安装锚点候选（容器内实际为 `/usr/local/lib/node_modules/@deepseek-ai/dsh`）。 */
