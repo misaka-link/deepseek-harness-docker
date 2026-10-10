@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // 测试/调试用：DSH_PATCH_ONLY_DIR 存在时只扫描该目录，避免误改环境中其它 DSH 副本
 const ONLY_DIR = process.env.DSH_PATCH_ONLY_DIR;
@@ -25,27 +28,56 @@ const markApplied = (name) => appliedPatches.add(name);
 const markMissed = (name) => missedPatches.add(name);
 let loopbackSeen = false;
 
-/** 读取已安装 DSH 版本（用于与 version.json 的兼容区间比对） */
+/**
+ * 读取「正在被扫描的那棵树」的 DSH 版本（用于与 version.json 的兼容区间比对）。
+ * 必须优先跟随 DSH_PATCH_ONLY_DIR / DSH_INSTALL_DIR：否则离线审计（DSH_PATCH_ONLY_DIR
+ * 指向某份安装树）时会读到环境里另一套 DSH（如本机 /usr/local 的旧版本），
+ * 横幅版本与真实扫描对象不一致，容易误判（历史踩坑 R4）。
+ */
 function readInstalledDshVersion() {
   const candidates = [
+    ONLY_DIR ? path.join(ONLY_DIR, 'dsh/package.json') : null,
+    process.env.DSH_INSTALL_DIR ? path.join(process.env.DSH_INSTALL_DIR, 'lib/node_modules/@deepseek-ai/dsh/package.json') : null,
     '/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json',
     '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/package.json'
-  ];
+  ].filter(Boolean);
   for (const p of candidates) {
-    try { if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8')).version || null; } catch {}
+    try {
+      if (!fs.existsSync(p)) continue;
+      return { version: JSON.parse(fs.readFileSync(p, 'utf8')).version || null, source: p };
+    } catch {}
   }
-  return null;
+  return { version: null, source: null };
+}
+
+/**
+ * 读取兼容区间元数据。离线审计（DSH_PATCH_ONLY_DIR）优先用仓库自身的 version.json，
+ * 容器内则用 /app/version.json；可用 DSH_VERSION_JSON 显式覆盖。
+ */
+function readCompatRange() {
+  const candidates = [
+    process.env.DSH_VERSION_JSON,
+    ONLY_DIR ? path.join(SCRIPT_DIR, '../version.json') : null,
+    '/app/version.json',
+    path.join(SCRIPT_DIR, '../version.json')
+  ].filter(Boolean);
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const range = (JSON.parse(fs.readFileSync(p, 'utf8')).compatibility || {}).supportedDshRange;
+      if (range) return { range, source: p };
+    } catch {}
+  }
+  return { range: null, source: null };
 }
 
 /** 与 version.json 的 supportedDshRange 比对（仅告警，不阻断启动） */
 function warnIfVersionOutOfRange() {
   try {
-    const ver = readInstalledDshVersion();
-    const vj = '/app/version.json';
-    if (!ver || !fs.existsSync(vj)) return;
-    const range = (JSON.parse(fs.readFileSync(vj, 'utf8')).compatibility || {}).supportedDshRange;
-    if (!range) return;
-    console.log(`[patch-dsh-client] DSH 版本: ${ver}，声明兼容区间: ${range}`);
+    const { version: ver, source: verSrc } = readInstalledDshVersion();
+    const { range, source: rangeSrc } = readCompatRange();
+    if (!ver || !range) return;
+    console.log(`[patch-dsh-client] DSH 版本: ${ver} (来源: ${verSrc})，声明兼容区间: ${range} (来源: ${rangeSrc})`);
   } catch (e) {
     console.warn('[patch-dsh-client] 版本区间检查跳过:', e.message);
   }

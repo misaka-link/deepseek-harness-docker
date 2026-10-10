@@ -26,7 +26,7 @@ const AUTH_SNIPPET = 'class C {\n\tisAuthenticated(request) {\n\t\treturn false;
 const AUTH_SNIPPET_NEW = 'class C {\n\tisAuthenticated(request, secure = false) {\n\t\treturn false;\n\t}\n}\n';
 const COMBO_SNIPPET = 'class R {\n\tbundleResource(method, url) {\n\t\tconst resourceUrl = url;\n\t\tconst response = this.responses.get(resourceUrl) ?? this.previousBatchResponses.get(resourceUrl) ?? this.chunkResponse(requestUrl);\n\t\treturn response;\n\t}\n}\n';
 
-function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET } = {}) {
+function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET, dshVersion = '0.2.1-alpha.2' } = {}) {
   const base = path.join(os.tmpdir(), `dsh-patch-${name}-${Date.now()}`);
   const mods = path.join(base, 'lib/node_modules/@deepseek-ai');
   const write = (rel, content) => {
@@ -34,6 +34,7 @@ function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET } = {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, content);
   };
+  write('dsh/package.json', JSON.stringify({ name: '@deepseek-ai/dsh', version: dshVersion }));
   write('dsh-client-ui-layout/lib/client.js', LOOPBACK_SNIPPET + '\n');
   write('dsh-client-connection/lib/index.js', breakAuth ? 'class C {\n\tother() {}\n}\n' : authSnippet);
   write('dsh-client-modules/lib/index.js', COMBO_SNIPPET);
@@ -75,8 +76,18 @@ ok(rC.status === 0, `退出码为 0（实际 ${rC.status}）`);
 ok(/全部必需补丁已生效/.test(rC.stdout || ''), '输出包含"全部必需补丁已生效"');
 ok(/已应用=\[[^\]]*auth-bypass/.test(rC.stdout || ''), 'auth-bypass 被标记为已应用（新签名命中）');
 
+console.log('\n=== D. 版本横幅跟随被扫描的树（R4：不得读环境里其它 DSH） ===');
+const vtree = makeSandbox('vtree', { dshVersion: '9.9.9-probe' });
+const rD = runPatch(vtree);
+const rDOut = (rD.stdout || '') + (rD.stderr || '');
+ok(rD.status === 0, `退出码为 0（实际 ${rD.status}）`);
+ok(/DSH 版本: 9\.9\.9-probe/.test(rDOut), '横幅显示被扫描树的版本 9.9.9-probe（而非 /usr/local 的旧版本）');
+ok(/来源: .*vtree/.test(rDOut), '横幅标注版本来源为沙箱树');
+ok(/全部必需补丁已生效/.test(rDOut), '必需补丁仍全部命中');
+
 fs.rmSync(good, { recursive: true, force: true });
 fs.rmSync(bad, { recursive: true, force: true });
 fs.rmSync(newer, { recursive: true, force: true });
+fs.rmSync(vtree, { recursive: true, force: true });
 console.log(`\n===== 汇总: 通过 ${pass} / 失败 ${fail} =====`);
 process.exit(fail ? 1 : 0);
