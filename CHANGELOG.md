@@ -4,6 +4,30 @@
 
 ---
 
+## [v0.2.3] - 2026-10-10
+
+### 🔼 核心适配
+- **内置 DSH 版本升级至 `@deepseek-ai/dsh@0.2.1-alpha.2`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-alpha.2`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 顶部置顶纳入 `0.2.1-alpha.2`，支持区间上界同步扩展为 `<=0.2.1-alpha.2`，推荐核心版本同步指向 `0.2.1-alpha.2`。
+- **控制台与网关版本感知**：`gateway/version-service.js` 本地工程版本升至 `0.2.3`；`dsh-manager.js`、`version-service.js` 与管理控制台兜底版本矩阵同步置顶 `0.2.1-alpha.2`，消除控制台未适配告警。
+- **工程版本递增**：`gateway/package.json`、`build.sh` 与 `.github/workflows/docker-build.yml` 工程版本同步递增至 `0.2.3`。
+
+### 📦 官方 0.2.1-alpha.2 用户可见变更
+- **浏览器会话鉴权加固**：按请求 authority 与 `trustedHosts` 白名单校验来源，TLS 监听启用 Secure Cookie 与 https 源判定（`isAuthenticated` 新增 `secure` 语义）。
+- **实验性持久终端**：新增六个全局终端工具与终端组合包，跨工具调用保留 shell 会话（默认关闭）。
+- **Git 工作树**：新增 `create_worktree` 工具与工作树运行时组合包，一次调用创建并进入隔离检出目录（默认关闭）。
+- **工作目录工具与运行时**：读取或切换当前 Session 目录，会话回放可恢复所选目录。
+- **会话搜索与会话标题**：新增跨历史会话只读检索工具与随对话进展自动更新的标题提供方（默认关闭）。
+- **思考过程（CoT）机器翻译**：新增 translator 服务与客户端 UI，默认 Bing，保留原文与已保存译文。
+- **实验性组合包**：新增 DSH 徽章技能与 Ralph 循环组合包（默认关闭）。
+
+### ⚠️ 官方 0.2.1-alpha.2 破坏性变更
+- **下线 hooks / webhook 系列包**：移除 `dsh-hook-protocol`、`dsh-hooks-claude-code`、`dsh-hooks-codex`、`dsh-webhook`、`dsh-webhook-github` 与 `dsh-subagent-in-process-driver`。
+- **`dsh-subagent` 类型结构调整**：新增 `activation` / `manager` / `structured` 模块，移除 `continuation` 与 `continuation-activation`。
+- **前端 dist 资源整体重打包**：bundle 文件哈希变动。
+
+---
+
 ## [v0.2.2] - 2026-10-04
 
 ### 🔼 核心适配

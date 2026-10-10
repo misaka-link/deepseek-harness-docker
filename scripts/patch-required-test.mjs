@@ -20,10 +20,13 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { console.log('   ✔ ' + m); pass++; } else { console.log('   ❌ ' + m); fail++; } };
 
 const LOOPBACK_SNIPPET = 'const x = isLoopbackHostname(pageLocation.hostname);';
+// 0.2.1-alpha.1 及更早签名
 const AUTH_SNIPPET = 'class C {\n\tisAuthenticated(request) {\n\t\treturn false;\n\t}\n}\n';
+// 0.2.1-alpha.2 起签名：新增 secure 参数（锚点必须兼容新旧两种形态）
+const AUTH_SNIPPET_NEW = 'class C {\n\tisAuthenticated(request, secure = false) {\n\t\treturn false;\n\t}\n}\n';
 const COMBO_SNIPPET = 'class R {\n\tbundleResource(method, url) {\n\t\tconst resourceUrl = url;\n\t\tconst response = this.responses.get(resourceUrl) ?? this.previousBatchResponses.get(resourceUrl) ?? this.chunkResponse(requestUrl);\n\t\treturn response;\n\t}\n}\n';
 
-function makeSandbox(name, { breakAuth = false } = {}) {
+function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET } = {}) {
   const base = path.join(os.tmpdir(), `dsh-patch-${name}-${Date.now()}`);
   const mods = path.join(base, 'lib/node_modules/@deepseek-ai');
   const write = (rel, content) => {
@@ -32,7 +35,7 @@ function makeSandbox(name, { breakAuth = false } = {}) {
     fs.writeFileSync(p, content);
   };
   write('dsh-client-ui-layout/lib/client.js', LOOPBACK_SNIPPET + '\n');
-  write('dsh-client-connection/lib/index.js', breakAuth ? 'class C {\n\tother() {}\n}\n' : AUTH_SNIPPET);
+  write('dsh-client-connection/lib/index.js', breakAuth ? 'class C {\n\tother() {}\n}\n' : authSnippet);
   write('dsh-client-modules/lib/index.js', COMBO_SNIPPET);
   return base;
 }
@@ -65,7 +68,15 @@ ok(rB.status !== 0, `退出码非 0（实际 ${rB.status}）`);
 ok(/\[FATAL\]/.test(rBOut), '输出包含 [FATAL]');
 ok(/auth-bypass/.test(rBOut), '指出未命中的补丁名 auth-bypass');
 
+console.log('\n=== C. 0.2.1-alpha.2 新签名 isAuthenticated(request, secure = false) → 应成功 ===');
+const newer = makeSandbox('newer', { authSnippet: AUTH_SNIPPET_NEW });
+const rC = runPatch(newer);
+ok(rC.status === 0, `退出码为 0（实际 ${rC.status}）`);
+ok(/全部必需补丁已生效/.test(rC.stdout || ''), '输出包含"全部必需补丁已生效"');
+ok(/已应用=\[[^\]]*auth-bypass/.test(rC.stdout || ''), 'auth-bypass 被标记为已应用（新签名命中）');
+
 fs.rmSync(good, { recursive: true, force: true });
 fs.rmSync(bad, { recursive: true, force: true });
+fs.rmSync(newer, { recursive: true, force: true });
 console.log(`\n===== 汇总: 通过 ${pass} / 失败 ${fail} =====`);
 process.exit(fail ? 1 : 0);

@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.1-alpha.1",
+    "dshVersion": "0.2.1-alpha.2",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,30 +19,54 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.2.2",
-    "releaseDate": "2026-10-04",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.2",
-    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.1，兼容区间上界同步为 <=0.2.1-alpha.1；适配矩阵置顶新增 0.2.1-alpha.1；profile 幽灵 bundle 清理清单对齐上游（schedule-bundle 退役）；同步官方 0.2.1-alpha.1 破坏性变更（移除 runtime invariant 与 ./invariant 导出、子路径插件不再读取独立 package.json、输入区统计拆分为 activity/usage）",
+    "version": "0.2.3",
+    "releaseDate": "2026-10-10",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.3",
+    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2；适配矩阵置顶新增 0.2.1-alpha.2；工程版本递增至 0.2.3；同步官方 0.2.1-alpha.2 破坏性变更（下线 hooks/webhook 系列包与 dsh-subagent-in-process-driver、dsh-subagent 类型结构调整）",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.1，兼容区间上界同步为 <=0.2.1-alpha.1",
-      "已适配版本矩阵置顶新增 0.2.1-alpha.1（保留 0.2.0-rc.2 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.1",
-      "profile 幽灵 bundle 清理清单新增 @deepseek-ai/dsh-experimental-schedule-bundle（0.2.1-alpha.1 起自动化任务内建进 dsh-web-app），老数据卷残留条目按上游同一口径清理"
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2",
+      "已适配版本矩阵置顶新增 0.2.1-alpha.2（保留 0.2.1-alpha.1 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.2",
+      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.2，工程版本递增至 0.2.3",
+      "远程同步清单纳入 remote-verify-0.2.1-alpha.2.sh 联调校验脚本（保留旧版 alpha.1 脚本）"
     ],
     "dshChangelogList": [
-      "新增实验性 Claude Code Mods 兼容层，验证 CC Mods API 能力大致为 DSH 插件子集",
-      "插件管理页新增「让 Agent 创建插件」入口，保留草稿进入创造模式",
-      "新会话支持预填未发送的提示；恢复草稿或切换工作区时保留文件、目录与会话引用",
-      "Web 支持通过 --public-url 指定对外访问地址，支持带路径前缀的反向代理入口",
-      "新增可选开发者工具组合包：会话原始日志、聊天分组与正文双向定位、内嵌 Host 调试工具",
-      "Markdown 文件预览将 YAML frontmatter 显示为清晰字段列表",
-      "破坏性变更：移除运行时 invariant 插件与各包 ./invariant 导出，依赖该诊断入口的扩展与自定义 profile 需调整",
-      "输入区统计扩展拆分为 activity 与 usage 两个独立入口，覆盖旧 stats 整行的插件需更新注册 ID",
-      "子路径插件不再读取独立 package.json，显示文本与图标须通过对应子路径导出",
-      "自动化任务改为 Web 内置能力（提醒工具按模式提供），旧实验组合包选择自动清理",
-      "修复目标编辑多行/中文输入、任务停止后消息滞留、部分 Bash/PowerShell/文件改动记录无法展开、插件启停移除他插件样式、登录无响应提示、Windows 桌面端端口等问题"
+      "浏览器会话鉴权加固：按请求 authority 与 trustedHosts 白名单校验来源，TLS 监听启用 Secure Cookie 与 https 源判定（isAuthenticated 新增 secure 语义）",
+      "新增实验性持久终端：六个全局终端工具与终端组合包，跨工具调用保留 shell 会话（默认关闭）",
+      "新增 Git 工作树能力：create_worktree 工具与工作树运行时组合包，一次调用创建并进入隔离检出目录（默认关闭）",
+      "新增工作目录工具与运行时：读取或切换当前 Session 目录，会话回放可恢复所选目录",
+      "新增会话搜索工具与随对话更新的会话标题提供方（实验性，默认关闭）",
+      "新增思考过程（CoT）机器翻译：translator 服务与客户端 UI，默认 Bing，保留原文与已保存译文",
+      "新增 DSH 徽章技能组合包与 Ralph 循环组合包（实验性，默认关闭）",
+      "破坏性变更：下线 dsh-hook-protocol / dsh-hooks-claude-code / dsh-hooks-codex / dsh-webhook / dsh-webhook-github 与 dsh-subagent-in-process-driver",
+      "破坏性变更：dsh-subagent 类型结构调整（新增 activation / manager / structured，移除 continuation 与 continuation-activation）",
+      "前端 dist 资源整体重打包，bundle 文件哈希变动"
     ]
   },
   "history": {
+    "0.2.2": {
+      "version": "0.2.2",
+      "releaseDate": "2026-10-04",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.2",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.1，兼容区间上界同步为 <=0.2.1-alpha.1；适配矩阵置顶新增 0.2.1-alpha.1；profile 幽灵 bundle 清理清单对齐上游（schedule-bundle 退役）；同步官方 0.2.1-alpha.1 破坏性变更（移除 runtime invariant 与 ./invariant 导出、子路径插件不再读取独立 package.json、输入区统计拆分为 activity/usage）",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.1，兼容区间上界同步为 <=0.2.1-alpha.1",
+        "已适配版本矩阵置顶新增 0.2.1-alpha.1（保留 0.2.0-rc.2 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.1",
+        "profile 幽灵 bundle 清理清单新增 @deepseek-ai/dsh-experimental-schedule-bundle（0.2.1-alpha.1 起自动化任务内建进 dsh-web-app），老数据卷残留条目按上游同一口径清理"
+      ],
+      "dshChangelogList": [
+        "新增实验性 Claude Code Mods 兼容层，验证 CC Mods API 能力大致为 DSH 插件子集",
+        "插件管理页新增「让 Agent 创建插件」入口，保留草稿进入创造模式",
+        "新会话支持预填未发送的提示；恢复草稿或切换工作区时保留文件、目录与会话引用",
+        "Web 支持通过 --public-url 指定对外访问地址，支持带路径前缀的反向代理入口",
+        "新增可选开发者工具组合包：会话原始日志、聊天分组与正文双向定位、内嵌 Host 调试工具",
+        "Markdown 文件预览将 YAML frontmatter 显示为清晰字段列表",
+        "破坏性变更：移除运行时 invariant 插件与各包 ./invariant 导出，依赖该诊断入口的扩展与自定义 profile 需调整",
+        "输入区统计扩展拆分为 activity 与 usage 两个独立入口，覆盖旧 stats 整行的插件需更新注册 ID",
+        "子路径插件不再读取独立 package.json，显示文本与图标须通过对应子路径导出",
+        "自动化任务改为 Web 内置能力（提醒工具按模式提供），旧实验组合包选择自动清理",
+        "修复目标编辑多行/中文输入、任务停止后消息滞留、部分 Bash/PowerShell/文件改动记录无法展开、插件启停移除他插件样式、登录无响应提示、Windows 桌面端端口等问题"
+      ]
+    },
     "0.2.1": {
       "version": "0.2.1",
       "releaseDate": "2026-09-30",
@@ -253,9 +277,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.1-alpha.1",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-alpha.1",
+    "recommendedDsh": "0.2.1-alpha.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-alpha.2",
     "adaptedVersions": [
+      "0.2.1-alpha.2",
       "0.2.1-alpha.1",
       "0.2.0-rc.2",
       "0.2.0-rc.1",

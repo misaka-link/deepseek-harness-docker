@@ -51,6 +51,18 @@ function warnIfVersionOutOfRange() {
   }
 }
 
+// auth-bypass 锚点：方法签名随 DSH 版本漂移，按「新→旧」顺序尝试命中。
+//   - 0.2.1-alpha.2 起：`isAuthenticated(request, secure = false) {`（新增 secure 参数，浏览器认证加固）
+//   - 0.2.1-alpha.1 及更早：`isAuthenticated(request) {`
+// 该方法是 dsh-client-connection 中**唯一**的 isAuthenticated 定义（位于 BrowserAuth 类内，
+// alpha.2 见 lib/index.js:484）。HostConnectionService.requestRejection / authorizeIndex
+// 均经 this.browserAuth.isAuthenticated(...) 调用它，故在此单点注入 return true 即可覆盖
+// 全部 401 判定（403 的 Host/Origin fence 仍由 isTrustedApiRequest 独立把守，与本补丁无关）。
+const AUTH_BYPASS_SIGNATURES = [
+  'isAuthenticated(request, secure = false) {',
+  'isAuthenticated(request) {'
+];
+
 const REPLACEMENTS = [
   {
     needle: 'isLoopbackHostname(pageLocation.hostname)',
@@ -98,17 +110,20 @@ function patchServerConnection(baseDir) {
       let cContent = fs.readFileSync(connTarget, 'utf8');
       if (cContent.includes('/* dsh-patch: auth-bypass-all */')) {
         markApplied('auth-bypass');
-      } else if (cContent.includes('isAuthenticated(request) {')) {
-        cContent = cContent.replace(
-          'isAuthenticated(request) {',
-          'isAuthenticated(request) {\n\t\t/* dsh-patch: auth-bypass-all */ return true;'
-        );
-        fs.writeFileSync(connTarget, cContent, 'utf8');
-        markApplied('auth-bypass');
-        console.log(`[patch-dsh-client] 成功修补服务端免鉴权直连 (由网关统一收口认证): ${connTarget}`);
       } else {
-        markMissed('auth-bypass');
-        console.warn(`[patch-dsh-client] ⚠️ 必需补丁 auth-bypass 未命中（锚点失效）: ${connTarget}`);
+        const signature = AUTH_BYPASS_SIGNATURES.find((sig) => cContent.includes(sig));
+        if (signature) {
+          cContent = cContent.replace(
+            signature,
+            signature + '\n\t\t/* dsh-patch: auth-bypass-all */ return true;'
+          );
+          fs.writeFileSync(connTarget, cContent, 'utf8');
+          markApplied('auth-bypass');
+          console.log(`[patch-dsh-client] 成功修补服务端免鉴权直连 (由网关统一收口认证): ${connTarget}`);
+        } else {
+          markMissed('auth-bypass');
+          console.warn(`[patch-dsh-client] ⚠️ 必需补丁 auth-bypass 未命中（锚点失效）: ${connTarget}`);
+        }
       }
     } catch (err) {
       console.warn(`[patch-dsh-client] 修补服务端放行失败: ${err.message}`);
