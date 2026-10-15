@@ -11,14 +11,17 @@
 - **左下角账号菜单直达**：账号菜单「Sign in」经补丁广播事件 `account-signin-notify` 直接唤起插件弹窗，无需先进设置页。
 - **新增回归测试** `scripts/account-login-origin-test.mjs`：覆盖 origin 归一、非法输入拒绝、账号弹窗接管与补丁幂等（21 项）。
 - **新增回归测试** `scripts/plugin-privacy-regex-test.mjs`：从插件源码还原运行时真实正则后断言边界与护栏（21 项，含「13 位毫秒时间戳不得被误判为手机号」）。
+- **新增回归测试** `scripts/gateway-encoding-ws-shim-test.mjs`：覆盖 Issue #10 的「压缩响应解压后再注入」与「https 场景 ws→wss 升级 shim」两项网关修复。
+- **文档与工程**：README 新增「🔑 DeepSeek 账号登录（远程 / 反代访问必读）」章节，给出本地隧道与手动回调两条可用路径；版本矩阵相关回归测试（`version-matrix-sync-test` / `version-range-fix-test`）同步更新 alpha.3 断言；本地调试工具 `scripts/baota-*.mjs` 纳入 `.gitignore`，不随发布上传。
 - **隐私保护**：插件支持**双击页面任意位置手机号/邮箱即可模糊/还原**、**默认模糊**开关，以及**自定义显示昵称**（设置后不再渲染真实账号）；截图留档均可安全入库。
-- **登录状态检测**：内置插件通过账号状态流（`status === "credential-stored"`）判定环境是否已登录；**已登录时不再展示登录框**，改为展示「✅ 已登录」与账号名/邮箱（来自 `getProfile`）。
+- **登录状态检测**：网关新增 `GET /__api/account/status`（读容器内 `.credentials.yaml` 判定本地凭据，仅返回布尔值，不依赖外网），内置插件据此判定环境是否已登录；**已登录时不再展示登录框**，改为展示「✅ 已登录」与账号名/邮箱（来自 `getProfile`）。
 - **内置插件「DeepSeek 登录（远程）」**：新增 `plugins/dsh-deepseek-remote-login`（DSH 内置 bundle，随镜像自动装配），**接管官方登录弹窗**并在 DSH 设置中心提供同配色弹窗——可复制/手动打开登录链接，并可粘贴回调链接一键完成登录；补丁层**关闭官方弹窗的自动预开与自动跳转**（`account-no-auto-open` / `account-dialog-replaced`）；网关新增 `/account/callback` 转发接口与 `/__api/account/client-version` 端点。
 
 ### 🔼 核心适配
 - **内置 DSH 版本升级至 `@deepseek-ai/dsh@0.2.1-alpha.3`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-alpha.3`。
 - **兼容矩阵更新**：`compatibility.adaptedVersions` 顶部置顶纳入 `0.2.1-alpha.3`，支持区间上界同步扩展为 `<=0.2.1-alpha.3`，推荐核心版本同步指向 `0.2.1-alpha.3`。
 - **控制台与网关版本感知**：`gateway/version-service.js` 本地工程版本升至 `0.2.4`；`dsh-manager.js`、`version-service.js` 与管理控制台兜底版本矩阵同步置顶 `0.2.1-alpha.3`，消除控制台未适配告警。
+- **补丁链适配 0.2.1-alpha.3 客户端文件拆分**：上游把浏览器客户端拆成 `client.browser.js` / `client.node.js`，`patch-dsh-client.mjs` 的客户端扫描改为 `CLIENT_FILE_NAMES = ['client.js','client.browser.js','client.node.js']`，`client-loopback` 等补丁在拆分后仍能命中；`patch-required-test.mjs` 新增 E/F 两道防线（**拆分后应成功命中** / **再次改名应 `[FATAL]` 中止**），补丁回归测试增至 21 项。
 - **工程版本递增**：`gateway/package.json`、`build.sh` 与 `.github/workflows/docker-build.yml` 工程版本同步递增至 `0.2.4`。
 
 ### 📦 官方 0.2.1-alpha.3 用户可见变更
@@ -68,6 +71,11 @@
 - **下线 hooks / webhook 系列包**：移除 `dsh-hook-protocol`、`dsh-hooks-claude-code`、`dsh-hooks-codex`、`dsh-webhook`、`dsh-webhook-github` 与 `dsh-subagent-in-process-driver`。
 - **`dsh-subagent` 类型结构调整**：新增 `activation` / `manager` / `structured` 模块，移除 `continuation` 与 `continuation-activation`。
 - **前端 dist 资源整体重打包**：bundle 文件哈希变动。
+
+---
+
+### 🐛 缺陷修复
+- **补丁链版本横幅跟随被扫描的 DSH 树 (R4)**：`patch-dsh-client.mjs` 的版本横幅改为从**被扫描的 DSH 树**读取版本（默认 `/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json`），兼容区间的来源指向仓库 `version.json`，并同时打印两者的来源路径；修复多树 / 软链场景下横幅显示的版本与实际被补丁的 DSH 不一致、易误判适配状态的问题。`patch-required-test` 新增 D 段断言横幅显示被扫描树的版本。
 
 ---
 
