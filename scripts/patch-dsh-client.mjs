@@ -97,6 +97,9 @@ const AUTH_BYPASS_SIGNATURES = [
 
 const REPLACEMENTS = [
   {
+    // loopback 锚点：表达式本身未随版本变化，但所在文件在 0.2.1-alpha.3 发生了拆分
+    //   - ≤0.2.1-alpha.2：dsh-client-connection/lib/client.js
+    //   - 0.2.1-alpha.3 起：client.browser.js（Web）/ client.node.js（Node 宿主）
     needle: 'isLoopbackHostname(pageLocation.hostname)',
     replacement: 'true'
   },
@@ -108,6 +111,13 @@ const REPLACEMENTS = [
     replacement: '"host"'
   }
 ];
+
+// 客户端连接层文件名随上游版本演进：
+//   - ≤0.2.1-alpha.2：单文件 dsh-client-connection/lib/client.js
+//   - 0.2.1-alpha.3 起：拆分为 client.browser.js（Web）与 client.node.js（Node 宿主）
+// loopback 锚点在拆分后的两个文件中均存在，必须全部纳入扫描，
+// 否则必需补丁 client-loopback 会失配并触发 [FATAL] 退出。
+const CLIENT_FILE_NAMES = new Set(['client.js', 'client.browser.js', 'client.node.js']);
 
 function findClientFiles(baseDir) {
   const matched = [];
@@ -124,7 +134,7 @@ function findClientFiles(baseDir) {
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         walk(fullPath);
-      } else if (ent.isFile() && ent.name === 'client.js') {
+      } else if (ent.isFile() && CLIENT_FILE_NAMES.has(ent.name)) {
         matched.push(fullPath);
       }
     }
@@ -178,6 +188,92 @@ function patchServerConnection(baseDir) {
   }
 }
 
+// 6.5 DeepSeek 账号登录：把非 loopback 回调 origin 归一到 loopback
+//   上游 0.2.1-alpha.3 新增「Web 本机 HTTP 访问时登录 DeepSeek 账号」。但：
+//     a) DeepSeek 平台只接受 loopback 回调（实测非 loopback redirect_uri 返回 PAYLOAD_SCHEMA_MISMATCH）；
+//     b) 宿主 loginOrigin() 直接拒绝非 loopback origin → 反代/域名访问下登录必然失败。
+//   本补丁把回调 origin 归一到 http://localhost:<原端口>，用户即可通过
+//   「本地隧道（ssh -L）」或「手动把回调链接里的 localhost 换成实际域名后粘贴」完成登录。
+//   非必需补丁：锚点漂移只告警，不影响容器启动。
+function patchAccountLoginOrigin(searchDir) {
+  const target = path.join(searchDir, 'dsh-deepseek-account-platform/lib/index.js');
+  if (!fs.existsSync(target)) return;
+  try {
+    let content = fs.readFileSync(target, 'utf8');
+    if (content.includes('/* dsh-patch: account-loopback-callback */')) {
+      console.log(`[patch-dsh-client] DeepSeek 账号回调 origin 归一补丁已存在: ${target}`);
+      return;
+    }
+    const anchor = '\t\tthrow new PlatformAuthError("protocol");\n\t}\n\tconst explicitPort = ';
+    if (!content.includes(anchor)) {
+      console.warn(`[patch-dsh-client] ⚠️ DeepSeek 账号回调 origin 归一补丁未命中（锚点漂移，非必需）: ${target}`);
+      return;
+    }
+    // 仅归一「无凭据」的 http/https origin；带 user:pass 的输入仍按上游语义拒绝（不静默剥离凭据）
+    const injected = '\t\tthrow new PlatformAuthError("protocol");\n\t}\n'
+      + '\t/* dsh-patch: account-loopback-callback */ if ((url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) { const __dshPort = url.port || (url.protocol === "https:" ? "443" : "80"); url = new URL("http://localhost:" + __dshPort + "/"); value = url.href; }\n'
+      + '\tconst explicitPort = ';
+    content = content.replace(anchor, injected);
+    fs.writeFileSync(target, content, 'utf8');
+    console.log(`[patch-dsh-client] 成功归一 DeepSeek 账号登录回调 origin 为 loopback [account-loopback-callback]: ${target}`);
+  } catch (err) {
+    console.warn(`[patch-dsh-client] 归一 DeepSeek 账号回调 origin 失败: ${err.message}`);
+  }
+}
+
+// 6.6 DeepSeek 账号登录弹窗：改为由本套件内置插件接管，并取消「自动跳转」
+//   官方弹窗（dsh-client-ui-settings-account）在点击 Sign in 时会预开一个标签页并自动跳转，
+//   且弹窗内没有「回调链接」输入。这里：
+//     a) 关闭自动预开与自动跳转（改为纯手动：复制 / 点击打开）；
+//     b) 让官方弹窗不再渲染，交由内置插件 @dsh-custom/dsh-deepseek-remote-login
+//        在 settings.models.sign-in 插槽渲染同款弹窗（含回调链接输入框）。
+//   非必需补丁：锚点漂移只告警，不影响容器启动。
+function patchAccountDialog(searchDir) {
+  const target = path.join(searchDir, 'dsh-client-ui-settings-account/lib/client.js');
+  if (!fs.existsSync(target)) return;
+  try {
+    let c = fs.readFileSync(target, 'utf8');
+    const MARKS = ['dsh-patch: account-no-auto-open', 'dsh-patch: account-dialog-replaced', 'dsh-patch: account-overlay-dialog-replaced', 'dsh-patch: account-signin-notify'];
+    if (MARKS.every((m) => c.includes(m))) {
+      console.log(`[patch-dsh-client] DeepSeek 账号弹窗接管补丁已存在: ${target}`);
+      return;
+    }
+    const edits = [
+      // a) 关闭「预开标签页 + 自动跳转」
+      ['\t\t\t\tthis.popup = window.open("about:blank", "_blank");',
+       '\t\t\t\tthis.popup = null; /* dsh-patch: account-no-auto-open */'],
+      ['\t\t\t\tif (this.popup && !this.popup.closed) this.popup.location.replace(this.destination(attempt.authorizeUrl));',
+       '\t\t\t\tif (false) this.popup.location.replace(this.destination(attempt.authorizeUrl)); /* dsh-patch: account-no-auto-open */'],
+      // b) 设置弹窗插槽内的官方登录弹窗（AccountOnboarding）不再渲染
+      ['\t\t\tif (!account.view || account.view.status === "credential-stored") return null;',
+       '\t\t\tif (true) return null; /* dsh-patch: account-dialog-replaced */'],
+      // c) 账号菜单触发的官方登录弹窗（loginVisible overlay）不再渲染
+      ['\t\t\t\t\taccount.loginVisible && !account.onboarding && (0, react_jsx_runtime__.jsx)(SignInDialog, {'.replace('react_jsx_runtime__', 'react_jsx_runtime'),
+       '\t\t\t\t\tfalse && account.loginVisible && !account.onboarding && (0, react_jsx_runtime.jsx)(SignInDialog, { /* dsh-patch: account-overlay-dialog-replaced */'],
+      // d) 左下角账号菜单「Sign in」被点击时，广播事件唤起本套件插件的弹窗
+      //    用逗号运算符保持单语句，避免破坏其后的 else 分支
+      ['\t\t\t\t\t\t\t} else if (id === "signin") beginSignIn();',
+       '\t\t\t\t\t\t\t} else if (id === "signin") (beginSignIn(), window.dispatchEvent(new CustomEvent("dsh-deepseek-remote-login:open"))); /* dsh-patch: account-signin-notify */']
+    ];
+    let changed = false;
+    for (const [from, to] of edits) {
+      if (c.includes(to)) continue;
+      if (!c.includes(from)) {
+        console.warn(`[patch-dsh-client] ⚠️ 账号弹窗接管锚点未命中（非必需）: ${from.slice(0, 60)}…`);
+        continue;
+      }
+      c = c.replace(from, to);
+      changed = true;
+    }
+    if (changed) {
+      fs.writeFileSync(target, c, 'utf8');
+      console.log(`[patch-dsh-client] 成功接管 DeepSeek 账号弹窗并关闭自动跳转: ${target}`);
+    }
+  } catch (err) {
+    console.warn(`[patch-dsh-client] 接管 DeepSeek 账号弹窗失败: ${err.message}`);
+  }
+}
+
 let patchedCount = 0;
 let checkedDirs = 0;
 
@@ -218,6 +314,12 @@ for (const searchDir of SEARCH_DIRS) {
 
   // 2. Server connection patch (gateway manages auth)
   patchServerConnection(searchDir);
+
+  // 2.5 DeepSeek 账号登录回调 origin 归一（远程/反代场景可用）
+  patchAccountLoginOrigin(searchDir);
+
+  // 2.6 DeepSeek 账号登录弹窗由内置插件接管 + 关闭自动跳转
+  patchAccountDialog(searchDir);
 
   // 3. 修补 client-modules combo 静态资源路由
   //    背景：客户端插件包 URL 形如 /plugins/??a/client.js,b/client.js&rev=<hash>；

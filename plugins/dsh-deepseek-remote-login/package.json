@@ -1,0 +1,28 @@
+{
+  "name": "@dsh-custom/dsh-deepseek-remote-login",
+  "version": "1.0.0",
+  "description": "DeepSeek 账号登录（远程/反代）助手：DSH 内置弹窗，支持复制/跳转登录链接，并可粘贴回调链接一键完成登录",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-modules",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}

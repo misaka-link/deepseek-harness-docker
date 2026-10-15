@@ -340,6 +340,34 @@ if (isBrowserDesktopUninstalled) {
   }
 }
 
+// 2.1 自动注册 @dsh-custom/dsh-deepseek-remote-login（DeepSeek 账号「远程登录」助手弹窗）
+const remoteLoginName = '@dsh-custom/dsh-deepseek-remote-login';
+const remoteLoginSource = '/app/plugins/dsh-deepseek-remote-login';
+const remoteLoginLink = path.join(linkDir, 'dsh-deepseek-remote-login');
+try {
+  if (pathExists(remoteLoginLink)) removeIfExists(remoteLoginLink);
+  fs.symlinkSync(remoteLoginSource, remoteLoginLink);
+  console.log('[install-plugin] 建立 DeepSeek 远程登录助手插件软链接成功');
+} catch (e) {
+  console.warn('[install-plugin] 建立 DeepSeek 远程登录助手软链接失败:', e.message);
+}
+try {
+  await writeProfile((pkg) => {
+    pkg.dependencies = pkg.dependencies || {};
+    pkg.dependencies[remoteLoginName] = 'link:' + remoteLoginSource;
+    pkg.dsh = pkg.dsh || { profile: {} };
+    pkg.dsh.profile = pkg.dsh.profile || {};
+    pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
+    if (!pkg.dsh.profile.bundles.includes(remoteLoginName)) {
+      pkg.dsh.profile.bundles.push(remoteLoginName);
+      console.log('[install-plugin] 注册 DeepSeek 远程登录助手 bundle 成功');
+    }
+    return true;
+  });
+} catch (e) {
+  console.warn('[install-plugin] 注册 DeepSeek 远程登录助手失败:', e.message);
+}
+
 // 3. 清除 cordis.patch.yml 中的重复 insert 项（外科手术式删除 + 安全闸，绝不误伤相邻插件/设置条目）
 if (fs.existsSync(patchPath)) {
   try {

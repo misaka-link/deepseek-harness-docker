@@ -4,6 +4,49 @@
 
 ---
 
+## [v0.2.4] - 2026-10-15
+
+### 🆕 新功能
+- **DeepSeek 账号登录适配（远程 / 反代访问可用）**：新增 `account-loopback-callback` 补丁，把非 loopback 的 OAuth 回调 origin 归一到 `http://localhost:<端口>`；网关放行 `/oauth/callback` 回调路径。远程用户可用「本地隧道」自动完成登录，或把回调链接里的 `localhost` 换成实际域名后手动粘贴完成（DeepSeek 平台只接受 loopback 回调，非 loopback 一律 `PAYLOAD_SCHEMA_MISMATCH`）。
+- **左下角账号菜单直达**：账号菜单「Sign in」经补丁广播事件 `account-signin-notify` 直接唤起插件弹窗，无需先进设置页。
+- **新增回归测试** `scripts/account-login-origin-test.mjs`：覆盖 origin 归一、非法输入拒绝、账号弹窗接管与补丁幂等（21 项）。
+- **新增回归测试** `scripts/plugin-privacy-regex-test.mjs`：从插件源码还原运行时真实正则后断言边界与护栏（21 项，含「13 位毫秒时间戳不得被误判为手机号」）。
+- **隐私保护**：插件支持**双击页面任意位置手机号/邮箱即可模糊/还原**、**默认模糊**开关，以及**自定义显示昵称**（设置后不再渲染真实账号）；截图留档均可安全入库。
+- **登录状态检测**：内置插件通过账号状态流（`status === "credential-stored"`）判定环境是否已登录；**已登录时不再展示登录框**，改为展示「✅ 已登录」与账号名/邮箱（来自 `getProfile`）。
+- **内置插件「DeepSeek 登录（远程）」**：新增 `plugins/dsh-deepseek-remote-login`（DSH 内置 bundle，随镜像自动装配），**接管官方登录弹窗**并在 DSH 设置中心提供同配色弹窗——可复制/手动打开登录链接，并可粘贴回调链接一键完成登录；补丁层**关闭官方弹窗的自动预开与自动跳转**（`account-no-auto-open` / `account-dialog-replaced`）；网关新增 `/account/callback` 转发接口与 `/__api/account/client-version` 端点。
+
+### 🔼 核心适配
+- **内置 DSH 版本升级至 `@deepseek-ai/dsh@0.2.1-alpha.3`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-alpha.3`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 顶部置顶纳入 `0.2.1-alpha.3`，支持区间上界同步扩展为 `<=0.2.1-alpha.3`，推荐核心版本同步指向 `0.2.1-alpha.3`。
+- **控制台与网关版本感知**：`gateway/version-service.js` 本地工程版本升至 `0.2.4`；`dsh-manager.js`、`version-service.js` 与管理控制台兜底版本矩阵同步置顶 `0.2.1-alpha.3`，消除控制台未适配告警。
+- **工程版本递增**：`gateway/package.json`、`build.sh` 与 `.github/workflows/docker-build.yml` 工程版本同步递增至 `0.2.4`。
+
+### 📦 官方 0.2.1-alpha.3 用户可见变更
+- **消息密钥与令牌脱敏**：识别已发送消息中的密钥与令牌并默认脱敏，支持按需查看原文。
+- **Web 版 DeepSeek 账号登录**：本机 HTTP 访问时支持登录 DeepSeek 账号，账号模型列表随可用模型更新并隐藏当前客户端不支持的模型。
+- **极简模式上下文压缩**：极简模式支持读取图片与长对话自动压缩，Web 与桌面端可通过 `/compact` 手动压缩上下文。
+- **子智能体独立预设**：子智能体可配置独立 Agent Preset，统一设置角色与工具。
+- **PTC Node 执行环境 in-memory 模式**：多次运行代码可复用变量、函数与已导入模块（可选）。
+
+### ⚠️ 官方 0.2.1-alpha.3 行为变更
+- **API Key 读取优先级调整**：Web/桌面端优先采用已保存凭据；headless 默认改用环境变量与 `.env`，不再读取已保存密钥。
+- **Azure 提供方更名**：第三方模型提供方名称统一为 `azure`，使用旧名 `azure-openai-responses` 的配置需迁移。
+- **`--from-default-profile` 语义变更**：重建已有自定义 profile 时会替换该 profile 及其插件与设置。
+
+### 🐛 缺陷修复
+- **内置插件冲突加固（Lead + gemini-3.8-flash 交叉审计）**：
+  - **编辑区豁免**：新增 `isProtected()` 排除 `contenteditable`（DSH 对话输入框底层为 Meta Lexical 富文本）、`pre/code/input/textarea`，昵称覆盖与默认模糊不再改写编辑器内部 DOM，避免光标错乱与编辑器状态脱节。
+  - **手机号边界收紧**：判定改为「非字母数字边界」，13 位毫秒时间戳、长订单号、哈希混合串不再被误判，避免抢占上游双击交互（`dsh-client-ui-workspace` 会话重命名）与原生双击选词。
+  - **single 插槽覆盖修正**：`settings.models.sign-in` 为 `kind:"single"`，官方组件被置空后仍占用 `priority 0`，插件改为 `priority: -1` 遮蔽，消除内核 `single slot … already has a registration at priority 0` 抛错。
+  - **弹窗单例化**：登录弹窗只由 `shell.overlay` 渲染一份，消除设置页内的双层 Modal 叠放。
+  - **样式时序与观察器**：`apply()` 阶段即注入样式，消除「已打码但未模糊」窗口；默认模糊与昵称均未启用时不挂 `MutationObserver`。
+- **HTTPS 反向代理下 Univer 预览乱码与白屏修复 (Issue #10)**：
+  - **上游压缩响应解压注入**：在 `gateway/index.js` 代理响应处理中，对携带 `content-encoding`（`gzip`/`deflate`/`br`）的上游 HTML 与 JS 响应先做解压再执行 polyfill 注入与回环替换，并删除 `content-encoding` 响应头；无压缩响应保持既有首块注入流式逻辑；未知编码或解压失败保守原样透传并告警，彻底解决 `/univer-viewer/` 等非白名单路径因注入导致的内容损坏与整页乱码。
+  - **WebSocket wss:// 自动升级**：在 `gateway/token-crawler.js` 注入脚本中新增安全升级 shim，仅在 `location.protocol === 'https:'` 时将 `ws://` 改写为 `wss://`，完整保留端口、查询参数、构造函数静态常量与原型链；解决反向代理边缘终止 TLS 场景下浏览器 Mixed Content 拦截导致的事件流中断与白屏空状态。
+  - **修复参考**：https://github.com/Latticect/deepseek-harness-docker/commit/478f27fd695fc93d1929c8e69af25ed79cece1dd
+
+---
+
 ## [v0.2.3] - 2026-10-10
 
 ### 🔼 核心适配

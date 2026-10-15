@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.3`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.4`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像仍统一保持 **`:latest`**（纯净版）与 **`:latest-market`**（插件商店版），开箱即用；每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.1-alpha.2`、`:0.2.1-alpha.2-market`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.3`、`:0.2.3-market`），精确锁定本容器套件自身的版本。
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.1-alpha.3`、`:0.2.1-alpha.3-market`），精确锁定底层 DSH 官方引擎；  
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.4`、`:0.2.4-market`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维。
 
@@ -38,7 +38,7 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 静态资源版本化隔离，配合 `dsh-browser-desktop` 插件，AI 可自主操控网页与实时截屏 |
 
-| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.1-alpha.2) |
+| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.1-alpha.3) |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，完美支持 DeepSeek-V41-Flash 等最新模型 |
@@ -51,8 +51,8 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 特性与适用场景 |
 |---|---|---|---|---|
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.1-alpha.2`<br>(`...:dsh-0.2.1-alpha.2`) | `...:0.2.3`<br>(`...:v0.2.3`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.1-alpha.2-market`<br>(`...:dsh-0.2.1-alpha.2-market`) | `...:0.2.3-market`<br>(`...:v0.2.3-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.1-alpha.3`<br>(`...:dsh-0.2.1-alpha.3`) | `...:0.2.4`<br>(`...:v0.2.4`) | 仅包含官方 DSH 核心、统一网关、访问认证与 Chromium 桌面环境，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.1-alpha.3-market`<br>(`...:dsh-0.2.1-alpha.3-market`) | `...:0.2.4-market`<br>(`...:v0.2.4-market`) | **开箱即用**：在基础版上**预装社区应用市场 (`dshmarket`)`** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -73,7 +73,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-alpha.2` 或项目版本 `:0.2.3`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-alpha.3` 或项目版本 `:0.2.4`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -88,13 +88,23 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-alpha.2-market` 或项目版本 `:0.2.3-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-alpha.3-market` 或项目版本 `:0.2.4-market`)*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
 - **DSH Web 交互工作区**：`http://<服务器IP>:3080/`
 - **容器 Chromium 桌面**：`http://<服务器IP>:3080/vnc/`
 - **默认认证码**：`admin`（登录后可在后台随时修改）
+
+#### 🔑 DeepSeek 账号登录（远程 / 反代访问必读）
+
+DSH 官方 0.2.1-alpha.3 起支持在 Web 端登录 DeepSeek 账号（免 API Key 使用官方模型）。该能力受**平台侧硬约束**：DeepSeek 平台只接受 **loopback 回调地址**（`http://localhost|127.0.0.1|[::1]:<端口>/oauth/callback`），非 loopback 域名/IP 的 `redirect_uri` 会被平台直接拒绝（返回 `PAYLOAD_SCHEMA_MISMATCH`）。
+
+本套件为此做了两处适配：内置补丁把回调 origin 归一到 `http://localhost:<端口>`，使远程/域名访问下也能**发起**登录；网关放行 `/oauth/callback`（由 DSH 自行校验 `state`/`code`）。**完成登录有两种方式**：
+
+1. **本地隧道（推荐，全自动）**：`ssh -L 3080:127.0.0.1:3080 <user>@<服务器IP>`，然后用浏览器打开 `http://localhost:3080/` 发起登录 —— 回调自动落回本机 `localhost`，全流程无感。
+2. **内置插件弹窗（远程用户推荐）**：DSH 内置插件已**接管官方登录弹窗**（设置中心「DeepSeek 登录（远程）」，或在「设置 → 模型」触发登录时弹出），配色与 DSH 一致，且**已关闭自动跳转**——可**复制登录链接**或**点击打开登录链接**；登录后浏览器会跳向 `http://localhost:<端口>/oauth/callback?code=...&state=...`（本机打不开属正常），把地址栏里的**整段链接粘贴到弹窗的「回调链接」输入框**，点「完成登录」即可，**无需手改 host**。
+   - 同一入口也可直接用网页版：`http://<服务器IP>:3080/account/callback`。
 
 ---
 
@@ -168,6 +178,11 @@ docker compose -f docker-compose.market.yml up -d
 ---
 
 ## 📝 版本更新历史 (Changelog)
+
+### v0.2.4
+- 🔼 **内置 DSH 版本更新至 `@deepseek-ai/dsh@0.2.1-alpha.3`**，兼容区间上界同步为 `<=0.2.1-alpha.3`，推荐核心与适配矩阵置顶同步指向 `0.2.1-alpha.3`；工程版本递增至 `0.2.4`。
+- 📦 **官方 0.2.1-alpha.3 用户可见变更**：已发送消息中的密钥与令牌默认脱敏、按需查看原文；Web 版本机 HTTP 访问支持登录 DeepSeek 账号；极简模式支持读取图片与长对话自动压缩（`/compact`）；子智能体可配置独立 Agent Preset；PTC Node 执行环境新增可选 in-memory 模式。
+- ⚠️ **官方 0.2.1-alpha.3 行为变更**：API Key 读取优先级调整（Web/桌面端优先采用已保存凭据，headless 默认改用环境变量与 `.env`）；Azure 提供方名称统一为 `azure`（旧名 `azure-openai-responses` 配置需迁移）；`--from-default-profile` 重建已有自定义 profile 时会替换该 profile 及其插件与设置。
 
 ### v0.2.3
 - 🔼 **内置 DSH 版本更新至 `@deepseek-ai/dsh@0.2.1-alpha.2`**，兼容区间上界同步为 `<=0.2.1-alpha.2`，推荐核心与适配矩阵置顶同步指向 `0.2.1-alpha.2`；工程版本递增至 `0.2.3`。

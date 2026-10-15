@@ -298,7 +298,11 @@ const PUBLIC_PATHS = new Set([
   '/login',
   '/favicon.ico',
   '/favicon.svg',
-  '/manifest.webmanifest'
+  '/manifest.webmanifest',
+  // DeepSeek 账号 OAuth 回调：平台只接受 loopback 回调，浏览器会从 platform.deepseek.com
+  // 跨站跳转到本回调（SameSite=Strict 的会话 Cookie 不会被携带），远程用户还可能手动把
+  // 回调链接里的 localhost 换成实际域名后粘贴访问。此处放行由 DSH 自行校验 state/code。
+  '/oauth/callback'
 ]);
 
 // ── 反向代理实例与容错处理 ─────────────────────────────────
@@ -602,6 +606,59 @@ function sendJson(res, status, data) {
     'Cache-Control': 'no-store'
   });
   res.end(JSON.stringify(data));
+}
+
+// ── DeepSeek 账号登录「手动回调」便捷入口 ─────────────────────────────
+// 背景：DeepSeek 平台只接受 loopback 回调（实测非 loopback redirect_uri 返回 PAYLOAD_SCHEMA_MISMATCH），
+// 远程/反代用户登录后浏览器会跳向 http://localhost:<端口>/oauth/callback?code=...&state=... 并打不开。
+// 该入口让用户把这段链接整段粘贴进来，由网关转发给 DSH 的 /oauth/callback（一次性 state/code 校验）。
+const ACCOUNT_CALLBACK_PATH = '/account/callback';
+
+/**
+ * 校验手动回调链接：http(s)、路径恰为 /oauth/callback、含 code+state、不含凭据。
+ * @returns {{ok: true, query: string} | {ok: false, error: string}}
+ */
+function normalizeAccountCallbackLink(link) {
+  const raw = String(link || '').trim();
+  if (!raw) return { ok: false, error: '回调链接为空' };
+  let url;
+  try { url = new URL(raw); } catch { return { ok: false, error: '不是合法的 URL' }; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return { ok: false, error: '仅支持 http/https 链接' };
+  if (url.username || url.password) return { ok: false, error: '链接不得包含账号密码' };
+  if (url.pathname !== '/oauth/callback') return { ok: false, error: '链接路径必须是 /oauth/callback' };
+  if (!url.searchParams.get('code') || !url.searchParams.get('state')) return { ok: false, error: '链接缺少 code 或 state 参数' };
+  return { ok: true, query: url.search };
+}
+
+async function handleAccountManualCallback(req, res) {
+  let body = '';
+  try {
+    for await (const chunk of req) { body += chunk; if (body.length > 8192) break; }
+  } catch {}
+  let link = '';
+  try {
+    if (String(req.headers['content-type'] || '').includes('application/json')) {
+      link = (JSON.parse(body || '{}') || {}).link || '';
+    } else {
+      link = new URLSearchParams(body).get('link') || '';
+    }
+  } catch {}
+  const v = normalizeAccountCallbackLink(link);
+  if (!v.ok) return sendJson(res, 400, { ok: false, error: v.error });
+  try {
+    const resp = await fetch('http://127.0.0.1:' + DSH_PORT + '/oauth/callback' + v.query, { redirect: 'manual' });
+    await resp.arrayBuffer().catch(() => {});
+    const ok = resp.status >= 200 && resp.status < 400;
+    return sendJson(res, ok ? 200 : 502, {
+      ok,
+      status: resp.status,
+      message: ok
+        ? '回调已送达 DSH，请回到 DSH Web 确认登录状态'
+        : 'DSH 拒绝该回调（state 可能已过期，或该链接不是本次登录生成的）'
+    });
+  } catch (e) {
+    return sendJson(res, 502, { ok: false, error: '转发回调失败: ' + e.message });
+  }
 }
 
 // ── Admin API 处理器 ─────────────────────────────────────────
@@ -1331,6 +1388,16 @@ async function handleHttpRequest(req, res) {
     return sendJson(res, 401, { ok: false, error: '尚未设置访问口令，请先访问 /setup 完成初始化', setupRequired: true });
   }
 
+  // DeepSeek 账号登录：手动回调转发接口（供内置插件弹窗调用）
+  if (pathname === ACCOUNT_CALLBACK_PATH) {
+    if (!checkRequestAuth(req)) {
+      res.writeHead(302, { Location: '/login?redirect=' + encodeURIComponent(req.url || ACCOUNT_CALLBACK_PATH) });
+      return res.end();
+    }
+    if (req.method === 'GET') return serveStaticHtml(res, 'account-callback.html');
+    if (req.method === 'POST') return handleAccountManualCallback(req, res);
+  }
+
   if (PUBLIC_PATHS.has(pathname)) {
     await alignHeadersForDsh(req);
     return dshProxy.web(req, res);
@@ -1355,6 +1422,43 @@ async function handleHttpRequest(req, res) {
       desktop: desktopManager.getStatus(),
       paths: { admin: ADMIN_PATH, vnc: VNC_PATH_HREF, proxyPort: PROXY_PORT }
     });
+  }
+  // 供「DeepSeek 远程登录助手」插件构造账号客户端元数据（x-client-version 必须与被运行的 DSH 一致）
+  if (pathname === '/__api/account/client-version' && req.method === 'GET') {
+    const candidates = [
+      '/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json',
+      '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/package.json',
+      '/app/node_modules/@deepseek-ai/dsh/package.json'
+    ];
+    let version = null;
+    for (const p of candidates) {
+      try { version = JSON.parse(fs.readFileSync(p, 'utf8')).version || null; } catch (e) {}
+      if (version) break;
+    }
+    return sendJson(res, 200, { version });
+  }
+  // DeepSeek 账号登录状态：直接读本地凭据库判定（不依赖外网，权威可靠）。
+  // 供「DeepSeek 登录（远程）」插件在已登录时展示「已登录」而不是登录表单。
+  if (pathname === '/__api/account/status' && req.method === 'GET') {
+    const candidates = [
+      process.env.DSH_HOME ? process.env.DSH_HOME + '/.credentials.yaml' : null,
+      '/root/.dsh/.credentials.yaml',
+      '/home/node/.dsh/.credentials.yaml'
+    ].filter(Boolean);
+    let signedIn = false;
+    let reason = null;
+    for (const file of candidates) {
+      try {
+        const text = fs.readFileSync(file, 'utf8');
+        // 账号平台写入的记录键为 <service>/<name>，即 deepseek-account-platform/default
+        signedIn = /(^|\n)\s*deepseek-account-platform\/default:/.test(text);
+        reason = null;
+        break;
+      } catch (err) {
+        reason = err.code || err.message;
+      }
+    }
+    return sendJson(res, 200, { signedIn, reason });
   }
   if (pathname === '/__api/desktop/start' && req.method === 'POST') {
     const body = await readJsonBody(req);

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepSeek 账号登录 · 手动回调</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+         background: #f5f7fa; color: #1f2329; padding: 24px; }
+  main { width: 100%; max-width: 720px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+         padding: 28px 30px; box-shadow: 0 8px 30px rgba(15,23,42,.06); }
+  h1 { margin: 0 0 10px; font-size: 19px; }
+  p { margin: 0 0 14px; color: #4b5563; font-size: 13px; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  textarea { width: 100%; min-height: 88px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+             font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+  button { margin-top: 12px; padding: 9px 20px; border: 0; border-radius: 8px; background: #2563eb; color: #fff;
+           font-size: 14px; cursor: pointer; }
+  button:hover { background: #1d4ed8; }
+  pre { margin: 16px 0 0; padding: 12px; min-height: 20px; background: #0f172a; color: #e2e8f0;
+        border-radius: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  .tip { margin: 14px 0 0; font-size: 12px; color: #6b7280; }
+</style>
+</head>
+<body>
+  <main>
+    <h1>DeepSeek 账号登录 · 手动回调</h1>
+    <p>DeepSeek 平台只接受 <code>localhost</code> 回调。若浏览器跳向
+      <code>http://localhost:&lt;端口&gt;/oauth/callback?code=…&amp;state=…</code> 后打不开，
+      请把地址栏里的<strong>整段链接</strong>粘贴到下面并提交。</p>
+    <textarea id="link" placeholder="http://localhost:3080/oauth/callback?code=...&state=..."></textarea>
+    <button id="go">完成登录</button>
+    <pre id="out"></pre>
+    <p class="tip">链接里的主机名无需修改：网关会自动转发给 DSH 校验一次性的 state/code。</p>
+  </main>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  $('go').addEventListener('click', function () {
+    $('out').textContent = '提交中…';
+    fetch('/account/callback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link: $('link').value })
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        var extra = j.status ? ' / DSH ' + j.status : '';
+        $('out').textContent = (j.ok ? '✅ ' : '❌ ') + (j.message || j.error || '') + '  (HTTP ' + r.status + extra + ')';
+      });
+    }).catch(function (e) { $('out').textContent = '❌ 请求失败: ' + e.message; });
+  });
+</script>
+</body>
+</html>

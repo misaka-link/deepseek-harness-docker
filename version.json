@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.1-alpha.2",
+    "dshVersion": "0.2.1-alpha.3",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,30 +19,53 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.2.3",
-    "releaseDate": "2026-10-10",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.3",
-    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2；适配矩阵置顶新增 0.2.1-alpha.2；工程版本递增至 0.2.3；同步官方 0.2.1-alpha.2 破坏性变更（下线 hooks/webhook 系列包与 dsh-subagent-in-process-driver、dsh-subagent 类型结构调整）",
+    "version": "0.2.4",
+    "releaseDate": "2026-10-15",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.4",
+    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.3，兼容区间上界同步为 <=0.2.1-alpha.3；适配矩阵置顶新增 0.2.1-alpha.3；工程版本递增至 0.2.4；同步官方 0.2.1-alpha.3 行为变更（已发送消息中的密钥/令牌默认脱敏、Web 本地 HTTP 登录 DeepSeek 账号、API Key 读取优先级调整、Azure 提供方更名 azure）",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2",
-      "已适配版本矩阵置顶新增 0.2.1-alpha.2（保留 0.2.1-alpha.1 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.2",
-      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.2，工程版本递增至 0.2.3",
-      "远程同步清单纳入 remote-verify-0.2.1-alpha.2.sh 联调校验脚本（保留旧版 alpha.1 脚本）"
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.3，兼容区间上界同步为 <=0.2.1-alpha.3",
+      "已适配版本矩阵置顶新增 0.2.1-alpha.3（保留 0.2.1-alpha.2 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.3",
+      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.3，工程版本递增至 0.2.4",
+      "远程同步清单纳入 remote-verify-0.2.1-alpha.3.sh 联调校验脚本（保留旧版 alpha.2 脚本）"
     ],
     "dshChangelogList": [
-      "浏览器会话鉴权加固：按请求 authority 与 trustedHosts 白名单校验来源，TLS 监听启用 Secure Cookie 与 https 源判定（isAuthenticated 新增 secure 语义）",
-      "新增实验性持久终端：六个全局终端工具与终端组合包，跨工具调用保留 shell 会话（默认关闭）",
-      "新增 Git 工作树能力：create_worktree 工具与工作树运行时组合包，一次调用创建并进入隔离检出目录（默认关闭）",
-      "新增工作目录工具与运行时：读取或切换当前 Session 目录，会话回放可恢复所选目录",
-      "新增会话搜索工具与随对话更新的会话标题提供方（实验性，默认关闭）",
-      "新增思考过程（CoT）机器翻译：translator 服务与客户端 UI，默认 Bing，保留原文与已保存译文",
-      "新增 DSH 徽章技能组合包与 Ralph 循环组合包（实验性，默认关闭）",
-      "破坏性变更：下线 dsh-hook-protocol / dsh-hooks-claude-code / dsh-hooks-codex / dsh-webhook / dsh-webhook-github 与 dsh-subagent-in-process-driver",
-      "破坏性变更：dsh-subagent 类型结构调整（新增 activation / manager / structured，移除 continuation 与 continuation-activation）",
-      "前端 dist 资源整体重打包，bundle 文件哈希变动"
+      "已发送消息中的密钥与令牌自动识别并默认脱敏，按需可查看原文",
+      "Web 版本机 HTTP 访问时支持登录 DeepSeek 账号；DeepSeek 账号模型列表随账号可用模型更新并隐藏当前客户端不支持的模型",
+      "API Key 读取优先级调整：Web/桌面端优先采用已保存凭据，headless 默认改用环境变量与 .env、不再读取已保存密钥",
+      "第三方模型支持更新：Azure 提供方名称统一为 azure，使用旧名 azure-openai-responses 的配置需迁移",
+      "插件更新/重装后即时生效：可热重载的插件直接生效，无法热重载时提示重启",
+      "子智能体可配置独立 Agent Preset 统一角色与工具；改进委派与等待指引（提前提示委派层数上限）",
+      "极简模式支持读取图片与长对话自动压缩，Web/桌面端可用 /compact 手动压缩上下文",
+      "修复切换会话/收起工作过程/发送后续消息时的对话区大块空白与滚动跳动、重启后部分会话无法继续等问题",
+      "PTC Mode 的 Node 执行环境新增可选 in-memory 模式，多次运行代码可复用变量、函数与已导入模块"
     ]
   },
   "history": {
+    "0.2.3": {
+      "version": "0.2.3",
+      "releaseDate": "2026-10-10",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.3",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2；适配矩阵置顶新增 0.2.1-alpha.2；工程版本递增至 0.2.3；同步官方 0.2.1-alpha.2 破坏性变更（下线 hooks/webhook 系列包与 dsh-subagent-in-process-driver、dsh-subagent 类型结构调整）",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2",
+        "已适配版本矩阵置顶新增 0.2.1-alpha.2（保留 0.2.1-alpha.1 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.2",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.2，工程版本递增至 0.2.3",
+        "远程同步清单纳入 remote-verify-0.2.1-alpha.2.sh 联调校验脚本（保留旧版 alpha.1 脚本）"
+      ],
+      "dshChangelogList": [
+        "浏览器会话鉴权加固：按请求 authority 与 trustedHosts 白名单校验来源，TLS 监听启用 Secure Cookie 与 https 源判定（isAuthenticated 新增 secure 语义）",
+        "新增实验性持久终端：六个全局终端工具与终端组合包，跨工具调用保留 shell 会话（默认关闭）",
+        "新增 Git 工作树能力：create_worktree 工具与工作树运行时组合包，一次调用创建并进入隔离检出目录（默认关闭）",
+        "新增工作目录工具与运行时：读取或切换当前 Session 目录，会话回放可恢复所选目录",
+        "新增会话搜索工具与随对话更新的会话标题提供方（实验性，默认关闭）",
+        "新增思考过程（CoT）机器翻译：translator 服务与客户端 UI，默认 Bing，保留原文与已保存译文",
+        "新增 DSH 徽章技能组合包与 Ralph 循环组合包（实验性，默认关闭）",
+        "破坏性变更：下线 dsh-hook-protocol / dsh-hooks-claude-code / dsh-hooks-codex / dsh-webhook / dsh-webhook-github 与 dsh-subagent-in-process-driver",
+        "破坏性变更：dsh-subagent 类型结构调整（新增 activation / manager / structured，移除 continuation 与 continuation-activation）",
+        "前端 dist 资源整体重打包，bundle 文件哈希变动"
+      ]
+    },
     "0.2.2": {
       "version": "0.2.2",
       "releaseDate": "2026-10-04",
@@ -277,9 +300,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.1-alpha.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-alpha.2",
+    "recommendedDsh": "0.2.1-alpha.3",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-alpha.3",
     "adaptedVersions": [
+      "0.2.1-alpha.3",
       "0.2.1-alpha.2",
       "0.2.1-alpha.1",
       "0.2.0-rc.2",

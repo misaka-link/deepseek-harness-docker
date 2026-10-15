@@ -26,7 +26,7 @@ const AUTH_SNIPPET = 'class C {\n\tisAuthenticated(request) {\n\t\treturn false;
 const AUTH_SNIPPET_NEW = 'class C {\n\tisAuthenticated(request, secure = false) {\n\t\treturn false;\n\t}\n}\n';
 const COMBO_SNIPPET = 'class R {\n\tbundleResource(method, url) {\n\t\tconst resourceUrl = url;\n\t\tconst response = this.responses.get(resourceUrl) ?? this.previousBatchResponses.get(resourceUrl) ?? this.chunkResponse(requestUrl);\n\t\treturn response;\n\t}\n}\n';
 
-function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET, dshVersion = '0.2.1-alpha.2' } = {}) {
+function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET, dshVersion = '0.2.1-alpha.2', clientFile = 'dsh-client-ui-layout/lib/client.js' } = {}) {
   const base = path.join(os.tmpdir(), `dsh-patch-${name}-${Date.now()}`);
   const mods = path.join(base, 'lib/node_modules/@deepseek-ai');
   const write = (rel, content) => {
@@ -35,7 +35,7 @@ function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET, dshV
     fs.writeFileSync(p, content);
   };
   write('dsh/package.json', JSON.stringify({ name: '@deepseek-ai/dsh', version: dshVersion }));
-  write('dsh-client-ui-layout/lib/client.js', LOOPBACK_SNIPPET + '\n');
+  write(clientFile, LOOPBACK_SNIPPET + '\n');
   write('dsh-client-connection/lib/index.js', breakAuth ? 'class C {\n\tother() {}\n}\n' : authSnippet);
   write('dsh-client-modules/lib/index.js', COMBO_SNIPPET);
   return base;
@@ -85,9 +85,26 @@ ok(/DSH 版本: 9\.9\.9-probe/.test(rDOut), '横幅显示被扫描树的版本 9
 ok(/来源: .*vtree/.test(rDOut), '横幅标注版本来源为沙箱树');
 ok(/全部必需补丁已生效/.test(rDOut), '必需补丁仍全部命中');
 
+console.log('\n=== E. 0.2.1-alpha.3 客户端文件拆分 client.browser.js → 应成功 ===');
+const a3browser = makeSandbox('a3browser', { clientFile: 'dsh-client-connection/lib/client.browser.js', dshVersion: '0.2.1-alpha.3' });
+const rE = runPatch(a3browser);
+ok(rE.status === 0, `退出码为 0（实际 ${rE.status}）`);
+ok(/已应用=\[[^\]]*client-loopback/.test(rE.stdout || ''), 'client-loopback 在 client.browser.js 上命中');
+ok(/全部必需补丁已生效/.test(rE.stdout || ''), '输出包含"全部必需补丁已生效"');
+
+console.log('\n=== F. 0.2.1-alpha.3 客户端文件再次改名（未知名） → 应 FATAL ===');
+const a3unknown = makeSandbox('a3unknown', { clientFile: 'dsh-client-connection/lib/client.unknown.js', dshVersion: '0.2.1-alpha.3' });
+const rF = runPatch(a3unknown);
+const rFOut = (rF.stdout || '') + (rF.stderr || '');
+ok(rF.status !== 0, `退出码非 0（实际 ${rF.status}）`);
+ok(/\[FATAL\]/.test(rFOut), '输出包含 [FATAL]');
+ok(/client-loopback/.test(rFOut), '指出未命中的补丁名 client-loopback');
+
 fs.rmSync(good, { recursive: true, force: true });
 fs.rmSync(bad, { recursive: true, force: true });
 fs.rmSync(newer, { recursive: true, force: true });
 fs.rmSync(vtree, { recursive: true, force: true });
+fs.rmSync(a3browser, { recursive: true, force: true });
+fs.rmSync(a3unknown, { recursive: true, force: true });
 console.log(`\n===== 汇总: 通过 ${pass} / 失败 ${fail} =====`);
 process.exit(fail ? 1 : 0);
