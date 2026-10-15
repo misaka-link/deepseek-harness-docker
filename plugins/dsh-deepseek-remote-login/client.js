@@ -108,7 +108,7 @@ window.__ModuleLoader__.load({
     function setPref(key, value) {
       prefs = Object.assign({}, prefs, { [key]: value });
       try { if (typeof localStorage !== 'undefined') localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
-      if (key === 'blurByDefault') { if (value) autoBlurScan(); else clearAutoBlur(); }
+      if (key === 'blurByDefault') { if (value) scanAll(); else clearAutoBlur(); }
       watchDomForAutoBlur();   // 开启任一功能后补挂观察器
       refreshSensitive();      // 昵称改动：重写页面中的手机号显示；同时重新评估自动模糊
       notify();
@@ -357,50 +357,70 @@ window.__ModuleLoader__.load({
       }
       return null;
     }
+    const LEAF_SELECTOR = 'span,div,button,td,li,p,a,strong,em,small';
+
     /**
-     * 自定义昵称覆盖：把页面里由 DSH 自己渲染的手机号（左下角账号栏、设置里的账号区等）
-     * 替换为昵称。只改写文本节点的 value（不动 DOM 结构），因此对 React 渲染是安全的；
-     * React 若重新渲染回手机号，MutationObserver 会再次覆盖。
+     * 对「单个」叶子元素应用：自定义昵称覆盖 + 默认模糊。
+     *
+     * 抽成单元素版本是为了让 MutationObserver 能做**增量**处理：只碰本次真正变化的节点，
+     * 而不是每次 DOM 抖动都全文档扫描一遍。
+     *
+     * 昵称覆盖只改写文本节点的 value（不动 DOM 结构），因此对 React 渲染是安全的；
+     * React 若重新渲染回手机号，会触发 characterData 变更 → 再次覆盖。
      */
-    function applyNicknameOverride() {
-      if (typeof document === 'undefined') return;
-      try {
-        const nick = String(prefs.nickname || '').trim();
-        // 昵称清空：还原原始手机号
-        if (!nick) {
-          for (const el of document.querySelectorAll('[data-dshdlq-nick="1"]')) {
-            const node = leafTextNode(el);
-            if (node) node.nodeValue = el.getAttribute('data-dshdlq-orig') || node.nodeValue;
-            el.removeAttribute('data-dshdlq-nick');
-            el.removeAttribute('data-dshdlq-orig');
-          }
+    function applySensitiveEl(el) {
+      if (!el || el.nodeType !== 1) return;
+      if (el.children && el.children.length > 0) return;   // 只处理叶子节点
+      if (isProtected(el)) return;                         // 编辑器 / 输入框 / 代码块内不碰
+      const node = leafTextNode(el);
+      if (!node) return;
+      const t = String(node.nodeValue || '').trim();
+      if (!t || t.length > 64) return;
+      const nick = String(prefs.nickname || '').trim();
+      if (nick) {
+        if (el.getAttribute('data-dshdlq-nick') === '1') {
+          if (t !== nick) node.nodeValue = nick;           // 昵称改名 / React 回写都会重新覆盖
           return;
         }
-        for (const el of document.querySelectorAll('span,div,button,a,p,strong,em,small,td')) {
-          if (el.children.length > 0) continue;
-          if (isProtected(el)) continue;                 // 绝不改写编辑器 / 输入框内的文本
-          const node = leafTextNode(el);
-          if (!node) continue;
-          const t = String(node.nodeValue || '').trim();
-          if (el.getAttribute('data-dshdlq-nick') === '1') {
-            if (t !== nick) node.nodeValue = nick;   // 昵称改名 / React 回写都会重新覆盖
-            continue;
-          }
-          if (!PHONE_RE.test(t)) continue;
+        if (PHONE_RE.test(t)) {
           el.setAttribute('data-dshdlq-orig', t);
           el.setAttribute('data-dshdlq-nick', '1');
           node.nodeValue = nick;
+          return;
+        }
+      }
+      if (!prefs.blurByDefault) return;
+      if (el.classList.contains('dshdlq-blur')) return;
+      if (SENSITIVE_RE.test(t)) {
+        el.classList.add('dshdlq-blur');
+        el.setAttribute('data-dshdlq-auto', '1');
+      }
+    }
+    /** 扫描 root（含自身）子树的叶子节点；不传 root 则扫全文档 */
+    function scanAll(root) {
+      if (typeof document === 'undefined') return;
+      try {
+        const scope = root && root.nodeType === 1 ? root : document;
+        if (scope.nodeType === 1) applySensitiveEl(scope);
+        for (const el of scope.querySelectorAll(LEAF_SELECTOR)) applySensitiveEl(el);
+      } catch (e) {}
+    }
+    /** 昵称清空后，把被覆盖的手机号写回原位 */
+    function restoreNicknames() {
+      if (typeof document === 'undefined') return;
+      try {
+        for (const el of document.querySelectorAll('[data-dshdlq-nick="1"]')) {
+          const node = leafTextNode(el);
+          if (node) node.nodeValue = el.getAttribute('data-dshdlq-orig') || node.nodeValue;
+          el.removeAttribute('data-dshdlq-nick');
+          el.removeAttribute('data-dshdlq-orig');
         }
       } catch (e) {}
     }
-    // 敏感信息统一刷新：昵称覆盖 + 默认模糊
-    function refreshSensitive() { applyNicknameOverride(); autoBlurScan(); }
-
-    // 「默认模糊」：扫描叶子节点并打码，DOM 变化后自动补扫
-    function autoBlurScan() {
-      if (!prefs.blurByDefault || typeof document === 'undefined') return;
+    /** 撤销「已不再像敏感信息」的自动模糊（例如昵称覆盖了手机号后，同节点残留的类要清掉） */
+    function pruneAutoBlur() {
+      if (typeof document === 'undefined') return;
       try {
-        // 先撤销「已不再像敏感信息」的自动模糊（例如昵称覆盖了手机号后，同节点残留的类要清掉）
         for (const el of document.querySelectorAll('[data-dshdlq-auto="1"]')) {
           const t = (el.textContent || '').trim();
           if (!t || t.length > 64 || !SENSITIVE_RE.test(t)) {
@@ -408,19 +428,18 @@ window.__ModuleLoader__.load({
             el.removeAttribute('data-dshdlq-auto');
           }
         }
-        const nodes = document.querySelectorAll('span,div,td,li,p,a,strong,em,small');
-        for (const el of nodes) {
-          if (el.children.length > 0) continue;
-          if (isProtected(el)) continue;                 // 编辑器 / 输入框 / 代码块内不打码
-          if (el.classList.contains('dshdlq-blur')) continue;
-          const t = (el.textContent || '').trim();
-          if (!t || t.length > 64) continue;
-          if (!SENSITIVE_RE.test(t)) continue;
-          el.classList.add('dshdlq-blur');
-          el.setAttribute('data-dshdlq-auto', '1');
-        }
       } catch (e) {}
     }
+    // 敏感信息全量刷新：还原昵称（若已清空）+ 修剪失效打码 + 全量扫描
+    function refreshSensitive() {
+      if (typeof document === 'undefined') return;
+      try {
+        if (!String(prefs.nickname || '').trim()) restoreNicknames();
+        if (prefs.blurByDefault) pruneAutoBlur();
+        scanAll();
+      } catch (e) {}
+    }
+
     function clearAutoBlur() {
       try {
         for (const el of document.querySelectorAll('[data-dshdlq-auto="1"]')) {
@@ -434,12 +453,28 @@ window.__ModuleLoader__.load({
       if (!prefs.blurByDefault && !prefs.nickname) return;
       if (autoObserver || typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
       try {
-        let timer = null;
-        autoObserver = new MutationObserver(() => {
+        autoObserver = new MutationObserver((mutations) => {
           // 两项功能都关闭时不做任何扫描：避免流式输出等高频 DOM 变化带来的无谓开销
           if (!prefs.blurByDefault && !prefs.nickname) return;
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(refreshSensitive, 300);
+          // 同步「增量」处理，不再走 setTimeout 防抖：
+          // MutationObserver 回调是在 DOM 变更后、**下一次绘制之前**以微任务执行的，
+          // 因此在这里同步打码可以做到「渲染即打码」，不会出现先明文、约 300ms 后才模糊的闪烁。
+          // 而且只处理本次真正变化的节点，比原先「防抖 + 全文档扫描」更快也更省。
+          try {
+            for (const m of mutations) {
+              if (m.type === 'characterData') {
+                if (m.target && m.target.parentElement) applySensitiveEl(m.target.parentElement);
+                continue;
+              }
+              if (m.target && m.target.nodeType === 1) applySensitiveEl(m.target);
+              const added = m.addedNodes;
+              if (!added) continue;
+              for (const n of added) {
+                if (n.nodeType === 1) scanAll(n);
+                else if (n.nodeType === 3 && n.parentElement) applySensitiveEl(n.parentElement);
+              }
+            }
+          } catch (e) {}
         });
         autoObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
       } catch (e) { autoObserver = null; }

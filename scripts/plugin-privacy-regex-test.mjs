@@ -54,8 +54,12 @@ for (const item of cases) {
 }
 
 ok('存在 isProtected() 护栏（编辑器/输入框/代码块排除）', src.includes('function isProtected('));
-ok('昵称覆盖调用 isProtected', /applyNicknameOverride[\s\S]{0,1500}isProtected\(el\)/.test(src));
-ok('默认模糊调用 isProtected', /autoBlurScan[\s\S]{0,1800}isProtected\(el\)/.test(src));
+ok('单元素应用 applySensitiveEl 调用 isProtected', /function applySensitiveEl[\s\S]{0,900}isProtected\(el\)/.test(src));
+ok('全量扫描 scanAll 走 applySensitiveEl', /function scanAll[\s\S]{0,600}applySensitiveEl\(el\)/.test(src));
+ok('DOM 变化同步增量打码（无 300ms setTimeout 防抖，避免设置页先明文后模糊）',
+  !/setTimeout\(refreshSensitive/.test(src) && /MutationObserver\(\(mutations\)/.test(src) && /m\.addedNodes/.test(src));
+ok('characterData 变更就地重扫（React 回写手机号后立刻重新打码）',
+  /characterData[\s\S]{0,220}applySensitiveEl\(m\.target\.parentElement\)/.test(src));
 ok('双击处理调用 inEditable', /dblclick[\s\S]{0,500}inEditable\(t\)/.test(src));
 const dialogRenders = src.split('s.open ? React.createElement(SignInDialog) : null').length - 1;
 ok('弹窗仅由 shell.overlay 单例渲染（设置区不再重复渲染）', dialogRenders === 1, 'occurrences=' + dialogRenders);
