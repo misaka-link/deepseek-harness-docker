@@ -34,7 +34,10 @@ console.log('\n=== A. version.json 自身一致性 ===');
 ok(typeof recommended === 'string' && recommended.length > 0, `recommendedDsh 已定义 (${recommended})`);
 ok(adapted.includes(recommended), `adaptedVersions 包含 recommendedDsh (${recommended})`);
 ok(adapted[0] === recommended, `adaptedVersions 置顶项为 recommendedDsh (${adapted[0]})`);
-ok(adapted.includes('0.2.1-alpha.3'), 'adaptedVersions 包含 0.2.1-alpha.3');
+ok(adapted.includes('0.2.1-rc.2'), 'adaptedVersions 包含 0.2.1-rc.2');
+ok(adapted.includes('0.2.1-alpha.5'), 'adaptedVersions 保留上一版 0.2.1-alpha.5');
+ok(adapted.includes('0.2.1-alpha.4'), 'adaptedVersions 保留 0.2.1-alpha.4');
+ok(adapted.includes('0.2.1-alpha.3'), 'adaptedVersions 保留 0.2.1-alpha.3');
 ok(adapted.includes('0.2.1-alpha.2'), 'adaptedVersions 保留上一版 0.2.1-alpha.2');
 ok(adapted.includes('0.2.1-alpha.1'), 'adaptedVersions 保留 0.2.1-alpha.1');
 ok(adapted.includes('0.2.0-rc.2'), 'adaptedVersions 保留 0.2.0-rc.2');
@@ -82,7 +85,7 @@ const chipCount = (adminSrc.match(new RegExp(`>${recommended.replace(/\./g, '\\.
 ok(chipCount >= 2, `静态适配 chips 含 ${recommended} (${chipCount} 处)`);
 // 回归：升级推荐核心时必须「置顶新增」而不是「替换掉」上一版推荐，
 // 否则冷启动静态页面（API 返回前）会漏展示上一版已深度适配的核心。
-const prevRecommended = '0.2.1-alpha.2';
+const prevRecommended = '0.2.1-alpha.5';
 const prevChipCount = (adminSrc.match(new RegExp(`>${prevRecommended.replace(/\./g, '\\.')}</span>`, 'g')) || []).length;
 ok(prevChipCount >= 2, `静态适配 chips 保留上一推荐版本 ${prevRecommended} (${prevChipCount} 处)`);
 

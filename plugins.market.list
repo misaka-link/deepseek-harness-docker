@@ -23,6 +23,11 @@ dshmarket@latest
 
 # 2. 思考强度调节插件
 # 项目地址: https://github.com/hytime/dsh-thinking-effort#readme
-# 已知限制（0.1.7）：宿主半依赖 settings.get 能力探测，0.1.7 下判为不可用并优雅降级
-# （打印 settings capability unavailable），不崩但「自动补齐思考强度默认值」不生效。
+# 官方 0.2.1-alpha.4 起，「设置 → 模型 → 自定义模型 API」已可图形化配置每个模型的推理等级
+# （reasoningEfforts），与本插件的「模型级档位编辑 / 线上值映射」功能重叠；
+# 但官方仍不做两件事，故继续预装：
+#   a) 不会为「未声明档位的手工 pi-ai 模型」自动补齐默认档位（会话内选择器不显示推理等级）；
+#   b) 没有「子 agent 统一默认思考强度」配置（子 agent 路由变化时官方直接丢弃 effort）。
+# 另：本插件还独占 llm-pi-ai.compat 18 字段图形化、OpenCode 会话头/user-agent 改写、配置备份与预设。
+# 兼容性：engines.dsh >=0.1.0-rc.7，满足官方 0.2.1-alpha.4 起「engines.dsh 优先」的判定规则。
 @hytime/dsh-thinking-effort@latest

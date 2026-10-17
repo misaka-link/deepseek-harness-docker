@@ -11,7 +11,7 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.1-alpha.3",
+    "dshVersion": "0.2.1-rc.2",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
@@ -19,29 +19,83 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "0.2.4",
-    "releaseDate": "2026-10-15",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.4",
-    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.3，兼容区间上界同步为 <=0.2.1-alpha.3；适配矩阵置顶新增 0.2.1-alpha.3；工程版本递增至 0.2.4；同步官方 0.2.1-alpha.3 行为变更（已发送消息中的密钥/令牌默认脱敏、Web 本地 HTTP 登录 DeepSeek 账号、API Key 读取优先级调整、Azure 提供方更名 azure）",
+    "version": "0.2.7",
+    "releaseDate": "2026-10-17",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.7",
+    "changelog": "内置 DSH 切换至 0.2.1 候选线 @deepseek-ai/dsh@0.2.1-rc.2，兼容区间上界同步为 <=0.2.1-rc.2；适配矩阵置顶新增 0.2.1-rc.2；工程版本递增至 0.2.7；官方 0.2.1-rc.2 新增 DeepSeek-V4.1-Flash-1017 模型适配与 DeepSeek Search/Fetch API（可在网页搜索设置中开启）",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.3，兼容区间上界同步为 <=0.2.1-alpha.3",
-      "已适配版本矩阵置顶新增 0.2.1-alpha.3（保留 0.2.1-alpha.2 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.3",
-      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.3，工程版本递增至 0.2.4",
-      "远程同步清单纳入 remote-verify-0.2.1-alpha.3.sh 联调校验脚本（保留旧版 alpha.2 脚本）"
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-rc.2，兼容区间上界同步为 <=0.2.1-rc.2",
+      "已适配版本矩阵置顶新增 0.2.1-rc.2（保留 0.2.1-alpha.5 及历史项），推荐核心与前端兜底同步指向 0.2.1-rc.2",
+      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-rc.2，工程版本递增至 0.2.7"
     ],
     "dshChangelogList": [
-      "已发送消息中的密钥与令牌自动识别并默认脱敏，按需可查看原文",
-      "Web 版本机 HTTP 访问时支持登录 DeepSeek 账号；DeepSeek 账号模型列表随账号可用模型更新并隐藏当前客户端不支持的模型",
-      "API Key 读取优先级调整：Web/桌面端优先采用已保存凭据，headless 默认改用环境变量与 .env、不再读取已保存密钥",
-      "第三方模型支持更新：Azure 提供方名称统一为 azure，使用旧名 azure-openai-responses 的配置需迁移",
-      "插件更新/重装后即时生效：可热重载的插件直接生效，无法热重载时提示重启",
-      "子智能体可配置独立 Agent Preset 统一角色与工具；改进委派与等待指引（提前提示委派层数上限）",
-      "极简模式支持读取图片与长对话自动压缩，Web/桌面端可用 /compact 手动压缩上下文",
-      "修复切换会话/收起工作过程/发送后续消息时的对话区大块空白与滚动跳动、重启后部分会话无法继续等问题",
-      "PTC Mode 的 Node 执行环境新增可选 in-memory 模式，多次运行代码可复用变量、函数与已导入模块"
+      "适配 DeepSeek-V4.1-Flash-1017 模型上线",
+      "适配 DeepSeek Search 与 Fetch API，可在网页搜索设置中开启",
+      "0.2.1 系列首个候选版（rc.1）汇总了自 0.2.0-rc.2 以来的变更：自定义插件索引源、让 Agent 创建插件入口、插件启停/更新的依赖同步与热重载、可选极简模式与 Claude Code/Codex 组合包、开发者工具组合包、CoT 机器翻译、Git Worktrees、working_directory 工具、SSH helper 运行时等"
     ]
   },
   "history": {
+    "0.2.6": {
+      "version": "0.2.6",
+      "releaseDate": "2026-10-17",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.6",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.5，兼容区间上界同步为 <=0.2.1-alpha.5；适配矩阵置顶新增 0.2.1-alpha.5；工程版本递增至 0.2.6；同步官方 0.2.1-alpha.5 修复（插件启停后已开会话 / 菜单技能列表不刷新、多终端重复查询与失效终端重试、PTC Mode 指引与模型身份说明、右侧栏收起时翻页导致界面左移）与新增 conversation.input.model.label 槽位",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.5，兼容区间上界同步为 <=0.2.1-alpha.5",
+        "已适配版本矩阵置顶新增 0.2.1-alpha.5（保留 0.2.1-alpha.4 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.5",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.5，工程版本递增至 0.2.6"
+      ],
+      "dshChangelogList": [
+        "修复在插件页启用或停用插件后，已打开会话的 / 菜单未更新技能列表",
+        "减少新建与恢复多个终端时的重复查询，避免失效终端在切换面板后反复重试",
+        "改善 PTC Mode 中缺失的部分指引，并统一 SDK、Web 与 headless 的模型身份说明",
+        "修复右侧栏收起时在输入框按 Page Up 导致整个界面向左偏移",
+        "新增 conversation.input.model.label 槽位，插件可按模型渠道自定义输入框模型选择器中的名称展示"
+      ]
+    },
+    "0.2.5": {
+      "version": "0.2.5",
+      "releaseDate": "2026-10-16",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.5",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.4，兼容区间上界同步为 <=0.2.1-alpha.4；适配矩阵置顶新增 0.2.1-alpha.4；工程版本递增至 0.2.5；同步官方 0.2.1-alpha.4 新能力（自定义模型可在设置页直接配置推理等级、支持从自定义插件索引源发现并安装插件）与生态变更（第三方插件版本兼容性优先按 engines.dsh 判定）",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.4，兼容区间上界同步为 <=0.2.1-alpha.4",
+        "已适配版本矩阵置顶新增 0.2.1-alpha.4（保留 0.2.1-alpha.3 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.4",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.4，工程版本递增至 0.2.5"
+      ],
+      "dshChangelogList": [
+        "自定义模型支持在设置页直接配置每个模型的推理等级，无需手动编辑配置文件",
+        "插件页支持从「自定义插件索引源」发现并安装插件（官方不预置任何索引源，默认关闭）",
+        "第三方插件版本兼容性改为优先按 engines.dsh 判定，未声明时沿用 peerDependencies 规则",
+        "修复命令与参数交界处的输入异常（整体选中/删除、撤销与刷新后恢复）",
+        "修复启用开发者工具后仍需刷新才能打开工具面板",
+        "修复命令执行失败时未呈现有效状态信息",
+        "Office 文件交付改进：不再引用已删除的预览图、减少验证性工具调用",
+        "减少 Linux 下启动命令前的重复检查，改善旧 systemd 兼容性"
+      ]
+    },
+    "0.2.4": {
+      "version": "0.2.4",
+      "releaseDate": "2026-10-15",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.4",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.3，兼容区间上界同步为 <=0.2.1-alpha.3；适配矩阵置顶新增 0.2.1-alpha.3；工程版本递增至 0.2.4；同步官方 0.2.1-alpha.3 行为变更（已发送消息中的密钥/令牌默认脱敏、Web 本地 HTTP 登录 DeepSeek 账号、API Key 读取优先级调整、Azure 提供方更名 azure）",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.3，兼容区间上界同步为 <=0.2.1-alpha.3",
+        "已适配版本矩阵置顶新增 0.2.1-alpha.3（保留 0.2.1-alpha.2 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.3",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.3，工程版本递增至 0.2.4"
+      ],
+      "dshChangelogList": [
+        "已发送消息中的密钥与令牌自动识别并默认脱敏，按需可查看原文",
+        "Web 版本机 HTTP 访问时支持登录 DeepSeek 账号；DeepSeek 账号模型列表随账号可用模型更新并隐藏当前客户端不支持的模型",
+        "API Key 读取优先级调整：Web/桌面端优先采用已保存凭据，headless 默认改用环境变量与 .env、不再读取已保存密钥",
+        "第三方模型支持更新：Azure 提供方名称统一为 azure，使用旧名 azure-openai-responses 的配置需迁移",
+        "插件更新/重装后即时生效：可热重载的插件直接生效，无法热重载时提示重启",
+        "子智能体可配置独立 Agent Preset 统一角色与工具；改进委派与等待指引（提前提示委派层数上限）",
+        "极简模式支持读取图片与长对话自动压缩，Web/桌面端可用 /compact 手动压缩上下文",
+        "修复切换会话/收起工作过程/发送后续消息时的对话区大块空白与滚动跳动、重启后部分会话无法继续等问题",
+        "PTC Mode 的 Node 执行环境新增可选 in-memory 模式，多次运行代码可复用变量、函数与已导入模块"
+      ]
+    },
     "0.2.3": {
       "version": "0.2.3",
       "releaseDate": "2026-10-10",
@@ -50,8 +104,7 @@
       "changelogList": [
         "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-alpha.2，兼容区间上界同步为 <=0.2.1-alpha.2",
         "已适配版本矩阵置顶新增 0.2.1-alpha.2（保留 0.2.1-alpha.1 及历史项），推荐核心与前端兜底同步指向 0.2.1-alpha.2",
-        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.2，工程版本递增至 0.2.3",
-        "远程同步清单纳入 remote-verify-0.2.1-alpha.2.sh 联调校验脚本（保留旧版 alpha.1 脚本）"
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-alpha.2，工程版本递增至 0.2.3"
       ],
       "dshChangelogList": [
         "浏览器会话鉴权加固：按请求 authority 与 trustedHosts 白名单校验来源，TLS 监听启用 Secure Cookie 与 https 源判定（isAuthenticated 新增 secure 语义）",
@@ -300,9 +353,12 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.1-alpha.3",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-alpha.3",
+    "recommendedDsh": "0.2.1-rc.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-rc.2",
     "adaptedVersions": [
+      "0.2.1-rc.2",
+      "0.2.1-alpha.5",
+      "0.2.1-alpha.4",
       "0.2.1-alpha.3",
       "0.2.1-alpha.2",
       "0.2.1-alpha.1",

@@ -233,13 +233,13 @@ RUN set -eux; \
     DOWNLOAD_SUCCESS=0; \
     if [ "$USE_CHINA_MIRROR" = "1" ] || [ "$USE_CHINA_MIRROR" = "true" ]; then \
       echo "===> 尝试从国内官方镜像源下载 Golang..."; \
-      if curl -sSL --fail "https://golang.google.cn/dl/${GO_TARBALL}" -o /tmp/go.tar.gz; then \
+      if curl -sSL --fail --connect-timeout 10 --max-time 900 --retry 2 --retry-delay 3 "https://golang.google.cn/dl/${GO_TARBALL}" -o /tmp/go.tar.gz; then \
         DOWNLOAD_SUCCESS=1; \
       fi; \
     fi; \
     if [ "${DOWNLOAD_SUCCESS}" = "0" ]; then \
       echo "===> 从全球官方源下载 Golang..."; \
-      curl -sSL --fail "https://go.dev/dl/${GO_TARBALL}" -o /tmp/go.tar.gz; \
+      curl -sSL --fail --connect-timeout 10 --max-time 900 --retry 2 --retry-delay 3 "https://go.dev/dl/${GO_TARBALL}" -o /tmp/go.tar.gz; \
     fi; \
     tar -C /usr/local -xzf /tmp/go.tar.gz; \
     rm -f /tmp/go.tar.gz; \
@@ -254,7 +254,7 @@ RUN set -eux; \
 
 # 3. 全局安装 DeepSeek Harness 官方 CLI 与 pnpm（M10：固定版本 + 校验完整性 + 安装期不执行包脚本）
 #    版本默认来自 build.sh 读取的 version.json#supply，可用 --build-arg 覆盖。
-ARG DSH_VERSION="0.2.1-alpha.3"
+ARG DSH_VERSION="0.2.1-rc.2"
 ARG PNPM_VERSION="12.5.1"
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \

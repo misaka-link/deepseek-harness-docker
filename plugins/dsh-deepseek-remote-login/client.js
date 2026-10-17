@@ -136,7 +136,7 @@ window.__ModuleLoader__.load({
           if (j && j.version) { cachedVersion = String(j.version); return cachedVersion; }
         }
       } catch (e) {}
-      cachedVersion = '0.2.1-alpha.3';
+      cachedVersion = '0.2.1-rc.2';
       return cachedVersion;
     }
     function activeLocale(ctx) {

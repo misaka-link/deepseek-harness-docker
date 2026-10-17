@@ -4,14 +4,63 @@
 
 ---
 
-## [未发布]
+## [v0.2.7] - 2026-10-17
+
+### 🔼 核心适配
+- **内置 DSH 切换至 0.2.1 候选线 `@deepseek-ai/dsh@0.2.1-rc.2`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-rc.2`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 置顶纳入 `0.2.1-rc.2`（保留 `0.2.1-alpha.5`），支持区间上界扩展为 `<=0.2.1-rc.2`，推荐核心同步指向 `0.2.1-rc.2`；`gateway/version-service.js`、`gateway/dsh-manager.js` 与管理控制台兜底矩阵同步，工程版本递增至 `0.2.7`。
+- **构建健壮性**：Golang 下载增加连接/总超时、重试与回退（两个源均 10s 连接 + 900s 总超时 + 2 次重试，主源失败自动切备用源），避免镜像源被限速时构建长时间无输出挂起。
+
+### 📦 官方 0.2.1-rc.2 用户可见变更
+- 适配 `DeepSeek-V4.1-Flash-1017` 模型上线。
+- 适配 DeepSeek Search 与 Fetch API，可在网页搜索设置中开启。
+- `rc.1` 为 0.2.1 系列首个候选版，汇总了自 `0.2.0-rc.2` 以来的变更（自定义插件索引源、Agent 创建插件入口、插件启停/更新的依赖同步与热重载、可选极简模式与 Claude Code/Codex 组合包、开发者工具组合包、CoT 机器翻译、Git Worktrees、`working_directory` 工具、SSH helper 运行时、自定义模型推理等级 UI 等）。
+- 本版本无破坏性变更：`rc.2` 仅新增能力，未调整插件兼容判定与官方插件市场语义。
+
+---
+
+## [v0.2.6] - 2026-10-17
+
+### 🔼 核心适配
+- **内置 DSH 版本升级至 `@deepseek-ai/dsh@0.2.1-alpha.5`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-alpha.5`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 置顶纳入 `0.2.1-alpha.5`（保留 `0.2.1-alpha.4`），支持区间上界扩展为 `<=0.2.1-alpha.5`，推荐核心同步指向 `0.2.1-alpha.5`；`gateway/version-service.js`、`gateway/dsh-manager.js` 与管理控制台兜底矩阵同步，工程版本递增至 `0.2.6`。
+
+### 📦 官方 0.2.1-alpha.5 用户可见变更
+- 修复在插件页启用或停用插件后，已打开会话的 `/` 菜单未更新技能列表。
+- 减少新建与恢复多个终端时的重复查询，避免失效终端在切换面板后反复重试。
+- 改善 PTC Mode 中缺失的部分指引，并统一 SDK、Web 与 headless 的模型身份说明。
+- 修复右侧栏收起时在输入框按 Page Up 导致界面整体向左偏移。
+- 新增 `conversation.input.model.label` 槽位：插件可按模型渠道自定义输入框模型选择器中的名称展示。
+- 本版本无破坏性变更：无新增/下线包，插件兼容判定（engines.dsh 优先）与官方插件市场组合包语义均未变化。
+
+---
+
+## [v0.2.5] - 2026-10-16
+
+### 🔼 核心适配
+- **内置 DSH 版本升级至 `@deepseek-ai/dsh@0.2.1-alpha.4`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-alpha.4`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 置顶纳入 `0.2.1-alpha.4`（保留 `0.2.1-alpha.3`），支持区间上界扩展为 `<=0.2.1-alpha.4`，推荐核心同步指向 `0.2.1-alpha.4`；`gateway/version-service.js`、`gateway/dsh-manager.js` 与管理控制台兜底矩阵同步，工程版本递增至 `0.2.5`。
+
+### 📌 思考档位：官方新增推理等级 UI，插件继续预装
+- 官方 0.2.1-alpha.4 在「设置 → 模型 → 自定义模型 API → 编辑 → 模型行展开」新增**逐模型推理等级**编辑（写入 `llm-pi-ai.providers.<route>.models[i].reasoningEfforts`，档位 `off/minimal/low/medium/high/xhigh/max` + 自定义线上参数值），免去手改配置文件；作用域仅限**手工声明的 pi-ai 路由**。
+- 官方**不会**为未声明档位的模型自动补齐档位（会话内选择器仍只显示「提供方默认」），也**没有**「子 agent 统一默认思考强度」；`@hytime/dsh-thinking-effort` 继续预装，仅更新 `plugins.market.list` 中已过时的限制说明。
+
+### 📦 官方 0.2.1-alpha.4 用户可见变更
+- 自定义模型 API 支持在 UI 配置各模型推理等级，无需手动编辑配置文件。
+- 插件页支持从「自定义插件索引源」发现并安装插件（官方不预置索引源，默认关闭）；启用后插件页出现 Installed / Discover 双页签。
+- 官方实验性插件市场组合包 `dsh-experimental-plugin-market-bundle` 随 CLI 依赖自动安装、默认关闭，槽位与项目预装的 `dshmarket` 不同，互不冲突（无需新增安装步骤）。
+
+### ⚠️ 官方 0.2.1-alpha.4 行为变更
+- **插件版本兼容性改为优先按 `engines.dsh` 判定**（未声明时沿用原 peerDependencies 规则）；声明了 `engines.dsh` 的插件完全由该字段决定，`workspace:*` 一律视为不满足。
+- 插件操作结果的兼容性字段由 `peers` 更名 `requirements`（本项目 `gateway/plugin-manager.js` 未消费该字段，无需适配）。
+
+### 🐛 官方 0.2.1-alpha.4 修复
+- 修复命令与参数交界处的输入异常（整体选中/删除、撤销与刷新后恢复）。
+- 修复启用开发者工具后仍需刷新才能打开工具面板；修复命令执行失败时未呈现有效状态信息。
+- 改进 Office 文件交付（不再引用已删除预览图、减少验证性工具调用）；减少 Linux 下启动命令前的重复检查，改善旧 systemd 兼容性。
 
 ### 🐛 缺陷修复
-- **修复「默认模糊 / 自定义昵称」在打开设置时约 300ms 的延迟（先明文、后模糊）**：此前 `MutationObserver` 采用「**300ms 防抖 + 全文档扫描**」，设置页新渲染出的账号手机号会先以明文显示约 0.3 秒才被打码。现改为**同步增量处理**——回调内只处理本次真正变更的节点（`childList` 的新增子树 + `characterData` 的文本节点），而 MutationObserver 回调是在 DOM 变更后、**下一次绘制之前**以微任务执行的，因此可以做到「渲染即打码」，全程没有任何一帧明文；同时把重复逻辑合并为单元素 `applySensitiveEl()`，全量扫描 `scanAll()` 与增量路径共用（原 `applyNicknameOverride` / `autoBlurScan` 两套遍历删除）。
-  - 回归防线：`scripts/plugin-privacy-regex-test.mjs` 由 21 项增至 **23 项**，新增「不存在 `setTimeout(refreshSensitive` 防抖」与「`characterData` 变更就地重扫」两条断言，防止该延迟问题复发。
-  - 实测：零闪烁专项 **4/4**（叶子手机号元素「首次被 MutationObserver 观测到时」即已带打码类，延迟 **0ms**；昵称路径首帧即为昵称）；全量 e2e **15/15**；容器内回归无失败项。
-
-> 注：本次改动**未做版本递增、未发布**，随下次发版一并生效（远程实例已先行验证通过）。
+- **修复打码 / 昵称在设置页约 300ms 的延迟（先明文、后模糊）**：此前 `MutationObserver` 采用「300ms 防抖 + 全文档扫描」，设置页新渲染出的账号手机号会先以明文显示约 0.3 秒才被打码。现改为**同步增量处理**——回调只处理本次真正变更的节点（新增子树 + 文本节点），而 MutationObserver 回调在下一次绘制之前以微任务执行，因此做到「渲染即打码」，全程没有一帧明文；同时把重复逻辑合并为单元素 `applySensitiveEl()`，全量扫描与增量路径共用。
 
 ---
 
