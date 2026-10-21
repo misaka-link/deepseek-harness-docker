@@ -39,6 +39,10 @@ window.__ModuleLoader__.load({
       checking: zh ? '检测中…' : 'Checking…',
       // 偏好设置
       prefsTitle: zh ? '显示与隐私' : 'Display & privacy',
+      mobileScrollLock: zh ? '移动端防下拉黑屏与滚动锁定' : 'Mobile viewport scroll lock (prevent pull-down void)',
+      mobileScrollLockHint: zh
+        ? '锁定移动端外层页面视口，防止触屏下拉或收起软键盘时整个界面上卷留出大片黑屏；聊天记录与侧边栏内部正常滚动（默认开启）。'
+        : 'Lock the outer viewport on mobile to prevent touch gestures and keyboard dismissal from scrolling the whole page into a blank dark void, while keeping internal chat and panels scrolling smoothly (enabled by default).',
       blurDefault: zh ? '默认模糊敏感信息（手机号 / 邮箱）' : 'Blur sensitive info by default (phone / email)',
       blurDefaultHint: zh ? '开启后页面中的手机号、邮箱会自动打码；双击任意手机号可随时模糊 / 还原。' : 'When on, phone numbers and emails on the page are masked automatically; double-click any phone number to blur or restore it.',
       nickLabel: zh ? '自定义显示昵称' : 'Custom display name',
@@ -97,21 +101,108 @@ window.__ModuleLoader__.load({
 
     // ── 偏好设置（localStorage，按浏览器保存）────────────────────
     const PREFS_KEY = 'dsh-deepseek-remote-login:prefs';
-    let prefs = { blurByDefault: false, nickname: '' };
+    let prefs = { blurByDefault: false, nickname: '', mobileScrollLock: true };
     function loadPrefs() {
       try {
         const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null;
-        if (raw) prefs = Object.assign({}, prefs, JSON.parse(raw));
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          prefs = Object.assign({}, prefs, parsed);
+          if (parsed && parsed.mobileScrollLock === undefined) {
+            prefs.mobileScrollLock = true;
+          }
+        }
       } catch (e) {}
+      applyMobileScrollLock();
       return prefs;
     }
     function setPref(key, value) {
       prefs = Object.assign({}, prefs, { [key]: value });
       try { if (typeof localStorage !== 'undefined') localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
       if (key === 'blurByDefault') { if (value) scanAll(); else clearAutoBlur(); }
+      if (key === 'mobileScrollLock') { applyMobileScrollLock(); }
       watchDomForAutoBlur();   // 开启任一功能后补挂观察器
       refreshSensitive();      // 昵称改动：重写页面中的手机号显示；同时重新评估自动模糊
       notify();
+    }
+
+    // ── 移动端防下拉黑屏与视口锁定 ────────────────────────────────
+    const MOBILE_STYLE_ID = 'dsh-mobile-scroll-lock-css';
+    let viewportResetAttached = false;
+    function setupViewportReset() {
+      if (viewportResetAttached || typeof window === 'undefined') return;
+      viewportResetAttached = true;
+      const resetScroll = () => {
+        if (prefs.mobileScrollLock && typeof window !== 'undefined' && window.scrollY !== 0) {
+          window.scrollTo(0, 0);
+        }
+      };
+      window.addEventListener('scroll', resetScroll, { passive: true });
+      window.addEventListener('focusout', () => {
+        if (prefs.mobileScrollLock) {
+          setTimeout(resetScroll, 60);
+          setTimeout(resetScroll, 300);
+        }
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+          if (prefs.mobileScrollLock) {
+            setTimeout(resetScroll, 60);
+          }
+        });
+        window.visualViewport.addEventListener('scroll', () => {
+          if (prefs.mobileScrollLock) {
+            resetScroll();
+          }
+        });
+      }
+      window.addEventListener('orientationchange', () => {
+        if (prefs.mobileScrollLock) {
+          setTimeout(resetScroll, 100);
+        }
+      });
+    }
+
+    function applyMobileScrollLock() {
+      if (typeof document === 'undefined') return;
+      let el = document.getElementById(MOBILE_STYLE_ID);
+      if (prefs.mobileScrollLock) {
+        if (!el) {
+          el = document.createElement('style');
+          el.id = MOBILE_STYLE_ID;
+          document.head.appendChild(el);
+        }
+        el.textContent = [
+          '/* 移动端视口防下拉黑屏与滚动穿透补丁 (@dsh-custom/dsh-deepseek-remote-login) */',
+          'html, body {',
+          '  height: 100% !important;',
+          '  height: 100dvh !important;',
+          '  max-height: 100dvh !important;',
+          '  overflow: hidden !important;',
+          '  overscroll-behavior: none !important;',
+          '  overscroll-behavior-y: none !important;',
+          '}',
+          '#root {',
+          '  height: 100% !important;',
+          '  max-height: 100% !important;',
+          '  overflow: hidden !important;',
+          '}',
+          '@media (max-width: 768px) {',
+          '  [data-conversation-content], .wSkVaW_body {',
+          '    --dsh-chat-content-width: 100% !important;',
+          '    --dsh-composer-card-max-width: 100% !important;',
+          '    --dsh-composer-side-clearance: 8px !important;',
+          '  }',
+          '  [data-conversation-scroll], .wSkVaW_scrollBody {',
+          '    margin-right: 0px !important;',
+          '    overscroll-behavior: contain !important;',
+          '  }',
+          '}'
+        ].join('\n');
+        setupViewportReset();
+      } else {
+        if (el) el.remove();
+      }
     }
 
     function accountApi(ctx) {
@@ -525,6 +616,15 @@ window.__ModuleLoader__.load({
       return React.createElement(React.Fragment, null,
         React.createElement('div', { className: 'dshdlq-sep' }),
         React.createElement('div', { className: 'dshdlq-label' }, L.prefsTitle),
+        React.createElement('label', { className: 'dshdlq-check' },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: !!prefs.mobileScrollLock,
+            onChange: (e) => setPref('mobileScrollLock', e.target.checked)
+          }),
+          React.createElement('span', null, L.mobileScrollLock)
+        ),
+        React.createElement('div', { className: 'dshdlq-hint', style: { marginLeft: '24px' } }, L.mobileScrollLockHint),
         React.createElement('label', { className: 'dshdlq-check' },
           React.createElement('input', {
             type: 'checkbox',
