@@ -1,7 +1,7 @@
 {
-  "name": "@dsh-custom/dsh-deepseek-remote-login",
+  "name": "@dsh-custom/dsh-container-helper",
   "version": "1.0.0",
-  "description": "DeepSeek 账号登录（远程/反代）助手：DSH 内置弹窗，支持复制/跳转登录链接，并可粘贴回调链接一键完成登录",
+  "description": "DSH 容器助手：集成移动端视口防黑屏适配、远程/反代登录中继与敏感信息脱敏",
   "type": "module",
   "main": "./index.js",
   "exports": {

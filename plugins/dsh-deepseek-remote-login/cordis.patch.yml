@@ -1,3 +1,0 @@
-- insert:
-    - id: dsh-deepseek-remote-login
-      name: '@dsh-custom/dsh-deepseek-remote-login'

@@ -1,12 +1,12 @@
 window.__ModuleLoader__.load({
-  id: '@dsh-custom/dsh-deepseek-remote-login',
+  id: '@dsh-custom/dsh-container-helper',
   factory: (require) => {
     const module = { exports: {} };
     const React = require('react');
 
     const zh = typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
     const L = {
-      section: zh ? 'DeepSeek 登录（远程）' : 'DeepSeek Sign-in (Remote)',
+      section: zh ? 'DSH 容器助手' : 'DSH Container Helper',
       title: zh ? 'DeepSeek 账号登录' : 'DeepSeek account sign-in',
       badge: zh ? '内置容器套件组件' : 'Builtin Suite Component',
       desc: zh
@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
       blurHint: zh ? '提示：双击页面中任意位置的手机号即可模糊 / 还原（便于截图留档）。' : 'Tip: double-click any phone number on the page to blur or restore it (useful before taking screenshots).',
     };
 
-    const STYLE_ID = 'dsh-deepseek-remote-login-css';
+    const STYLE_ID = 'dsh-container-helper-css';
     function ensureStyles() {
       if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
       const el = document.createElement('style');
@@ -100,11 +100,15 @@ window.__ModuleLoader__.load({
     const setUi = (patch) => { ui = Object.assign({}, ui, patch); notify(); };
 
     // ── 偏好设置（localStorage，按浏览器保存）────────────────────
-    const PREFS_KEY = 'dsh-deepseek-remote-login:prefs';
+    const PREFS_KEY = 'dsh-container-helper:prefs';
+    const LEGACY_PREFS_KEY = 'dsh-deepseek-remote-login:prefs';
     let prefs = { blurByDefault: false, nickname: '', mobileScrollLock: true };
     function loadPrefs() {
       try {
-        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null;
+        let raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null;
+        if (!raw && typeof localStorage !== 'undefined') {
+          raw = localStorage.getItem(LEGACY_PREFS_KEY);
+        }
         if (raw) {
           const parsed = JSON.parse(raw);
           prefs = Object.assign({}, prefs, parsed);
@@ -173,7 +177,7 @@ window.__ModuleLoader__.load({
           document.head.appendChild(el);
         }
         el.textContent = [
-          '/* 移动端视口防下拉黑屏与滚动穿透补丁 (@dsh-custom/dsh-deepseek-remote-login) */',
+          '/* 移动端视口防下拉黑屏与滚动穿透补丁 (@dsh-custom/dsh-container-helper) */',
           'html, body {',
           '  height: 100% !important;',
           '  height: 100dvh !important;',
@@ -772,31 +776,33 @@ window.__ModuleLoader__.load({
       watchDomForAutoBlur();
       if (typeof window !== 'undefined') {
         try {
-          window.addEventListener('dsh-deepseek-remote-login:open', () => {
+          const handleOpen = () => {
             if (isSignedIn()) { setUi({ open: true, msg: '', msgKind: '' }); return; }
             setUi({ open: true, msg: '', msgKind: '' });
             beginSignIn();
-          });
+          };
+          window.addEventListener('dsh-container-helper:open', handleOpen);
+          window.addEventListener('dsh-deepseek-remote-login:open', handleOpen);
         } catch (e) {}
       }
       if (ctx && ctx.slots && typeof ctx.slots.inject === 'function') {
         ctx.slots.inject('settings.section', () => {
           return ctx.slots.register({
             name: 'settings.section',
-            id: 'deepseek-remote-login',
+            id: 'dsh-container-helper',
             order: 46,
             label: () => L.section
           }, RemoteLoginSection);
         });
         ctx.slots.inject('shell.overlay', () => {
-          return ctx.slots.register({ name: 'shell.overlay', id: 'deepseek-remote-login-dialog', order: 90 }, RemoteLoginOverlay);
+          return ctx.slots.register({ name: 'shell.overlay', id: 'dsh-container-helper-dialog', order: 90 }, RemoteLoginOverlay);
         });
         // 兑现补丁层注释里的承诺：官方 settings.models.sign-in 被置空后由本插件接管。
         // 该插槽是 kind:"single"（由 settings.onboarding 的 children 声明），官方 AccountOnboarding
         // 虽被补丁置空但**仍占着 priority 0** —— 同优先级再注册会抛
         // "single slot ... already has a registration"。按内核提示用更低的 priority 覆盖（lowest renders）。
         ctx.slots.inject('settings.models.sign-in', () => {
-          return ctx.slots.register({ name: 'settings.models.sign-in', id: 'deepseek-remote-login-models', priority: -1 }, ModelsSignInEntry);
+          return ctx.slots.register({ name: 'settings.models.sign-in', id: 'dsh-container-helper-models', priority: -1 }, ModelsSignInEntry);
         });
       }
     }
@@ -806,3 +812,13 @@ window.__ModuleLoader__.load({
     return module.exports;
   }
 });
+
+// 兼容别名注册：保证老版本或缓存的 ModuleLoader 仍能解析旧 ID
+try {
+  if (typeof window !== 'undefined' && window.__ModuleLoader__ && typeof window.__ModuleLoader__.load === 'function') {
+    window.__ModuleLoader__.load({
+      id: '@dsh-custom/dsh-deepseek-remote-login',
+      factory: (require) => require('@dsh-custom/dsh-container-helper')
+    });
+  }
+} catch (e) {}

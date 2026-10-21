@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const target = path.join(here, '..', 'plugins', 'dsh-deepseek-remote-login', 'client.js');
+const target = path.join(here, '..', 'plugins', 'dsh-container-helper', 'client.js');
 const src = fs.readFileSync(target, 'utf8');
 
 let pass = 0;

@@ -225,7 +225,7 @@ function patchAccountLoginOrigin(searchDir) {
 //   官方弹窗（dsh-client-ui-settings-account）在点击 Sign in 时会预开一个标签页并自动跳转，
 //   且弹窗内没有「回调链接」输入。这里：
 //     a) 关闭自动预开与自动跳转（改为纯手动：复制 / 点击打开）；
-//     b) 让官方弹窗不再渲染，交由内置插件 @dsh-custom/dsh-deepseek-remote-login
+//     b) 让官方弹窗不再渲染，交由内置插件 @dsh-custom/dsh-container-helper
 //        在 settings.models.sign-in 插槽渲染同款弹窗（含回调链接输入框）。
 //   非必需补丁：锚点漂移只告警，不影响容器启动。
 function patchAccountDialog(searchDir) {
@@ -253,7 +253,7 @@ function patchAccountDialog(searchDir) {
       // d) 左下角账号菜单「Sign in」被点击时，广播事件唤起本套件插件的弹窗
       //    用逗号运算符保持单语句，避免破坏其后的 else 分支
       ['\t\t\t\t\t\t\t} else if (id === "signin") beginSignIn();',
-       '\t\t\t\t\t\t\t} else if (id === "signin") (beginSignIn(), window.dispatchEvent(new CustomEvent("dsh-deepseek-remote-login:open"))); /* dsh-patch: account-signin-notify */']
+       '\t\t\t\t\t\t\t} else if (id === "signin") (beginSignIn(), window.dispatchEvent(new CustomEvent("dsh-container-helper:open")), window.dispatchEvent(new CustomEvent("dsh-deepseek-remote-login:open"))); /* dsh-patch: account-signin-notify */']
     ];
     let changed = false;
     for (const [from, to] of edits) {
