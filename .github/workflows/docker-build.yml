@@ -257,13 +257,23 @@ jobs:
             docker exec dsh-smoke sh -c 'test ! -d /app/plugins/dsh-browser-desktop && test -d /app/plugins/dsh-container-helper' || {
               echo "错误: mini 插件目录不符合预期 (应无 dsh-browser-desktop 且保留 dsh-container-helper)" >&2; exit 1;
             }
-            # 3. /vnc 返回 404 (不是 200/302)
-            VNC_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/vnc || true)
+            # 3. 先登录拿会话 Cookie（/vnc 与 /admin/api/* 均受鉴权保护，未登录是 401 会遮蔽 404）
+            curl -s -c /tmp/smoke_ck -H "Content-Type: application/json" \
+              -d '{"token":"smoke-test-token-0123456789"}' \
+              http://127.0.0.1:18080/__auth/verify >/tmp/smoke_login.json || true
+            grep -q '"ok":true' /tmp/smoke_login.json || { echo "错误: 冒烟登录失败" >&2; cat /tmp/smoke_login.json >&2; exit 1; }
+            # 3.1 /vnc 返回 404 (不是 200/302)
+            VNC_CODE=$(curl -s -b /tmp/smoke_ck -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/vnc || true)
             if [ "$VNC_CODE" != "404" ]; then
               echo "错误: mini 镜像 /vnc 期望 404，实际返回 ${VNC_CODE}" >&2; exit 1;
             fi
+            # 3.2 桌面 API 必须 403 CAPABILITY_UNAVAILABLE
+            DS_CODE=$(curl -s -b /tmp/smoke_ck -o /tmp/smoke_ds.json -w "%{http_code}" -X POST http://127.0.0.1:18080/admin/api/desktop/start || true)
+            if [ "$DS_CODE" != "403" ] || ! grep -q CAPABILITY_UNAVAILABLE /tmp/smoke_ds.json; then
+              echo "错误: mini 桌面 API 期望 403 CAPABILITY_UNAVAILABLE，实际 ${DS_CODE}" >&2; cat /tmp/smoke_ds.json >&2; exit 1;
+            fi
             # 4. /admin/api/status 包含 "variant":"mini"
-            STATUS_JSON=$(curl -s -H "Authorization: Bearer smoke-test-token-0123456789" http://127.0.0.1:18080/admin/api/status || true)
+            STATUS_JSON=$(curl -s -b /tmp/smoke_ck http://127.0.0.1:18080/admin/api/status || true)
             echo "--- /admin/api/status ---"; echo "$STATUS_JSON"
             echo "$STATUS_JSON" | grep -q '"variant"[[:space:]]*:[[:space:]]*"mini"' || {
               echo "错误: /admin/api/status 未包含 'variant':'mini'" >&2; exit 1;
