@@ -33,6 +33,9 @@ doc/
 *.md
 !README.md
 
+# 【Issue #11】Compose 编排文件（宿主机使用，不进构建上下文）
+docker-compose*.yml
+
 # 日志与缓存
 *.log
 .cache/

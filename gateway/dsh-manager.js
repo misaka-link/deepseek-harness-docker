@@ -10,6 +10,8 @@ const SNAPSHOTS_DIR = process.env.DSH_SNAPSHOTS_DIR || '/root/.dsh-snapshots';
 const DSH_DIR = path.join(process.env.DSH_HOME || '/root', '.dsh');
 const backupService = require('./backup-service');
 const { isValidVersion, resolveWithinDir } = require('./dsh-version');
+// Issue #11: 运行期变体能力
+const CAPABILITIES = require('./capabilities');
 
 try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
 try { fs.mkdirSync(DSH_WORKSPACE, { recursive: true }); } catch {}
@@ -105,6 +107,7 @@ const VERSION_META = readVersionMeta();
 
 // 兜底清单：仅在 version.json 缺失时使用，必须与 compatibility.recommendedDsh 保持同步
 const DEFAULT_ADAPTED_VERSIONS = [
+  '0.2.1-rc.3',
   '0.2.1-rc.2',
   '0.2.1-alpha.5',
   '0.2.1-alpha.4',
@@ -125,7 +128,7 @@ const DEFAULT_ADAPTED_VERSIONS = [
 ];
 
 // 版本探测失败时的兜底版本号（优先取 version.json 供应链固定版本）
-const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.2.1-rc.2';
+const FALLBACK_DSH_VERSION = (VERSION_META && VERSION_META.supply && VERSION_META.supply.dshVersion) || '0.2.1-rc.3';
 
 function parseSemver(v = '') {
   const clean = String(v).replace(/^v/, '').trim();
@@ -1306,7 +1309,9 @@ class DshManager {
       emitProgress({ step: 4, total: 5, percent: 70, label: '插件装配与补丁自愈', mode: 'install' });
       log(`=== [阶段 4/5] 插件环境装配与客户端补丁注入 ===`);
       if (fs.existsSync('/app/scripts/install-plugin.mjs')) {
-        log(`> 正在同步并链接插件依赖至新核心 (schemastery & dsh-browser-desktop)...`);
+        // Issue #11: 按变体区隔依赖同步日志文案
+        const pluginDeps = CAPABILITIES.browser.pluginSupported ? '(schemastery & dsh-browser-desktop)' : '(schemastery)';
+        log(`> 正在同步并链接插件依赖至新核心 ${pluginDeps}...`);
         const res = spawnSync('node', ['/app/scripts/install-plugin.mjs'], { encoding: 'utf8' });
         if (res.stdout) log(res.stdout.trim());
       }
@@ -1980,7 +1985,9 @@ class DshManager {
       emitProgress({ step: 4, total: 5, percent: 75, label: '插件装配与补丁自愈', mode: 'install' });
       log(`=== [阶段 4/5] 插件环境装配与客户端补丁自愈 ===`);
       if (fs.existsSync('/app/scripts/install-plugin.mjs')) {
-        log(`> 正在同步并链接插件依赖至新核心 (schemastery & dsh-browser-desktop)...`);
+        // Issue #11: 按变体区隔依赖同步日志文案
+        const pluginDeps = CAPABILITIES.browser.pluginSupported ? '(schemastery & dsh-browser-desktop)' : '(schemastery)';
+        log(`> 正在同步并链接插件依赖至新核心 ${pluginDeps}...`);
         const res = spawnSync('node', ['/app/scripts/install-plugin.mjs'], { encoding: 'utf8' });
         if (res.stdout) log(res.stdout.trim());
       }

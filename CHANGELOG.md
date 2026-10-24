@@ -4,6 +4,52 @@
 
 ---
 
+## [v0.2.8] - 2026-10-24
+
+### 🚀 新增 mini 镜像 / 第三镜像变体 `mini`（`:latest-mini`，Issue #11）
+- **新增 mini 镜像与 C 档深度瘦身**：针对低配 VPS、代码型开发与资源敏感部署推出新增第三镜像变体 mini 轻量精简镜像 `ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`，解压体积由 ~5.3GB 压缩至 **实测 1.79GB（amd64）/ 1.82GB（arm64）**（原 5.3GB、缩减约 66%）；单 Dockerfile 通过构建参数 `VARIANT=mini`、`INSTALL_DESKTOP=0` 与 `INSTALL_GO=0` 统一装配，保持与默认 `full` 镜像单源向后兼容。
+- **mini 镜像移除组件与精炼清单**：完整逐项移除容器 Chromium、X11/xvfb/openbox/x11vnc/noVNC/websockify 桌面栈、`@dsh-custom/dsh-browser-desktop` 插件与 AI `browser_open/browser_screenshot/browser_control` 工具、Golang 工具链、gh CLI、Office 预览 wasm 资产（libreoffice-kit-wasm assets ~146MB）、本地语音识别 .so（sherpa-onnx ~32MB）、sourcemap/.d.ts/测试文档、Node 头文件（`/usr/local/include/node`）、彩色 emoji/symbola 字体（仅留 fonts-wqy-microhei）。
+- **剥离容器图形桌面与 AI 浏览器插件**：物理移除 Debian 下的 `chromium`、`xvfb`、`openbox`、`x11vnc`、`novnc`、`websockify` 等桌面包与 X11 运行库；剔除容器专属扩展 `@dsh-custom/dsh-browser-desktop` 及其 AI 工具（`browser_open`、`browser_screenshot`、`browser_control`）与系统提示词注入。
+- **取消预装 Golang 与 GitHub CLI (`gh`)**：mini 镜像不预装 `/usr/local/go` 运行时，跳过 `gh` CLI 构建层，释放磁盘并净化系统环境，工作区保留完整基础 CLI 工具链（`git`、`ripgrep`、`jq` 等）。
+
+### 🌍 多架构构建与 ARM64 原生支持
+- **双架构 Multi-Arch Manifest 与架构边界**：`mini` 镜像构建并发布 `linux/amd64` 与 `linux/arm64` 统一 Manifest，适配 Apple Silicon、树莓派及各类 ARM 架构云服务器；**明确 ARM 版只有 mini，暂不增加其他变体**（`full` 与 `market` 仅支持 `linux/amd64`，避免读者误解 full 也有 arm64）。
+- **原生模块架构隔离**：ARM64 镜像在目标架构上下文内原生执行 `npm install`，保证 `node-pty`、`@vscode/ripgrep`、`sharp`、`koffi` 等原生 C/C++ 模块与动态库正确编译匹配，杜绝跨架构复用损坏。
+
+### 🧹 C 档瘦身管线实现
+- **Slim 底座与多阶段构建**：mini 构建底座切换至 `node:24-trixie-slim`，解耦编译阶段（builder）与运行阶段（runtime），编译依赖（`build-essential`、`python3` 头文件）不驻留于最终镜像；两个 npm 安装步骤同层执行缓存清理（`npm cache clean --force`、删除 `/tmp/*` 与 `.cache/node-gyp`）。
+- **静态资源与非必要代码裁剪**：新增瘦身脚本 `scripts/prune-runtime-deps.mjs`，递归删除 `**/*.map`、`**/*.d.ts`、测试/文档/样例目录、`node-pty` 的 Windows 与 macOS 预编译二进制，并移除 Node 头文件（`/usr/local/include/node`）。
+- **核心依赖非侵入式资产精炼**：剥离 `libreoffice-kit-wasm` 的 wasm 与 data 资产（约 146MB，保留包壳防止 DSH 启动报错，右侧边栏 Office 预览不可用）；剥离 `sherpa-onnx` 本地语音原生 `.so` 动态库（约 32MB，保留包壳，本地语音识别不可用）；字体剔除彩色 emoji/symbola 字体（仅留 `fonts-wqy-microhei` 约 27MB，中文字符与 CLI 正常排版，彩色 emoji 降级为系统黑白符号）。
+
+### 🛡️ 运行时能力契约与硬闸安全隔离
+- **单一能力真源契约**：新增 `gateway/capabilities.js` 作为运行时变体能力唯一真源；mini 变体下 `/vnc/*` 请求显式返回 404，`/admin/api/desktop/*`、`/__api/desktop/*` 及内部桌面端点统一拦截返回 403 `CAPABILITY_UNAVAILABLE`。
+- **桌面管理器装配桩对象**：mini 模式下为网关 `DesktopManager` 装配轻量桩对象，彻底消除后台 15s 空转看门狗定时器与 `/root/.config/chromium`、`/tmp/dsh-desktop` 运行时目录创建。
+- **公共探针契约继承**：`/healthz` 端点遵循「只加不减」原则，新增 `variant` 与能力摘要字段，完整保留既有字段以确保外部监控与脚本兼容。
+
+### 🎛️ 控制台与 DSH 界面控制面全量收敛
+- **管理后台 (admin.html) 样式级隐藏与防崩判空**：服务端向 HTML 注入 `data-variant="mini"`，通过 CSS 样式隐藏概览页桌面状态徽标、顶部栏 VNC 直达入口、移动端抽屉项、设置页桌面参数与插件页桌面组件入口；修复 `loadStatus()` 中无判空的 DOM 操作，杜绝脚本抛错阻断徽标与设置页渲染；深链参数 `?tab=tab-desktop` 自动平滑回退至 `tab-dsh`。
+- **DSH Web 界面入口收敛**：启动时不装配 `@dsh-custom/dsh-browser-desktop` 插件，移除会话侧边栏 VNC 入口及 `tool:browser_tools` 提示词。
+- **保留客户端侧边栏浏览器**：明确区分并完整保留客户端沙箱侧边栏浏览器 `ui-sidebar-browser`（纯客户端前端能力，零容器开销）。
+
+### 🔄 启动装配链与历史数据卷兼容自适应
+- **装配脚本自适应**：改造 `scripts/entrypoint.sh` 与 `scripts/install-plugin.mjs`，mini 模式下跳过 Chromium 运行时目录初始化与桌面插件 Profile 强注入，消除无效软链与缺失包告警。
+- **双向平滑切换保障**：老数据卷中残留的 `gateway.config.json` 桌面持久化配置不会反向覆盖 mini 能力硬闸；历史会话中 AI 生成的历史截图卡片可正常只读回放，支持在同一数据卷上安全进行 full↔mini 双向平滑切换。
+
+### 🧩 内置插件：DSH 容器助手（`@dsh-custom/dsh-container-helper`）
+- **插件更名与能力归拢**：内置客户端插件由 `dsh-deepseek-remote-login` 更名为 `@dsh-custom/dsh-container-helper`（DSH 容器助手），集中提供三项能力：移动端视口防下拉黑屏与滚动锁定适配、远程/反向代理访问下的 DeepSeek 账号登录中继（复制登录链接 + 回填浏览器回调链接）、登录态敏感信息脱敏展示。
+- **全变体保留**：该插件为纯客户端 UI 插件（宿主侧不注册工具/服务，零进程、零端口、零额外依赖），`full` / `market` / `mini` 三个镜像均默认装配；mini 构建期仅剔除容器浏览器插件 `dsh-browser-desktop`，不影响容器助手。
+- **管理后台展示**：插件列表统一显示为「DSH 容器助手」；老数据卷中若残留旧插件名，启动时由装配脚本自动对齐，无需手动清理。
+
+### 🔼 核心适配与版本升级
+- **内置官方 DSH 引擎升级至 `@deepseek-ai/dsh@0.2.1-rc.3`**：`supply.dshVersion`、`Dockerfile` 构建参数 `DSH_VERSION` 与 `build.sh` 默认出厂基准同步升级为 `0.2.1-rc.3`（npm next 标签）；工程版本递增至 `0.2.8`。
+- **兼容矩阵更新**：`compatibility.adaptedVersions` 置顶纳入 `0.2.1-rc.3`（保留 `0.2.1-rc.2` 及历史版本），支持区间上界扩展为 `<=0.2.1-rc.3`，推荐核心与管理控制台兜底矩阵同步指向 `0.2.1-rc.3`。
+
+### 🧱 编排、构建与验收支持
+- **专用编排配置**：仓库根目录新增 `docker-compose.mini.yml`，剥离 `./data/browser` 挂载，提供开箱即用的一键轻量编排。
+- **构建脚本与自动化验收工具**：`build.sh` 新增 `--mini` 与 `--arch` 构建选项；新增自动化验收脚本 `scripts/remote-verify-mini.sh`（支持 `--arch arm64` 参数），实现镜像内无残留二进制、路由硬闸拦截与端口纯净度的自动化断言。
+
+---
+
 ## [v0.2.7] - 2026-10-17
 
 ### 🔼 核心适配

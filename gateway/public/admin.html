@@ -1382,6 +1382,21 @@
       .terminal-log { height: 150px !important; }
       .modal-box { max-height: 96vh; }
     }
+
+    /* Issue #11：mini 变体能力裁剪（DOM 全部保留，仅视觉隐藏，避免 loadStatus 等空指针） */
+    html[data-variant="mini"] #linkToVnc,
+    html[data-variant="mini"] #mobileLinkToVnc,
+    html[data-variant="mini"] .tab-btn[data-tab="tab-desktop"],
+    html[data-variant="mini"] #tab-desktop,
+    html[data-variant="mini"] #vncDirectBtn,
+    html[data-variant="mini"] #vncPathFormGroup,
+    html[data-variant="mini"] #desktopParamsReadOnlyGroup,
+    html[data-variant="mini"] #pluginDesktopNotice {
+      display: none !important;
+    }
+    html[data-variant="mini"] #pluginDesktopNoticeMini {
+      display: inline !important;
+    }
   </style>
 </head>
 <body>
@@ -1434,12 +1449,13 @@
             <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; font-size:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="color:var(--text-main); font-weight:700; font-size:11px;">🎯 适配官方 DSH 核心版本：</span>
-                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.2.1-rc.2</span>
+                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.2.1-rc.3</span>
               </div>
               <div style="color:var(--text-muted); font-size:11px; margin-bottom:5px;">
-                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.1-rc.2</code>
+                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.1-rc.3</code>
               </div>
               <div id="popoverCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
+                <span class="badge-chip chip-green">0.2.1-rc.3</span>
                 <span class="badge-chip chip-green">0.2.1-rc.2</span>
                 <span class="badge-chip chip-green">0.2.1-alpha.5</span>
                 <span class="badge-chip chip-green">0.2.1-alpha.4</span>
@@ -1831,10 +1847,11 @@
         </p>
         <p style="margin:10px 0 0; padding:10px 12px; font-size:12px; line-height:1.7; color:var(--text-muted); background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md);">
           ⓘ 这里是<strong>安装/卸载级</strong>操作：启停后会自动重启 DSH（Web 短暂断开数秒）才会生效。<br>
-          日常「开关 AI 浏览器能力（含容器桌面）」请使用
+          <span id="pluginDesktopNotice">日常「开关 AI 浏览器能力（含容器桌面）」请使用
           <a href="javascript:void(0)" onclick="switchTab('tab-desktop')" style="color:var(--primary);">浏览器与桌面控制</a>
           页的<strong>容器浏览器总开关</strong>——即时生效且会一并撤销 AI 工具与提示词。
-          <br>停用本页的 <code>@dsh-custom/dsh-browser-desktop</code> 会自动把浏览器总开关一并置为停用，避免"插件没了、桌面还在跑"。
+          <br>停用本页的 <code>@dsh-custom/dsh-browser-desktop</code> 会自动把浏览器总开关一并置为停用，避免"插件没了、桌面还在跑"。</span>
+          <span id="pluginDesktopNoticeMini" style="display:none;">当前镜像不含容器浏览器能力。</span>
         </p>
 
         <div class="table-scroll" style="margin-top:12px;">
@@ -2046,7 +2063,7 @@
             <label class="form-label">管理后台路径 (ADMIN_PATH)</label>
             <input type="text" id="editAdminPath" class="form-control" placeholder="默认 /admin" />
           </div>
-          <div class="form-group">
+          <div class="form-group" id="vncPathFormGroup">
             <label class="form-label">桌面 VNC 路径 (VNC_PATH)</label>
             <input type="text" id="editVncPath" class="form-control" placeholder="默认 /vnc" />
           </div>
@@ -2061,7 +2078,7 @@
               <label for="clearAuthCheckbox" style="cursor:pointer; user-select:none;">清除现有访问口令（清除后需重新初始化设置）</label>
             </div>
           </div>
-          <div class="form-group" style="grid-column: 1 / -1; background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:14px 16px;">
+          <div class="form-group" id="desktopParamsReadOnlyGroup" style="grid-column: 1 / -1; background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-md); padding:14px 16px;">
             <div class="form-label" style="margin-bottom:6px; font-weight:700; color:var(--text-main);">桌面运行参数（分辨率 / 休眠 / CDP）</div>
             <div style="font-size:12px; color:var(--text-muted); line-height:1.8;">
               已统一由「<strong>浏览器与桌面控制</strong>」页管理并即时持久化，此处不再提供入口，避免同一配置出现两个写入点。<br>
@@ -2528,11 +2545,12 @@
                 <span class="badge-chip chip-gray" id="hubCompatSourceBadge" style="font-size:10px; margin-left:6px;">📦 本地离线规则</span>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; line-height:1.5;">
-                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.2.1-rc.2</strong> (已深度适配)</div>
-                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.1-rc.2</code></div>
+                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.2.1-rc.3</strong> (已深度适配)</div>
+                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.1-rc.3</code></div>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:5px;">已预置深度适配版本：</div>
               <div id="hubCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
+                <span class="badge-chip chip-green">0.2.1-rc.3</span>
                 <span class="badge-chip chip-green">0.2.1-rc.2</span>
                 <span class="badge-chip chip-green">0.2.1-alpha.5</span>
                 <span class="badge-chip chip-green">0.2.1-alpha.4</span>
@@ -2669,17 +2687,24 @@
     }
 
     function switchTab(tabId, evt) {
+      let targetId = tabId;
+      let pane = document.getElementById(targetId);
+      // Issue #11：pane 不存在（如既有缺陷 :5101 传 tab-overview）或在 mini 变体下访问禁用面板时回退至 tab-dsh
+      const isMini = document.documentElement.dataset.variant === 'mini';
+      if (!pane || (isMini && targetId === 'tab-desktop')) {
+        targetId = 'tab-dsh';
+        pane = document.getElementById(targetId);
+      }
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-      const pane = document.getElementById(tabId);
       if (pane) pane.classList.add('active');
       // P14：不再依赖已废弃的 window.event（程序化调用时它不存在 → 无高亮）。
-      // 优先用调用方传入的事件；否则按 tabId 反查对应按钮（onclick="switchTab('tab-x')" 的
+      // 优先用调用方传入的事件；否则按 targetId 反查对应按钮（onclick="switchTab('tab-x')" 的
       // 按钮通过 data-tab 与面板一一对应）。
       let btn = (evt && evt.currentTarget) || null;
       if (!btn) {
-        btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`)
-          || document.querySelector(`.tab-btn[onclick*="'${tabId}'"]`);
+        btn = document.querySelector(`.tab-btn[data-tab="${targetId}"]`)
+          || document.querySelector(`.tab-btn[onclick*="'${targetId}'"]`);
       }
       if (btn) btn.classList.add('active');
       // 窄屏标签栏是横向滚动的：切页时把当前标签滚入可视区，并刷新「可继续右滑」提示
@@ -2687,10 +2712,10 @@
         try { btn.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); } catch (e) {}
       }
       updateTabsScrollHint();
-      if (tabId === 'tab-plugins') {
+      if (targetId === 'tab-plugins') {
         loadPlugins();
       }
-      if (tabId === 'tab-snapshots') {
+      if (targetId === 'tab-snapshots') {
         loadRollbackStatus();
         loadSnapshots();
       }
@@ -2752,6 +2777,10 @@
       }
 
       tbody.innerHTML = list.map(p => {
+        // Issue #11: mini 镜像下对老卷残留的桌面插件进行标注并禁用操作
+        const isMini = document.documentElement.dataset.variant === 'mini' || currentData?.capabilities?.variant === 'mini' || currentData?.capabilities?.desktop?.supported === false;
+        const isUnsupportedDesktopPlugin = isMini && p.name === '@dsh-custom/dsh-browser-desktop';
+
         let typeBadge = '';
         if (p.isCore) {
           typeBadge = '<span class="nav-badge" style="background:#f1f5f9; color:#475569;">系统核心</span>';
@@ -2763,7 +2792,9 @@
 
         const isAutoIsolated = currentData?.autoIsolatedEvents?.some(ev => ev.plugin === p.name);
         let statusBadge = '';
-        if (p.isUninstalled) {
+        if (isUnsupportedDesktopPlugin) {
+          statusBadge = '<span class="status-badge status-stopped" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca;"><span class="dot" style="background:#ef4444;"></span> 当前镜像不支持</span>';
+        } else if (p.isUninstalled) {
           statusBadge = '<span class="status-badge" style="background:#f1f5f9; color:#64748b;"><span class="dot" style="background:#94a3b8;"></span> 已卸载</span>';
         } else if (p.enabled) {
           statusBadge = '<span class="status-badge status-running"><span class="dot"></span> 已启用</span>';
@@ -2774,7 +2805,9 @@
         }
 
         let actionBtns = '';
-        if (p.isCore) {
+        if (isUnsupportedDesktopPlugin) {
+          actionBtns = '<button class="btn" disabled style="padding:4px 10px; font-size:12px; opacity:0.5; cursor:not-allowed;" title="当前 mini 镜像未预装 Chromium 与桌面栈，无法使用此拓展">当前镜像不支持</button>';
+        } else if (p.isCore) {
           actionBtns = '<span style="color:var(--text-muted); font-size:12px;">受保护 (系统必备)</span>';
         } else if (p.isUninstalled) {
           actionBtns = `<button class="btn btn-primary btn-plugin-install" style="padding:4px 10px; font-size:12px;">重新安装</button>`;
@@ -2789,6 +2822,11 @@
           actionBtns = toggleBtn + uninstallBtn;
         }
 
+        let descText = escapeHtml(p.description || '暂无功能描述');
+        if (isUnsupportedDesktopPlugin) {
+          descText += ' <span style="color:var(--danger); font-size:11.5px;">（当前 mini 镜像不含容器浏览器栈，此插件不可用）</span>';
+        }
+
         return `
           <tr data-plugin-name="${escapeHtml(p.name)}">
             <td data-label="">
@@ -2798,7 +2836,7 @@
             <td data-label="类型">${typeBadge}</td>
             <td data-label="运行状态">${statusBadge}</td>
             <td data-label="功能简介" style="color:var(--text-muted); font-size:12px; max-width:350px; line-height:1.4;">
-              ${escapeHtml(p.description || '暂无功能描述')}
+              ${descText}
             </td>
             <td data-label="操作" style="text-align:right; white-space:nowrap;">
               ${actionBtns}
@@ -2835,6 +2873,12 @@
     });
 
     async function installPlugin(name) {
+      // Issue #11: mini 镜像防御性拦截
+      const isMini = document.documentElement.dataset.variant === 'mini' || currentData?.capabilities?.variant === 'mini';
+      if (isMini && name === '@dsh-custom/dsh-browser-desktop') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，无法操作此插件', 'warning');
+        return;
+      }
       const __okInstall = await askConfirm({
         title: '重新安装拓展',
         icon: CONFIRM_ICON.warning,
@@ -2862,6 +2906,12 @@
     }
 
     async function togglePlugin(name, enable) {
+      // Issue #11: mini 镜像防御性拦截
+      const isMini = document.documentElement.dataset.variant === 'mini' || currentData?.capabilities?.variant === 'mini';
+      if (isMini && name === '@dsh-custom/dsh-browser-desktop') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，无法操作此插件', 'warning');
+        return;
+      }
       const action = enable ? '启用' : '禁用';
       const isBrowserPlugin = name === '@dsh-custom/dsh-browser-desktop';
       const confirmed = await askConfirm({
@@ -3199,7 +3249,7 @@
           hubDshNotice.style.background = '#f0fdf4';
           hubDshNotice.style.borderColor = '#bbf7d0';
           hubDshNotice.style.color = '#166534';
-          hubDshNotice.innerHTML = `<div class="notice-title" style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">✔ 官方核心 (v${escapeHtml(dsh.current || '0.2.1-rc.2')}) 特性要点：</div>` + dshListHtml;
+          hubDshNotice.innerHTML = `<div class="notice-title" style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">✔ 官方核心 (v${escapeHtml(dsh.current || '0.2.1-rc.3')}) 特性要点：</div>` + dshListHtml;
         }
       }
 
@@ -3210,9 +3260,9 @@
       // 单一数据源：优先取本次传入 data.compatibility（避免全局 versionCheckData 滞后/串场），
       // 兜底数组仅在后端元数据缺失时生效，基准已同步至 0.2.1-rc.2。
       const compat = (data && data.compatibility) || (versionCheckData && versionCheckData.compatibility) || {};
-      const recDsh = compat.recommendedDsh || '0.2.1-rc.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.1-rc.2';
-      const adaptedList = compat.adaptedVersions || ['0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.2.1-rc.3';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.1-rc.3';
+      const adaptedList = compat.adaptedVersions || ['0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const hubCompatRecommended = document.getElementById('hubCompatRecommended');
       if (hubCompatRecommended) hubCompatRecommended.textContent = 'v' + recDsh;
@@ -3354,9 +3404,9 @@
       // P5：兼容矩阵字段必须在本函数作用域内重新取值（原先引用了 renderVersionHubModal 内
       // 以 const 声明的 recDsh/rangeDsh/adaptedList，跨函数不可见 → ReferenceError）
       const compat = versionCheckData?.compatibility || {};
-      const recDsh = compat.recommendedDsh || '0.2.1-rc.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.1-rc.2';
-      const adaptedList = compat.adaptedVersions || ['0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.2.1-rc.3';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.1-rc.3';
+      const adaptedList = compat.adaptedVersions || ['0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const curElem = document.getElementById('popoverCurrentVer');
       if (curElem) curElem.textContent = 'v' + cur;
@@ -3469,7 +3519,7 @@
         const logs = data.recentLogs || [];
         let headerBanner = `[系统环境与状态概要]
 ----------------------------------------------------------------------
-DSH 核心版本 : v${currentVersion || '0.2.1-rc.2'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
+DSH 核心版本 : v${currentVersion || '0.2.1-rc.3'} (${data.running ? (data.ready ? '已就绪运行' : '启动中...') : '未运行'})
 服务监听端口 : 3080 (内部核心端口: 3079)
 进程运行状态 : PID ${data.pid || '--'} | 状态: ${data.running ? 'Active' : 'Stopped'}${data.manualStopped ? ' (已手动停止)' : ''}
 ----------------------------------------------------------------------\n`;
@@ -3509,6 +3559,36 @@ DSH 核心版本 : v${currentVersion || '0.2.1-rc.2'} (${data.running ? (data.re
       if (autoScrollTerminal) term.scrollTop = term.scrollHeight;
     }
 
+    // Issue #11：根据后端 capabilities 动态配置前端变体能力与视图
+    function applyCapabilities(caps) {
+      if (!caps) return;
+      if (caps.variant) {
+        document.documentElement.dataset.variant = caps.variant;
+      }
+      const desktopSupported = caps.desktop ? caps.desktop.supported !== false : (caps.variant !== 'mini');
+      if (!desktopSupported) {
+        const fullNotice = document.getElementById('pluginDesktopNotice');
+        if (fullNotice) fullNotice.style.display = 'none';
+        const miniNotice = document.getElementById('pluginDesktopNoticeMini');
+        if (miniNotice) miniNotice.style.display = 'inline';
+
+        const activeBtn = document.querySelector('.tab-btn.active');
+        const hash = (window.location.hash || '').replace(/^#/, '');
+        const tabParam = new URLSearchParams(window.location.search).get('tab');
+        if ((activeBtn && activeBtn.dataset.tab === 'tab-desktop') || hash === 'tab-desktop' || tabParam === 'tab-desktop') {
+          try {
+            const url = new URL(window.location.href);
+            url.hash = '';
+            if (url.searchParams.get('tab') === 'tab-desktop') {
+              url.searchParams.delete('tab');
+            }
+            window.history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : ''));
+          } catch (e) {}
+          switchTab('tab-dsh');
+        }
+      }
+    }
+
     async function loadStatus() {
       try {
         const res = await fetch(`${adminBase}/api/status`);
@@ -3518,6 +3598,10 @@ DSH 核心版本 : v${currentVersion || '0.2.1-rc.2'} (${data.running ? (data.re
         }
         const data = await res.json();
         currentData = data;
+        // Issue #11: 优先应用 capabilities 变体能力
+        if (data.capabilities) {
+          applyCapabilities(data.capabilities);
+        }
         const curVer = data.dsh?.version || 'unknown';
         currentVersion = curVer;
 
@@ -3531,8 +3615,11 @@ DSH 核心版本 : v${currentVersion || '0.2.1-rc.2'} (${data.running ? (data.re
         if (dText && !dText.textContent.includes('•')) {
           dText.textContent = `DSH 核心 v${curVer}`;
         }
-        document.getElementById('linkToVnc').href = data.paths?.vnc || '/vnc/';
-        document.getElementById('vncDirectBtn').href = data.paths?.vnc || '/vnc/';
+        const _vnc = data.paths?.vnc || null;
+        const elLinkVnc = document.getElementById('linkToVnc');
+        if (elLinkVnc) elLinkVnc.href = _vnc || '#';
+        const elVncDirect = document.getElementById('vncDirectBtn');
+        if (elVncDirect) elVncDirect.href = _vnc || '#';
         syncMobileMenuData();
 
         // Hero Card 1: 当前运行核心
@@ -3599,6 +3686,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         }
 
         // Desktop status
+        // Issue #11：所有桌面 DOM 访问均增加空判断，防止 mini 变体或节点异常导致 loadStatus 静默中断
         const dsBadge = document.getElementById('desktopStatusBadge');
         const desktopEnabled = data.desktop?.enabled !== false;
         const masterBadge = document.getElementById('desktopMasterBadge');
@@ -3610,31 +3698,41 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         const masterDisableBtn = document.getElementById('desktopMasterDisableBtn');
         if (masterEnableBtn) masterEnableBtn.disabled = desktopEnabled;
         if (masterDisableBtn) masterDisableBtn.disabled = !desktopEnabled;
+        const startDesktopBtn = document.getElementById('startDesktopBtn');
+        const stopDesktopBtn = document.getElementById('stopDesktopBtn');
         if (!desktopEnabled) {
-          dsBadge.className = 'status-badge status-stopped';
-          dsBadge.innerHTML = '<span class="dot"></span> 已彻底停用 (重启后也不会自启)';
-          document.getElementById('startDesktopBtn').disabled = true;
-          document.getElementById('stopDesktopBtn').disabled = true;
+          if (dsBadge) {
+            dsBadge.className = 'status-badge status-stopped';
+            dsBadge.innerHTML = '<span class="dot"></span> 已彻底停用 (重启后也不会自启)';
+          }
+          if (startDesktopBtn) startDesktopBtn.disabled = true;
+          if (stopDesktopBtn) stopDesktopBtn.disabled = true;
         } else if (data.desktop?.running) {
-          dsBadge.className = 'status-badge status-running';
-          dsBadge.innerHTML = '<span class="dot"></span> 运行中 (CDP就绪)';
-          document.getElementById('startDesktopBtn').disabled = true;
-          document.getElementById('stopDesktopBtn').disabled = false;
+          if (dsBadge) {
+            dsBadge.className = 'status-badge status-running';
+            dsBadge.innerHTML = '<span class="dot"></span> 运行中 (CDP就绪)';
+          }
+          if (startDesktopBtn) startDesktopBtn.disabled = true;
+          if (stopDesktopBtn) stopDesktopBtn.disabled = false;
         } else {
-          dsBadge.className = 'status-badge status-stopped';
-          dsBadge.innerHTML = '<span class="dot"></span> 已停止 / 休眠中';
-          document.getElementById('startDesktopBtn').disabled = false;
-          document.getElementById('stopDesktopBtn').disabled = true;
+          if (dsBadge) {
+            dsBadge.className = 'status-badge status-stopped';
+            dsBadge.innerHTML = '<span class="dot"></span> 已停止 / 休眠中';
+          }
+          if (startDesktopBtn) startDesktopBtn.disabled = false;
+          if (stopDesktopBtn) stopDesktopBtn.disabled = true;
         }
 
         // Timer Info
         const timerInfo = document.getElementById('desktopTimerInfo');
-        if (data.desktop?.remainingMinutes) {
-          timerInfo.textContent = `临时工作倒计时: 约剩余 ${data.desktop.remainingMinutes} 分钟自动停止`;
-        } else if (data.desktop?.idleTimeoutMinutes > 0) {
-          timerInfo.textContent = `空闲休眠策略: 空闲超 ${data.desktop.idleTimeoutMinutes} 分钟自动停止`;
-        } else {
-          timerInfo.textContent = '休眠策略: 始终保持运行';
+        if (timerInfo) {
+          if (data.desktop?.remainingMinutes) {
+            timerInfo.textContent = `临时工作倒计时: 约剩余 ${data.desktop.remainingMinutes} 分钟自动停止`;
+          } else if (data.desktop?.idleTimeoutMinutes > 0) {
+            timerInfo.textContent = `空闲休眠策略: 空闲超 ${data.desktop.idleTimeoutMinutes} 分钟自动停止`;
+          } else {
+            timerInfo.textContent = '休眠策略: 始终保持运行';
+          }
         }
 
         // Desktop Tab 回填 (避免点击启动时重置分辨率或休眠设置)
@@ -3662,17 +3760,26 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         const settingsTab = document.getElementById('settingsTab') || document.getElementById('tab-settings');
         const isEditingSettings = settingsTab && settingsTab.contains(document.activeElement);
         if (!isEditingSettings) {
-          document.getElementById('editProxyPort').value = data.paths?.proxyPort || 3080;
-          document.getElementById('editAdminPath').value = data.paths?.admin || '/admin';
-          document.getElementById('editVncPath').value = data.paths?.vnc || '/vnc';
+          const elEditPort = document.getElementById('editProxyPort');
+          if (elEditPort) elEditPort.value = data.paths?.proxyPort || 3080;
+          const elEditAdmin = document.getElementById('editAdminPath');
+          if (elEditAdmin) elEditAdmin.value = data.paths?.admin || '/admin';
+          const elEditVnc = document.getElementById('editVncPath');
+          if (elEditVnc) elEditVnc.value = data.paths?.vnc || '/vnc';
           // 桌面运行参数只读回显（权威在「浏览器与桌面控制」页）
           const roRes = document.getElementById('roDesktopRes');
           if (roRes) {
             roRes.textContent = currentDesktopRes;
-            document.getElementById('roDesktopIdle').textContent = (data.desktop?.idleTimeoutMinutes === 0)
-              ? '始终保持' : `${data.desktop?.idleTimeoutMinutes ?? 30} 分钟`;
-            document.getElementById('roDesktopCdp').textContent = data.desktop?.enableCdp
-              ? `已启用 (:${data.desktop?.cdpPort || 9222})` : '已关闭';
+            const roIdle = document.getElementById('roDesktopIdle');
+            if (roIdle) {
+              roIdle.textContent = (data.desktop?.idleTimeoutMinutes === 0)
+                ? '始终保持' : `${data.desktop?.idleTimeoutMinutes ?? 30} 分钟`;
+            }
+            const roCdp = document.getElementById('roDesktopCdp');
+            if (roCdp) {
+              roCdp.textContent = data.desktop?.enableCdp
+                ? `已启用 (:${data.desktop?.cdpPort || 9222})` : '已关闭';
+            }
           }
 
           const tokenInput = document.getElementById('editAuthToken');
@@ -3734,7 +3841,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         availableDistTags = tags;
         const versions = data.versions || [];
         availableCachedVersions = data.cachedVersions || [];
-        availableAdaptedVersions = data.adaptedVersions || ['0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        availableAdaptedVersions = data.adaptedVersions || ['0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
         availableEvaluations = data.versionEvaluations || {};
         // 记录适配规则来源（后端 /api/dsh/versions 返回 isRemoteMeta；兼容 compatibility 内嵌字段）
         if (typeof data.isRemoteMeta === 'boolean') {
@@ -4363,6 +4470,11 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
     // 说明：AI 工具与提示词的启停已由插件跟随本开关（无需第二个开关）；
     //       插件的安装/卸载属于专家操作，在「拓展与插件管理」页完成。
     async function setDesktopMaster(enabled) {
+      // Issue #11: mini 镜像防御性拦截
+      if (document.documentElement.dataset.variant === 'mini') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，不支持此操作', 'warning');
+        return;
+      }
       const d = (currentData && currentData.desktop) || {};
       const curText = (d.enabled === false) ? '已彻底停用' : '已启用（持久化）';
       const kvRow = (k, v, color) =>
@@ -4427,16 +4539,23 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
 
 
     async function saveDesktopConfig() {
-      const parts = document.getElementById('desktopResolution').value.split('x');
+      // Issue #11: mini 镜像防御性拦截
+      if (document.documentElement.dataset.variant === 'mini') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，不支持此操作', 'warning');
+        return;
+      }
+      const elRes = document.getElementById('desktopResolution');
+      if (!elRes) return;
+      const parts = elRes.value.split('x');
       const payload = {
         width: parseInt(parts[0]) || 0,
         height: parseInt(parts[1]) || 0,
-        idleTimeoutMinutes: parseInt(document.getElementById('desktopIdleTimeout').value),
-        enableCdp: document.getElementById('desktopEnableCdp').value === 'true',
-        cdpPort: parseInt(document.getElementById('desktopCdpPort').value) || 9222,
-        screenshotQuality: document.getElementById('desktopShotQuality').value,
-        screenshotDir: document.getElementById('desktopShotDir').value.trim(),
-        enableSidebarTab: document.getElementById('desktopSidebarTab').value === 'true'
+        idleTimeoutMinutes: parseInt(document.getElementById('desktopIdleTimeout')?.value || 30),
+        enableCdp: document.getElementById('desktopEnableCdp')?.value === 'true',
+        cdpPort: parseInt(document.getElementById('desktopCdpPort')?.value) || 9222,
+        screenshotQuality: document.getElementById('desktopShotQuality')?.value || 'high',
+        screenshotDir: (document.getElementById('desktopShotDir')?.value || '').trim(),
+        enableSidebarTab: document.getElementById('desktopSidebarTab')?.value === 'true'
       };
       const btn = document.getElementById('saveDesktopCfgBtn');
       if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
@@ -4461,9 +4580,14 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
     }
 
     async function startDesktop() {
+      // Issue #11: mini 镜像防御性拦截
+      if (document.documentElement.dataset.variant === 'mini') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，不支持此操作', 'warning');
+        return;
+      }
       // 注意：分辨率 / 空闲休眠属于「配置」，一律通过「保存桌面配置」持久化；
       // 这里只传临时工作时长，避免出现"改了分辨率点了启动、重启后又变回去"的不一致。
-      const durationMinutes = parseInt(document.getElementById('keepAliveDuration').value) || undefined;
+      const durationMinutes = parseInt(document.getElementById('keepAliveDuration')?.value) || undefined;
 
       const r = await fetch(`${adminBase}/api/desktop/start`, {
         method: 'POST',
@@ -4474,11 +4598,21 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
     }
 
     async function stopDesktop() {
+      // Issue #11: mini 镜像防御性拦截
+      if (document.documentElement.dataset.variant === 'mini') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，不支持此操作', 'warning');
+        return;
+      }
       await fetch(`${adminBase}/api/desktop/stop`, { method: 'POST' });
       await loadStatus();
     }
 
     async function restartDesktop() {
+      // Issue #11: mini 镜像防御性拦截
+      if (document.documentElement.dataset.variant === 'mini') {
+        showToast('当前 mini 镜像未预装 Chromium 与桌面栈，不支持此操作', 'warning');
+        return;
+      }
       await fetch(`${adminBase}/api/desktop/restart`, { method: 'POST' });
       await loadStatus();
     }
@@ -5098,7 +5232,8 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       });
       if (!confirmed) return;
 
-      switchTab('tab-overview');
+      // Issue #11: 修复既有缺陷 tab-overview 不存在导致页面空白问题，回退至主 tab-dsh 面板
+      switchTab('tab-dsh');
       isVersionSwitchingInProgress = true;
 
       const installBtn = document.getElementById('installBtn');
@@ -5201,20 +5336,23 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
 
     // ── 网关与系统配置变更二次确认 ──────────────────────────────
     function prepareSaveConfig() {
-      const newPort = parseInt(document.getElementById('editProxyPort').value) || 3080;
-      const newAdmin = document.getElementById('editAdminPath').value.trim() || '/admin';
-      const newVnc = document.getElementById('editVncPath').value.trim() || '/vnc';
-      const rawToken = document.getElementById('editAuthToken').value.trim();
+      // Issue #11: mini 变体兼容
+      const isMini = document.documentElement.dataset.variant === 'mini' || currentData?.capabilities?.variant === 'mini';
+      const newPort = parseInt(document.getElementById('editProxyPort')?.value) || 3080;
+      const newAdmin = document.getElementById('editAdminPath')?.value?.trim() || '/admin';
+      const elVnc = document.getElementById('editVncPath');
+      const newVnc = elVnc ? (elVnc.value.trim() || '/vnc') : (currentData?.paths?.vnc || '/vnc');
+      const rawToken = document.getElementById('editAuthToken')?.value?.trim() || '';
       const clearAuth = document.getElementById('clearAuthCheckbox')?.checked || false;
 
-      const oldPort = currentData.paths?.proxyPort || 3080;
-      const oldAdmin = currentData.paths?.admin || '/admin';
-      const oldVnc = currentData.paths?.vnc || '/vnc';
+      const oldPort = currentData?.paths?.proxyPort || 3080;
+      const oldAdmin = currentData?.paths?.admin || '/admin';
+      const oldVnc = currentData?.paths?.vnc || '/vnc';
 
       const diffs = [];
       if (newPort !== oldPort) diffs.push(`服务端口: ${oldPort} -> ${newPort}`);
       if (newAdmin !== oldAdmin) diffs.push(`管理后台路径: ${oldAdmin} -> ${newAdmin}`);
-      if (newVnc !== oldVnc) diffs.push(`桌面 VNC 路径: ${oldVnc} -> ${newVnc}`);
+      if (!isMini && newVnc !== oldVnc) diffs.push(`桌面 VNC 路径: ${oldVnc} -> ${newVnc}`);
       if (rawToken) {
         diffs.push('访问认证码: 设置/更新为新口令');
       } else if (clearAuth && currentData.hasAuthToken) {
@@ -5250,7 +5388,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       pendingConfig = {
         proxyPort: newPort,
         adminPath: newAdmin,
-        vncPath: newVnc,
+        vncPath: isMini ? (currentData?.paths?.vnc ?? null) : newVnc,
         authToken: rawToken ? rawToken : undefined,
         clearAuthToken: clearAuth,
         autoHealPlugins: newAutoHeal,

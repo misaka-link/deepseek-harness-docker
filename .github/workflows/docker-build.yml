@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.2.7)'
+        description: 'Project version tag (e.g. 0.2.8)'
         required: false
-        default: '0.2.7'
+        default: '0.2.8'
   push:
     branches:
       - main
@@ -41,7 +41,7 @@ jobs:
           # 1. 手动 workflow_dispatch 触发
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PROJ_VER="${{ github.event.inputs.version }}"
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.7"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.8"
             echo "✔ 手动触发 (workflow_dispatch)，指定版本: ${PROJ_VER}"
 
           # 2. Git Tag 触发 (如 v0.0.9)
@@ -52,7 +52,7 @@ jobs:
           # 3. main 分支 push 触发：严格比对版本号是否变动
           else
             PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.7"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.8"
 
             PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
             echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
@@ -79,17 +79,46 @@ jobs:
       matrix:
         include:
           - variant: base
+            node_image: "node:24-trixie"
+            build_variant: full
+            install_desktop: "1"
+            install_go: "1"
+            prune_level: full
             preinstall_plugins: "0"
             suffix: ""
             latest_tag: "latest"
+            platforms: "linux/amd64"
           - variant: market
+            node_image: "node:24-trixie"
+            build_variant: full
+            install_desktop: "1"
+            install_go: "1"
+            prune_level: full
             preinstall_plugins: "1"
             suffix: "-market"
             latest_tag: "latest-market"
+            platforms: "linux/amd64"
+          # 【Issue #11】新增 mini 镜像 (C 档瘦身 + 双架构 linux/amd64,linux/arm64)
+          # 注：CI 中的 QEMU arm64 仅作为多架构 manifest 兜底；arm64 真实运行与原生性能验收以 865bt 原生环境为准。
+          - variant: mini
+            node_image: "node:24-trixie-slim"
+            build_variant: mini
+            install_desktop: "0"
+            install_go: "0"
+            prune_level: mini
+            preinstall_plugins: "0"
+            suffix: "-mini"
+            latest_tag: "latest-mini"
+            platforms: "linux/amd64,linux/arm64"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # 【Issue #11】配置 QEMU 支持多架构构建 (mini 需要 linux/arm64，QEMU 仅兜底，arm64 验收以 865bt 原生为准)
+      - name: Set up QEMU
+        if: contains(matrix.platforms, 'arm64')
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4460bfa22da0abc499688eda8ef7 # v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -117,12 +146,14 @@ jobs:
             echo "错误: version.json#supply.dshVersion 未设置" >&2
             exit 1
           fi
+          DSH_INTEGRITY=$(node -e "process.stdout.write(require('./version.json').supply.dshIntegrity||'')")
           echo "dsh_version=${DSH_VERSION}" >> $GITHUB_OUTPUT
+          echo "dsh_integrity=${DSH_INTEGRITY}" >> $GITHUB_OUTPUT
           echo "Detected built-in DSH Version: ${DSH_VERSION}"
           echo "Current Project Version: ${PROJ_VER}"
 
           TAGS=""
-          # 默认主标签 (:latest / :latest-market)
+          # 默认主标签 (:latest / :latest-market / :latest-mini)
           TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG},"
 
           # 额外标签一：内置官方 DeepSeek Harness 版本号
@@ -133,9 +164,11 @@ jobs:
           TAGS="${TAGS}${IMAGE_NAME}:${PROJ_VER}${SUFFIX},"
           TAGS="${TAGS}${IMAGE_NAME}:v${PROJ_VER}${SUFFIX}"
 
-          # 兼容传统简写标签 (:market)
+          # 兼容传统简写标签 (:market / :mini)
           if [ "${{ matrix.variant }}" = "market" ]; then
             TAGS="${TAGS},${IMAGE_NAME}:market"
+          elif [ "${{ matrix.variant }}" = "mini" ]; then
+            TAGS="${TAGS},${IMAGE_NAME}:mini"
           fi
 
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
@@ -147,17 +180,22 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64
+          platforms: ${{ matrix.platforms }}
           # M10：生成 SLSA provenance 与 SBOM（供应链可追溯）
           provenance: mode=max
           sbom: true
           # 每次构建唯一，强制 Dockerfile 预装层缓存失效，
           # 让 plugins.market.list 里的 dshmarket@latest 真正拉到当次构建的最新版
           build-args: |
-            NODE_IMAGE=node:24-trixie
+            NODE_IMAGE=${{ matrix.node_image }}
+            VARIANT=${{ matrix.build_variant }}
+            INSTALL_DESKTOP=${{ matrix.install_desktop }}
+            INSTALL_GO=${{ matrix.install_go }}
+            PRUNE_LEVEL=${{ matrix.prune_level }}
             NOVNC_ASSET_REVISION=1.6.0
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
             DSH_VERSION=${{ steps.docker_meta.outputs.dsh_version }}
+            DSH_INTEGRITY=${{ steps.docker_meta.outputs.dsh_integrity }}
             MARKET_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             USE_CHINA_MIRROR=0
           tags: ${{ steps.docker_meta.outputs.tags }}
@@ -176,6 +214,8 @@ jobs:
             tag: latest
           - variant: market
             tag: latest-market
+          - variant: mini
+            tag: latest-mini
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -203,7 +243,33 @@ jobs:
           done
           echo "--- /healthz ---"; cat /tmp/healthz.json || true; echo
           docker logs dsh-smoke | tail -40 || true
-          docker rm -f dsh-smoke >/dev/null 2>&1 || true
-          [ "$ok" = "1" ] || { echo "冒烟测试失败: /healthz 未就绪"; exit 1; }
+          [ "$ok" = "1" ] || { echo "冒烟测试失败: /healthz 未就绪"; docker rm -f dsh-smoke >/dev/null 2>&1 || true; exit 1; }
           grep -q '"ok":true' /tmp/healthz.json
+
+          # 【Issue #11】mini 镜像专属反向断言
+          if [ "${{ matrix.variant }}" = "mini" ]; then
+            echo "===> 执行 mini 镜像专属反向断言..."
+            # 1. 物理不存在：无 chromium / go / Xvfb
+            docker exec dsh-smoke sh -c '! command -v chromium && ! command -v go && ! command -v Xvfb' || {
+              echo "错误: mini 容器中探测到不应存在的二进制 (chromium/go/Xvfb)" >&2; exit 1;
+            }
+            # 2. 插件目录：无 dsh-browser-desktop，保留 dsh-container-helper
+            docker exec dsh-smoke sh -c 'test ! -d /app/plugins/dsh-browser-desktop && test -d /app/plugins/dsh-container-helper' || {
+              echo "错误: mini 插件目录不符合预期 (应无 dsh-browser-desktop 且保留 dsh-container-helper)" >&2; exit 1;
+            }
+            # 3. /vnc 返回 404 (不是 200/302)
+            VNC_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/vnc || true)
+            if [ "$VNC_CODE" != "404" ]; then
+              echo "错误: mini 镜像 /vnc 期望 404，实际返回 ${VNC_CODE}" >&2; exit 1;
+            fi
+            # 4. /admin/api/status 包含 "variant":"mini"
+            STATUS_JSON=$(curl -s -H "Authorization: Bearer smoke-test-token-0123456789" http://127.0.0.1:18080/admin/api/status || true)
+            echo "--- /admin/api/status ---"; echo "$STATUS_JSON"
+            echo "$STATUS_JSON" | grep -q '"variant"[[:space:]]*:[[:space:]]*"mini"' || {
+              echo "错误: /admin/api/status 未包含 'variant':'mini'" >&2; exit 1;
+            }
+            echo "✔ mini 镜像专属反向断言全部通过"
+          fi
+
+          docker rm -f dsh-smoke >/dev/null 2>&1 || true
           echo "冒烟测试通过"

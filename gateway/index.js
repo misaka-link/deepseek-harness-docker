@@ -20,7 +20,9 @@ const {
 } = require('./auth');
 
 const { ensureUpstreamCookie, injectPolyfill, getEncodingType, decompressBuffer } = require('./token-crawler');
-const desktopManager = require('./desktop-manager');
+// Issue #11: 运行期变体能力单一真源，按能力挂载真实桌面管理器或无副作用 Stub
+const CAPABILITIES = require('./capabilities');
+const desktopManager = CAPABILITIES.desktop.supported ? require('./desktop-manager') : require('./desktop-stub');
 const dshManager = require('./dsh-manager');
 const backupService = require('./backup-service');
 const pluginManager = require('./plugin-manager');
@@ -161,6 +163,38 @@ function isBrowserPluginDisabled() {
   }
 }
 
+// Issue #11 (G3): mini 变体下访问 VNC 返回显式 404 中文解释页
+function serveCapabilityGonePage(res) {
+  const adminPath = ADMIN_PATH || '/admin';
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>容器桌面不可用 (404)</title>
+<style>
+  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1115;color:#e5e7eb;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .box{max-width:560px;padding:32px 36px;border:1px solid #2c2c2e;border-radius:14px;background:#1b1b1c;text-align:center}
+  h1{font-size:18px;margin:0 0 12px}
+  p{font-size:13px;line-height:1.8;color:#9ca3af;margin:0 0 20px}
+  a{display:inline-block;padding:9px 18px;border-radius:8px;background:#4176e6;color:#fff;text-decoration:none;font-size:13px}
+</style></head>
+<body><div class="box">
+  <h1>🖥️ 容器桌面与 noVNC 服务不存在</h1>
+  <p>当前运行环境为 <strong>mini 瘦身镜像</strong>，物理上未预装 Chromium、X11 及 noVNC 桌面栈。<br>如需使用容器内自动化浏览器与图形桌面，请改用 full 完整镜像；在 mini 镜像中请改用本地浏览器或客户端侧边栏浏览器。</p>
+  <a href="${adminPath}/">返回管理后台</a>
+</div></body></html>`;
+  res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, no-cache' });
+  res.end(html);
+}
+
+// Issue #11: mini 变体下桌面能力不可用统一响应 (403 CAPABILITY_UNAVAILABLE)
+function sendCapabilityUnavailable(res, msg = '当前为 mini 镜像，不含容器桌面与浏览器能力') {
+  return sendJson(res, 403, {
+    ok: false,
+    code: 'CAPABILITY_UNAVAILABLE',
+    error: msg
+  });
+}
+
 // 浏览器被「彻底停用」后访问 VNC 的提示页（避免只看到黑屏 / 连接失败而无解释）
 function serveDesktopDisabledPage(res) {
   const adminPath = ADMIN_PATH || '/admin';
@@ -248,6 +282,10 @@ function warnConfigConflict(label, envValue, persistedValue) {
 warnConfigConflict('PROXY_PORT', process.env.PROXY_PORT, persisted.proxyPort);
 warnConfigConflict('ADMIN_PATH', process.env.ADMIN_PATH, persisted.adminPath);
 warnConfigConflict('VNC_PATH', process.env.VNC_PATH, persisted.vncPath);
+// Issue #11 (G1): mini 变体下忽略持久化的 desktop 段以防覆盖 mini 默认
+if (!CAPABILITIES.desktop.supported) {
+  persisted.desktop = null;
+}
 if (persisted.desktop) {
   desktopManager.updateConfig(persisted.desktop);
 }
@@ -561,7 +599,11 @@ async function alignHeadersForDsh(req) {
 function serveStaticHtml(res, filename) {
   const filePath = path.join(__dirname, 'public', filename);
   try {
-    const html = fs.readFileSync(filePath, 'utf8');
+    let html = fs.readFileSync(filePath, 'utf8');
+    // Issue #11 (§6.1): 服务端注入变体标记，避免首屏闪现与支持纯 curl 断言
+    if (filename === 'admin.html') {
+      html = html.replace('<html lang="zh-CN">', `<html lang="zh-CN" data-variant="${CAPABILITIES.variant}">`);
+    }
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store'
@@ -676,9 +718,10 @@ async function handleAdminApi(req, res, pathname, query) {
         desktop: desktopManager.getStatus(),
         paths: {
           admin: ADMIN_PATH,
-          vnc: VNC_PATH_HREF,
+          vnc: CAPABILITIES.vnc.supported ? VNC_PATH_HREF : null,
           proxyPort: PROXY_PORT
         },
+        capabilities: CAPABILITIES,
         authEnabled: isAuthEnabled(),
         authToken: isAuthEnabled() && getAuthToken() ? '******' : '',
         hasAuthToken: Boolean(getAuthToken()),
@@ -886,6 +929,13 @@ async function handleAdminApi(req, res, pathname, query) {
     }
 
     // 5. 桌面启停控制
+    // Issue #11 (G4): mini 变体下桌面 API 统一拦截，返回 403 CAPABILITY_UNAVAILABLE
+    if (subPath.startsWith('/api/desktop')) {
+      if (!CAPABILITIES.desktop.supported) {
+        return sendCapabilityUnavailable(res);
+      }
+    }
+
     // 5.1 「彻底开关」总开关：持久化，停用后连网关/容器重启也不再自动启动
     if (subPath === '/api/desktop/master' && req.method === 'POST') {
       const body = await readJsonBody(req);
@@ -1020,6 +1070,10 @@ async function handleAdminApi(req, res, pathname, query) {
       try {
         if (!body || !body.name) throw new Error('缺少插件名称');
         const enabled = body.enabled !== false;
+        // Issue #11: mini 镜像拒绝启用容器桌面插件
+        if (!CAPABILITIES.browser.pluginSupported && (body.name === BROWSER_DESKTOP_PLUGIN || body.name === 'dsh-browser-desktop' || body.name?.includes('dsh-browser-desktop')) && enabled) {
+          return sendCapabilityUnavailable(res);
+        }
         const r = await pluginManager.togglePlugin(body.name, enabled);
         // 与浏览器总开关保持一致（"插件停用 → 浏览器也用不了"）：
         // 禁用本插件时顺带彻底停用浏览器；启用时恢复总开关（不强行拉起桌面，按需启动）。
@@ -1060,6 +1114,10 @@ async function handleAdminApi(req, res, pathname, query) {
       const body = await readJsonBody(req);
       try {
         if (!body || !body.name) throw new Error('缺少插件名称');
+        // Issue #11: mini 镜像拒绝安装容器桌面插件
+        if (!CAPABILITIES.browser.pluginSupported && (body.name === BROWSER_DESKTOP_PLUGIN || body.name === 'dsh-browser-desktop' || body.name?.includes('dsh-browser-desktop'))) {
+          return sendCapabilityUnavailable(res);
+        }
         const r = await pluginManager.installPlugin(body.name);
         return sendJson(res, 200, r);
       } catch (err) {
@@ -1177,6 +1235,10 @@ async function handleAdminApi(req, res, pathname, query) {
 
 // ── 内部桌面控制 API (供本地插件调用) ─────────────────────────
 async function handleInternalDesktopApi(req, res, pathname) {
+  // Issue #11 (G5 纵深防御): mini 变体短路返回 403
+  if (!CAPABILITIES.desktop.supported) {
+    return sendCapabilityUnavailable(res);
+  }
   try {
     const action = pathname.replace('/__internal/desktop/', '').trim();
     // 附带网关权威的 VNC 路径，供插件生成正确的 vncUrl（避免沿用过期的本地/补丁配置）
@@ -1348,7 +1410,13 @@ async function handleHttpRequest(req, res) {
       adminPath: ADMIN_PATH,
       vncPath: VNC_PATH,
       dsh: { running: !!dsh.running, ready: !!dsh.ready },
-      desktop: { enabled: !!ds.enabled, running: !!ds.running }
+      desktop: { enabled: !!ds.enabled, running: !!ds.running },
+      variant: CAPABILITIES.variant,
+      capabilities: {
+        desktop: CAPABILITIES.desktop.supported,
+        golang: CAPABILITIES.golang.supported,
+        vnc: CAPABILITIES.vnc.supported
+      }
     }));
   }
 
@@ -1367,6 +1435,10 @@ async function handleHttpRequest(req, res) {
   //    仅凭"来源是回环"不够：网关若位于反向代理之后，外部请求的对端地址也会是 127.0.0.1。
   //    因此追加共享密钥校验（插件读 /root/.dsh/.internal-api-token，见 internal-token.js）。
   if (pathname.startsWith('/__internal/desktop/')) {
+    // Issue #11 (G5): mini 变体首行短路拦截，早于 setup/鉴权闸
+    if (!CAPABILITIES.desktop.supported) {
+      return sendCapabilityUnavailable(res);
+    }
     const peer = wsOrigin.normalizeIp(req.socket && req.socket.remoteAddress);
     const isLoopbackReq = peer === '127.0.0.1' || peer === '::1';
     if (isLoopbackReq && verifyInternalToken(req)) {
@@ -1417,6 +1489,13 @@ async function handleHttpRequest(req, res) {
   }
 
   // 3.5 稳定桌面插件接口 (经鉴权后可用，提供与 ADMIN_PATH 解耦的稳定基准路径)
+  // Issue #11 (G6): mini 变体下 /__api/desktop/* 统一返回 403 CAPABILITY_UNAVAILABLE
+  if (pathname === '/__api/desktop' || pathname.startsWith('/__api/desktop/')) {
+    if (!CAPABILITIES.desktop.supported) {
+      return sendCapabilityUnavailable(res);
+    }
+  }
+
   if (pathname === '/__api/desktop/status' && req.method === 'GET') {
     return sendJson(res, 200, {
       desktop: desktopManager.getStatus(),
@@ -1475,7 +1554,19 @@ async function handleHttpRequest(req, res) {
   }
 
   // 5. 自定义 VNC 路由 (VNC_PATH)
-  if (pathname === VNC_PATH || pathname.startsWith(VNC_PATH + '/')) {
+  if (pathname === VNC_PATH || pathname.startsWith(VNC_PATH + '/') || pathname === '/vnc' || pathname.startsWith('/vnc/')) {
+    // Issue #11 (G3): mini 变体下显式返回 404，HTML 导航给解释页，API/静态资源返回 404 JSON，不得落入 DSH 反代
+    if (!CAPABILITIES.desktop.supported) {
+      if (isHtmlNavigation(req)) {
+        return serveCapabilityGonePage(res);
+      }
+      return sendJson(res, 404, {
+        ok: false,
+        code: 'NOT_FOUND',
+        error: '当前为 mini 镜像，不含容器桌面与 noVNC 服务'
+      });
+    }
+
     // 浏览器被管理后台「彻底停用」、或浏览器插件被停用时，给出明确提示页而不是让 noVNC 黑屏
     if (!desktopManager.isEnabled() || isBrowserPluginDisabled()) {
       return serveDesktopDisabledPage(res);
@@ -1593,7 +1684,12 @@ async function handleUpgrade(req, socket, head) {
   const vncWsPath = VNC_PATH + '/websockify';
   // 轻微项：只精确匹配已知的 websockify 端点（原来 endsWith('/websockify') 过宽，
   // 任何以 /websockify 结尾的路径都会被当作桌面 WS 代理）
-  if (pathname === vncWsPath || pathname === '/websockify') {
+  if (pathname === vncWsPath || pathname === '/websockify' || (pathname.startsWith(VNC_PATH + '/') && pathname.endsWith('/websockify'))) {
+    // Issue #11 (G3 WS): mini 变体下拒绝 VNC WebSocket 升级，直接返回 404
+    if (!CAPABILITIES.desktop.supported) {
+      socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+      return;
+    }
     // 浏览器被彻底停用（或插件被停用）时不再转发 VNC WebSocket（与 /vnc 提示页保持一致）
     if (!desktopManager.isEnabled() || isBrowserPluginDisabled()) {
       socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
@@ -1639,7 +1735,12 @@ async function bootstrap() {
     console.log('  认证状态: ' + (isAuthEnabled() ? '已启用认证码保护 (AUTH_TOKEN)' : '未启用认证 (无感直通)'));
     console.log('  DSH Web:  http://127.0.0.1:' + PROXY_PORT + '/');
     console.log('  管理面板: http://127.0.0.1:' + PROXY_PORT + ADMIN_PATH + '/');
-    console.log('  noVNC 桌面: http://127.0.0.1:' + PROXY_PORT + VNC_PATH + '/');
+    // Issue #11: mini 镜像不打印 noVNC 行，改打印容器浏览器状态
+    if (CAPABILITIES.vnc.supported) {
+      console.log('  noVNC 桌面: http://127.0.0.1:' + PROXY_PORT + VNC_PATH + '/');
+    } else {
+      console.log('  容器浏览器: 未启用（mini 镜像）');
+    }
     console.log('==================================================');
   });
 
@@ -1667,7 +1768,10 @@ async function bootstrap() {
   }
 
   // 启动虚拟桌面 (尊重管理后台「彻底开关」与环境变量；任一处显式关闭则不启动)
-  if (!desktopManager.isEnabled()) {
+  // Issue #11 (G2): mini 变体跳过桌面自启并打印说明
+  if (!CAPABILITIES.desktop.supported) {
+    console.log('[desktop-manager] mini 镜像：未预装桌面与 Chromium 栈，跳过开机自动启动');
+  } else if (!desktopManager.isEnabled()) {
     console.log('[desktop-manager] 容器浏览器已被管理后台彻底停用，跳过开机自动启动');
   } else if (isBrowserPluginDisabled()) {
     // 插件已被显式禁用：按"插件停用 → 浏览器也用不了"的约定，不自动启动桌面

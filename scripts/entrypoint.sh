@@ -10,7 +10,13 @@ export VNC_PORT="${VNC_PORT:-6080}"
 if [ -n "${ADMIN_PATH:-}" ]; then export ADMIN_PATH; fi
 if [ -n "${VNC_PATH:-}" ]; then export VNC_PATH; fi
 export NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
-export DSH_DESKTOP_ENABLED="${DSH_DESKTOP_ENABLED:-1}"
+# Issue #11：导出 DSH_VARIANT（默认 full），mini 变体强制关闭桌面栈
+export DSH_VARIANT="${DSH_VARIANT:-full}"
+if [ "${DSH_VARIANT}" = "mini" ]; then
+  export DSH_DESKTOP_ENABLED=0
+else
+  export DSH_DESKTOP_ENABLED="${DSH_DESKTOP_ENABLED:-1}"
+fi
 export DSH_DESKTOP_WIDTH="${DSH_DESKTOP_WIDTH:-1920}"
 export DSH_DESKTOP_HEIGHT="${DSH_DESKTOP_HEIGHT:-1080}"
 export DSH_DESKTOP_DEPTH="${DSH_DESKTOP_DEPTH:-24}"
@@ -50,8 +56,12 @@ echo "========================================================"
 echo "    启动 DeepSeek Harness"
 echo "========================================================"
 
-# 1. 确保必要目录就绪
-mkdir -p "${DSH_WORKSPACE}" "${DSH_DIR}" "${DSH_SNAPSHOT_DIR}" "${CHROME_USER_DATA_DIR}" "/tmp/dsh-desktop"
+# 1. 确保必要目录就绪 (Issue #11: mini 变体不创建桌面与 Chromium 用户目录)
+if [ "${DSH_VARIANT}" = "mini" ]; then
+  mkdir -p "${DSH_WORKSPACE}" "${DSH_DIR}" "${DSH_SNAPSHOT_DIR}"
+else
+  mkdir -p "${DSH_WORKSPACE}" "${DSH_DIR}" "${DSH_SNAPSHOT_DIR}" "${CHROME_USER_DATA_DIR}" "/tmp/dsh-desktop"
+fi
 mkdir -p "$(dirname "${DSH_WEB_LOG}")" 2>/dev/null || true
 if [ -f "${DSH_WEB_LOG}" ]; then
   _log_size=$(wc -c < "${DSH_WEB_LOG}" 2>/dev/null || echo 0)
@@ -123,9 +133,13 @@ if [ "$_persisted" != "1" ]; then
   echo "[entrypoint] ⚠️ 默认应落在快照卷内 (${DSH_SNAPSHOT_DIR}/versions)；如需独立隔离，可挂载 -v ./data/versions:/root/.dsh-versions 并设置 DSH_VERSIONS_DIR=/root/.dsh-versions"
 fi
 
-# 2. 自动注册并安装 dsh-browser-desktop 插件到 DSH profile
+# 2. 自动注册并安装/同步插件到 DSH profile (Issue #11: mini 按变体显示日志)
 if [ -f "/app/scripts/install-plugin.mjs" ]; then
-  echo "[entrypoint] 注册 dsh-browser-desktop 插件到 Web Profile..."
+  if [ "${DSH_VARIANT}" = "mini" ]; then
+    echo "[entrypoint] 同步插件装配状态 (mini 变体)..."
+  else
+    echo "[entrypoint] 注册 dsh-browser-desktop 插件到 Web Profile..."
+  fi
   node /app/scripts/install-plugin.mjs || true
 fi
 

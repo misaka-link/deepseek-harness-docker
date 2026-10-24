@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+// Issue #11: 运行期变体能力
+const CAPABILITIES = require('./capabilities');
 
 // M11：DSH_HOME 可迁移（非 root 部署），默认 /root
 const DSH_HOME = process.env.DSH_HOME || '/root';
@@ -297,7 +299,11 @@ function getPlugins() {
     }
   }
 
-  const list = Array.from(foundMap.values());
+  let list = Array.from(foundMap.values());
+  // Issue #11: mini 变体下从展示列表中剔除容器桌面浏览器插件 (C18)
+  if (!CAPABILITIES.browser.pluginSupported) {
+    list = list.filter(p => p.name !== '@dsh-custom/dsh-browser-desktop' && p.name !== 'dsh-browser-desktop');
+  }
   // 排序：核心组件居首，已安装在先（按启用降序、名称升序），已卸载排在最末
   list.sort((a, b) => {
     if (a.isCore && !b.isCore) return -1;
@@ -320,6 +326,10 @@ function isValidPluginName(name) {
 async function togglePlugin(name, enable) {
   if (!isValidPluginName(name)) {
     throw new Error('非法或不安全的插件名称: ' + name);
+  }
+  // Issue #11: mini 镜像拒绝启用容器桌面插件
+  if (!CAPABILITIES.browser.pluginSupported && (name === '@dsh-custom/dsh-browser-desktop' || name === 'dsh-browser-desktop') && enable) {
+    throw new Error('当前为 mini 镜像，不含容器桌面与 Chromium 栈，无法启用该插件');
   }
   if (CORE_PACKAGES.has(name)) {
     throw new Error('系统核心组件 (' + name + ') 不允许禁用，否则会导致系统无法运行');
@@ -453,6 +463,10 @@ async function uninstallPlugin(name) {
 async function installPlugin(name) {
   if (!isValidPluginName(name)) {
     throw new Error('非法或不安全的插件名称: ' + name);
+  }
+  // Issue #11: mini 镜像拒绝安装容器桌面插件
+  if (!CAPABILITIES.browser.pluginSupported && (name === '@dsh-custom/dsh-browser-desktop' || name === 'dsh-browser-desktop')) {
+    throw new Error('当前为 mini 镜像，不含容器桌面与 Chromium 栈，无法安装该插件');
   }
 
   // P6：软链建立 + package.json 读改写 + 状态持久化整体进同一把写锁

@@ -25,7 +25,7 @@ const ok = (cond, msg) => {
 };
 const eq = (actual, expected, msg) => ok(actual === expected, `${msg} (期望 ${expected}，实际 ${actual})`);
 
-const RANGE = '>=0.1.2-rc.1 <=0.2.1-rc.2';
+const RANGE = '>=0.1.2-rc.1 <=0.2.1-rc.3';
 
 // ── 单例默认导出（向后兼容路径） ──────────────────────────────────────────
 const versionService = require('../gateway/version-service');
@@ -59,7 +59,8 @@ eq(satisfiesRange('0.2.1-alpha.5', RANGE), true,  '0.2.1-alpha.5 IN（上一版�
 eq(satisfiesRange('0.2.1-alpha.4', RANGE), true,  '0.2.1-alpha.4 IN（历史版本，仍在区间内）');
 eq(satisfiesRange('0.2.1-alpha.3', RANGE), true,  '0.2.1-alpha.3 IN（历史版本，仍在区间内）');
 eq(satisfiesRange('0.2.1-alpha.1', RANGE), true,  '0.2.1-alpha.1 IN（历史版本，仍在区间内）');
-eq(satisfiesRange('0.2.1-rc.3', RANGE), false, '0.2.1-rc.3 OUT（高于区间上界）');
+eq(satisfiesRange('0.2.1-rc.3', RANGE), true,  '0.2.1-rc.3 IN（区间上界，Issue #11 内置版本）');
+eq(satisfiesRange('0.2.1-rc.4', RANGE), false, '0.2.1-rc.4 OUT（高于区间上界）');
 eq(satisfiesRange('0.2.0-rc.2', RANGE), true,  '0.2.0-rc.2 IN（上一版推荐，仍在区间内）');
 eq(satisfiesRange('0.1.7-rc.2', RANGE), true,  '0.1.7-rc.2 IN');
 eq(satisfiesRange('0.2.0',      RANGE), true,  '0.2.0 IN（<=0.2.1-rc.2，上界抬升后纳入）');

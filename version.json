@@ -11,12 +11,13 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.1-rc.2",
+    "dshVersion": "0.2.1-rc.3",
+    "dshIntegrity": "sha512-H+E9HLnHf7fJqzen84Z9Bq8ggb5xbrcbyhZjXTJLE9NabHr3zteGvTRvdvGkxPl4ov80is4WLglFmSo+/olJjg==",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
     },
-    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.1-rc.3 来源 npm dist-tag next。"
   },
   "latest": {
     "version": "0.2.7",
@@ -353,9 +354,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.1-rc.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-rc.2",
+    "recommendedDsh": "0.2.1-rc.3",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-rc.3",
     "adaptedVersions": [
+      "0.2.1-rc.3",
       "0.2.1-rc.2",
       "0.2.1-alpha.5",
       "0.2.1-alpha.4",

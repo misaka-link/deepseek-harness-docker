@@ -258,39 +258,18 @@ if (dshCoreModules && globalScopeDir) {
   }
 }
 
-// 1. 建立插件依赖软链接 (schemastery)
-const possibleSchemasterySources = [
-  '/usr/local/lib/node_modules/@deepseek-ai/schemastery',
-  '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery',
-  '/opt/dsh/lib/node_modules/@deepseek-ai/schemastery',
-  '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery'
-];
-for (const src of possibleSchemasterySources) {
-  if (fs.existsSync(src)) {
-    const pluginDepDir = path.join(pluginSource, 'node_modules/@deepseek-ai');
-    fs.mkdirSync(pluginDepDir, { recursive: true });
-    const linkPath = path.join(pluginDepDir, 'schemastery');
-    try {
-      if (pathExists(linkPath)) fs.unlinkSync(linkPath);
-      fs.symlinkSync(src, linkPath);
-      console.log('[install-plugin] 建立 schemastery 依赖软链接成功');
-    } catch {}
-    break;
-  }
-}
-
-// 2. 自动注册并配置 @dsh-custom/dsh-browser-desktop (尊重用户持久化偏好)
+// Issue #11: mini 变体守卫（必须在 schemastery 软链循环之前，防止 mkdirSync 重建已移除的插件目录）
+const isMiniVariant = String(process.env.DSH_VARIANT || '').trim().toLowerCase() === 'mini';
 const browserDesktopName = '@dsh-custom/dsh-browser-desktop';
-// P6：先与 manifest 对齐（识别"被 DSH 原生插件管理器停用"），再决定是否装配
-reconcileManagedState([browserDesktopName]);
-const isBrowserDesktopUninstalled = pluginState.uninstalled.includes(browserDesktopName);
-const isBrowserDesktopDisabled = pluginState.disabled.includes(browserDesktopName);
 
-if (isBrowserDesktopUninstalled) {
-  console.log('[install-plugin] 用户已明确卸载 dsh-browser-desktop，跳过装配');
+if (isMiniVariant) {
+  console.log('[install-plugin] 当前为 mini 变体：执行 dsh-browser-desktop 净身清理');
+  // 1) 删 @dsh-custom/dsh-browser-desktop 软链（含悬空软链）
   try {
     if (pathExists(targetLink)) removeIfExists(targetLink);
   } catch {}
+
+  // 2) 从 profile package.json 删 dependencies 与 dsh.profile.bundles
   try {
     await writeProfile((pkg) => {
       let ch = false;
@@ -304,39 +283,134 @@ if (isBrowserDesktopUninstalled) {
       }
       return ch;
     });
-  } catch {}
-} else {
-  try {
-    if (pathExists(targetLink)) removeIfExists(targetLink);
-    fs.symlinkSync(pluginSource, targetLink);
-    console.log('[install-plugin] 建立插件目录软链接成功:', targetLink);
   } catch (e) {
-    console.warn('[install-plugin] 建立软链接失败:', e.message);
+    console.warn('[install-plugin] mini 净化 package.json 失败:', e.message);
   }
 
-  try {
-    await writeProfile((pkg) => {
-      pkg.dependencies = pkg.dependencies || {};
-      pkg.dependencies[browserDesktopName] = 'link:' + pluginSource;
-      pkg.dsh = pkg.dsh || { profile: {} };
-      pkg.dsh.profile = pkg.dsh.profile || {};
-      pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
+  // 3) 用 removePatchEntries 清 profile cordis.patch.yml 中该插件块
+  if (fs.existsSync(patchPath)) {
+    try {
+      await withProfileLock(profileDir, async () => {
+        assertProfileLockHeld(profileDir);
+        const before = fs.readFileSync(patchPath, 'utf8');
+        if (!before.includes('dsh-browser-desktop')) return;
+        const r = removePatchEntries(before, (block) => block.includes('dsh-browser-desktop'));
+        if (r.removed === 0) return;
+        let res = r.text.trim();
+        if (!res) res = '[]';
+        assertPatchSafe({ before, after: res, removedIds: r.removedIds });
+        atomicWrite(patchPath, res + '\n');
+        console.log('[install-plugin] (mini) 已清理 cordis.patch.yml 中 dsh-browser-desktop 块');
+      }, { label: 'install-plugin:mini-patch-cleanup' });
+    } catch (e) {
+      console.warn('[install-plugin] mini 清理 cordis.patch.yml 失败:', e.message);
+    }
+  }
 
-      if (isBrowserDesktopDisabled) {
-        if (pkg.dsh.profile.bundles.includes(browserDesktopName)) {
-          pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== browserDesktopName);
-        }
-        console.log('[install-plugin] 用户已显式禁用 dsh-browser-desktop，保持停用状态 (不加入 bundles)');
-      } else {
-        if (!pkg.dsh.profile.bundles.includes(browserDesktopName)) {
-          pkg.dsh.profile.bundles.push(browserDesktopName);
-        }
-        console.log('[install-plugin] 注册 bundle 依赖到 package.json 成功');
+  // 4) 严禁写 plugins-state.json 的 uninstalled（若有历史遗留残留则清除，保持未污染）
+  try {
+    if (fs.existsSync(stateFile)) {
+      const curState = readPluginState();
+      let stateChanged = false;
+      if (curState.uninstalled.includes(browserDesktopName)) {
+        curState.uninstalled = curState.uninstalled.filter(x => x !== browserDesktopName);
+        stateChanged = true;
       }
-      return true;
-    });
+      if (curState.disabled.includes(browserDesktopName)) {
+        curState.disabled = curState.disabled.filter(x => x !== browserDesktopName);
+        stateChanged = true;
+      }
+      if (curState.known.includes(browserDesktopName)) {
+        curState.known = curState.known.filter(x => x !== browserDesktopName);
+        stateChanged = true;
+      }
+      if (stateChanged) {
+        writePluginState(curState);
+      }
+    }
   } catch (e) {
-    console.warn('[install-plugin] 更新 package.json 失败:', e.message);
+    console.warn('[install-plugin] mini 校验 plugins-state.json 失败:', e.message);
+  }
+} else {
+  // 1. 建立插件依赖软链接 (schemastery)
+  const possibleSchemasterySources = [
+    '/usr/local/lib/node_modules/@deepseek-ai/schemastery',
+    '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery',
+    '/opt/dsh/lib/node_modules/@deepseek-ai/schemastery',
+    '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/schemastery'
+  ];
+  for (const src of possibleSchemasterySources) {
+    if (fs.existsSync(src)) {
+      const pluginDepDir = path.join(pluginSource, 'node_modules/@deepseek-ai');
+      fs.mkdirSync(pluginDepDir, { recursive: true });
+      const linkPath = path.join(pluginDepDir, 'schemastery');
+      try {
+        if (pathExists(linkPath)) fs.unlinkSync(linkPath);
+        fs.symlinkSync(src, linkPath);
+        console.log('[install-plugin] 建立 schemastery 依赖软链接成功');
+      } catch {}
+      break;
+    }
+  }
+
+  // 2. 自动注册并配置 @dsh-custom/dsh-browser-desktop (尊重用户持久化偏好)
+  // P6：先与 manifest 对齐（识别"被 DSH 原生插件管理器停用"），再决定是否装配
+  reconcileManagedState([browserDesktopName]);
+  const isBrowserDesktopUninstalled = pluginState.uninstalled.includes(browserDesktopName);
+  const isBrowserDesktopDisabled = pluginState.disabled.includes(browserDesktopName);
+
+  if (isBrowserDesktopUninstalled) {
+    console.log('[install-plugin] 用户已明确卸载 dsh-browser-desktop，跳过装配');
+    try {
+      if (pathExists(targetLink)) removeIfExists(targetLink);
+    } catch {}
+    try {
+      await writeProfile((pkg) => {
+        let ch = false;
+        if (pkg.dependencies && pkg.dependencies[browserDesktopName]) {
+          delete pkg.dependencies[browserDesktopName];
+          ch = true;
+        }
+        if (pkg.dsh?.profile?.bundles?.includes(browserDesktopName)) {
+          pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== browserDesktopName);
+          ch = true;
+        }
+        return ch;
+      });
+    } catch {}
+  } else {
+    try {
+      if (pathExists(targetLink)) removeIfExists(targetLink);
+      fs.symlinkSync(pluginSource, targetLink);
+      console.log('[install-plugin] 建立插件目录软链接成功:', targetLink);
+    } catch (e) {
+      console.warn('[install-plugin] 建立软链接失败:', e.message);
+    }
+
+    try {
+      await writeProfile((pkg) => {
+        pkg.dependencies = pkg.dependencies || {};
+        pkg.dependencies[browserDesktopName] = 'link:' + pluginSource;
+        pkg.dsh = pkg.dsh || { profile: {} };
+        pkg.dsh.profile = pkg.dsh.profile || {};
+        pkg.dsh.profile.bundles = pkg.dsh.profile.bundles || ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
+
+        if (isBrowserDesktopDisabled) {
+          if (pkg.dsh.profile.bundles.includes(browserDesktopName)) {
+            pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(b => b !== browserDesktopName);
+          }
+          console.log('[install-plugin] 用户已显式禁用 dsh-browser-desktop，保持停用状态 (不加入 bundles)');
+        } else {
+          if (!pkg.dsh.profile.bundles.includes(browserDesktopName)) {
+            pkg.dsh.profile.bundles.push(browserDesktopName);
+          }
+          console.log('[install-plugin] 注册 bundle 依赖到 package.json 成功');
+        }
+        return true;
+      });
+    } catch (e) {
+      console.warn('[install-plugin] 更新 package.json 失败:', e.message);
+    }
   }
 }
 
