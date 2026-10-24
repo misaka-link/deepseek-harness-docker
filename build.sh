@@ -7,10 +7,11 @@ set -e
 #   ./build.sh --market -> 构建带预装插件清单的镜像 (deepseek-harness-docker:latest-market 及额外标签)
 #   ./build.sh --mini   -> 构建轻量精简镜像 (deepseek-harness-docker:latest-mini，无 Chromium/桌面/Golang，C 档瘦身)
 #   可选参数:
-#     --arch amd64|arm64|both (both 使用 docker buildx 构建多架构 manifest)
+#     --arch amd64|arm64|both (both 使用 docker buildx 构建多架构 manifest，必须配合 --push)
+#     --push  构建后推送到 registry（多架构 manifest 无法 load 到本地，必须推送）
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.2.8"
+PROJ_VER="0.2.9"
 NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 # 预装层缓存刷新键：默认用当前时间戳，保证每次构建都重新执行预装层，
 # 让 plugins.market.list 里的 @latest 插件（dshmarket）拉到最新版。
@@ -35,6 +36,7 @@ if [ -z "${DSH_VERSION}" ]; then echo "错误: 未能确定 DSH 版本" >&2; exi
 # ── 参数解析（Issue #11 变体与架构）─────────────────────────────
 VARIANT="full"
 ARCH_TARGET=""
+PUSH_FLAG=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -58,6 +60,9 @@ while [ $# -gt 0 ]; do
       ;;
     --arch=*)
       ARCH_TARGET="${1#*=}"
+      ;;
+    --push)
+      PUSH_FLAG="1"
       ;;
     *)
       echo "未知参数: $1" >&2
@@ -99,9 +104,19 @@ NODE_IMAGE="${NODE_IMAGE:-$DEFAULT_NODE_IMAGE}"
 # 构建命令构建
 BUILD_CMD="docker build"
 if [ "$ARCH_TARGET" = "both" ]; then
-  BUILD_CMD="docker buildx build --platform linux/amd64,linux/arm64"
+  # 多架构 manifest 无法 --load 到本地 docker，必须推送到 registry（CI 即走这条路径）
+  if [ "$PUSH_FLAG" != "1" ]; then
+    echo "错误: --arch both 必须同时指定 --push（多架构 manifest 不能加载到本地）" >&2
+    echo "      本地单架构请用 --arch amd64 或 --arch arm64；多架构发布请用 --push，或交给 GitHub Actions" >&2
+    exit 2
+  fi
+  BUILD_CMD="docker buildx build --platform linux/amd64,linux/arm64 --push"
 elif [ -n "$ARCH_TARGET" ]; then
-  BUILD_CMD="docker build --platform linux/${ARCH_TARGET}"
+  if [ "$PUSH_FLAG" = "1" ]; then
+    BUILD_CMD="docker buildx build --platform linux/${ARCH_TARGET} --push"
+  else
+    BUILD_CMD="docker build --platform linux/${ARCH_TARGET}"
+  fi
 fi
 
 # ── 追加镜像标签（Issue #9）─────────────────────────────────────

@@ -4234,12 +4234,12 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
             const snapRes = await fetch(`${adminBase}/api/snapshots/create`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: `pre-switch-to-${version}` }),
-              __timeoutMs: 180000
+              body: JSON.stringify({ name: `pre-switch-to-${version}`, sync: true }),
+              __timeoutMs: 600000
             });
             const snapData = await snapRes.json();
             if (snapData.ok) {
-              appendLog(`[${new Date().toLocaleTimeString()}] ✔ 安全配置快照创建成功: ${snapData.snapshot.filename}`);
+              appendLog(`[${new Date().toLocaleTimeString()}] ✔ 安全配置快照创建成功: ${snapData.snapshot?.filename || '完成'}`);
               await loadSnapshots();
             } else {
               appendLog(`[${new Date().toLocaleTimeString()}] ⚠️ 自动创建快照提示: ${snapData.error || '非致命跳过，继续切换'}`);
@@ -4617,6 +4617,134 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       await loadStatus();
     }
 
+    // Issue #12: 快照后台任务轮询与进度格式化辅助
+    function formatSnapshotBytes(bytes) {
+      if (!bytes || bytes <= 0) return '0MB';
+      const mb = bytes / (1024 * 1024);
+      if (mb >= 1024) {
+        return (mb / 1024).toFixed(2) + 'GB';
+      }
+      return Math.round(mb) + 'MB';
+    }
+
+    function formatSnapshotElapsed(ms) {
+      const totalSec = Math.max(0, Math.floor((ms || 0) / 1000));
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    let snapshotPollTimer = null;
+    let snapshotPollInFlight = false; // Issue #12 复审：防止 setInterval 重叠请求
+    let snapshotPollStartedAt = 0;
+    const SNAPSHOT_MAX_POLL_MS = 30 * 60 * 1000;
+
+    function stopSnapshotJobPolling() {
+      if (snapshotPollTimer) {
+        clearInterval(snapshotPollTimer);
+        snapshotPollTimer = null;
+      }
+    }
+
+    window.addEventListener('beforeunload', () => {
+      stopSnapshotJobPolling();
+    });
+
+    function startSnapshotJobPolling(initialJob) {
+      if (snapshotPollTimer) return;
+      snapshotPollStartedAt = Date.now();
+
+      const applyJobUI = (job) => {
+        if (!job) return;
+        const timeText = formatSnapshotElapsed(job.elapsedMs);
+        const sizeText = formatSnapshotBytes(job.progressBytes);
+        const statusText = '正在打包 ' + timeText + ' · ' + sizeText;
+
+        const btn = document.getElementById('btnCreateSnapshot');
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = statusText;
+        }
+        const banner = document.getElementById('snapshotTaskBanner');
+        const msg = document.getElementById('snapshotTaskMsg');
+        if (banner) banner.style.display = 'flex';
+        if (msg) {
+          msg.textContent = statusText + '（主 Web 服务保持完全通畅响应，可关闭页面稍后查看）';
+        }
+        const btnImport = document.getElementById('btnImportSnapshot');
+        if (btnImport) btnImport.disabled = true;
+      };
+
+      const resetUI = () => {
+        const btn = document.getElementById('btnCreateSnapshot');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '+ 创建新快照';
+        }
+        updateTaskBanner(null);
+      };
+
+      if (initialJob) applyJobUI(initialJob);
+
+      // Issue #12 复审：轮询上限跟随后端 DSH_SNAPSHOT_TIMEOUT_MS（下发字段 timeoutMs），不再前端写死 30 分钟
+      const serverTimeoutMs = Number(initialJob && initialJob.timeoutMs) || 0;
+      const pollDeadlineMs = serverTimeoutMs > 0 ? serverTimeoutMs + 5 * 60 * 1000 : SNAPSHOT_MAX_POLL_MS;
+
+      snapshotPollTimer = setInterval(async () => {
+        if (snapshotPollInFlight) return; // 上一轮未结束则跳过，避免重复弹窗/重复渲染
+        snapshotPollInFlight = true;
+        try {
+          if (Date.now() - snapshotPollStartedAt > pollDeadlineMs) {
+            stopSnapshotJobPolling();
+            resetUI();
+            showToast('快照打包轮询超时，请稍后刷新页面查看结果', 'warning');
+            await loadSnapshots();
+            return;
+          }
+
+          const res = await fetch(adminBase + '/api/snapshots/job');
+          if (res.status === 401) {
+            // 会话过期：立即停止轮询并引导重新登录，避免 UI 卡死
+            stopSnapshotJobPolling();
+            resetUI();
+            showToast('登录会话已过期，请重新登录', 'warning');
+            setTimeout(() => {
+              window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
+            }, 1200);
+            return;
+          }
+          if (!res.ok) return;
+          const data = await res.json();
+          const job = data && data.job;
+          if (!job) {
+            stopSnapshotJobPolling();
+            resetUI();
+            showToast('快照任务状态已丢失（网关可能已重启），请检查快照列表', 'warning');
+            await loadSnapshots();
+            return;
+          }
+
+          if (job.status === 'running') {
+            applyJobUI(job);
+          } else if (job.status === 'success') {
+            stopSnapshotJobPolling();
+            resetUI();
+            showToast('快照创建成功: ' + (job.filename || '完成'), 'success');
+            await loadSnapshots();
+          } else if (job.status === 'error') {
+            stopSnapshotJobPolling();
+            resetUI();
+            showToast('快照创建失败: ' + (job.error || '未知错误'), 'error');
+            await loadSnapshots();
+          }
+        } catch (err) {
+          console.warn('[snapshot-poll] 轮询异常:', err);
+        } finally {
+          snapshotPollInFlight = false;
+        }
+      }, 2000);
+    }
+
     function updateTaskBanner(task) {
       const banner = document.getElementById('snapshotTaskBanner');
       const msg = document.getElementById('snapshotTaskMsg');
@@ -4625,12 +4753,17 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       if (!banner) return;
       if (task) {
         banner.style.display = 'flex';
-        msg.textContent = `正在后台异步执行「${task.label}」任务，主 Web 服务保持完全通畅响应...`;
+        if (msg) {
+          msg.textContent = task.customMsg || `正在后台异步执行「${task.label || '处理中'}」任务，主 Web 服务保持完全通畅响应...`;
+        }
         if (btnCreate) btnCreate.disabled = true;
         if (btnImport) btnImport.disabled = true;
       } else {
         banner.style.display = 'none';
-        if (btnCreate) btnCreate.disabled = false;
+        if (btnCreate) {
+          btnCreate.disabled = false;
+          btnCreate.textContent = '+ 创建新快照';
+        }
         if (btnImport) btnImport.disabled = false;
       }
     }
@@ -4640,11 +4773,26 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       try {
         const res = await fetch(`${adminBase}/api/snapshots`);
         const data = await res.json();
-        updateTaskBanner(data.activeTask);
-        tbody.innerHTML = '';
-        if (!data.snapshots || data.snapshots.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#94a3b8;">暂无快照，可点击右上角创建或导入</td></tr>';
-          return;
+        // Issue #12 复审：任务状态随 /api/snapshots 原子返回，避免两次请求之间的时序裂隙
+        const job = data.job || null;
+        if (job && job.status === 'running') {
+          startSnapshotJobPolling(job);
+        }
+        if (!snapshotPollTimer) {
+          // 仅当「已有备份 job 且已结束」时才丢弃列表接口里残留的 activeTask（消除时序裂隙导致的假死横幅）；
+          // job 为 null（如版本切换前的同步备份仍在跑、或网关刚重启）时保持原有 activeTask 展示，不影响 restore/import。
+          let taskForBanner = data.activeTask;
+          if (job && job.status !== 'running' && data.activeTask && data.activeTask.type === 'backup') {
+            taskForBanner = null;
+          }
+          updateTaskBanner(taskForBanner);
+        }
+        if (tbody) {
+          tbody.innerHTML = '';
+          if (!data.snapshots || data.snapshots.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#94a3b8;">暂无快照，可点击右上角创建或导入</td></tr>';
+            return;
+          }
         }
 
         data.snapshots.forEach(s => {
@@ -4722,10 +4870,11 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
           actionRow.append(btnRestore, linkDownload, btnDelete);
           tdAction.appendChild(actionRow);
           tr.append(tdName, tdVer, tdType, tdSize, tdTime, tdAction);
-          tbody.appendChild(tr);
+          if (tbody) tbody.appendChild(tr);
         });
+
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ef4444;">加载快照失败</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#ef4444;">加载快照失败</td></tr>';
       }
     }
 
@@ -4734,11 +4883,13 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       if (input) input.value = '';
       const defaultRadio = document.querySelector('input[name="snapshotType"][value="full"]');
       if (defaultRadio) defaultRadio.checked = true;
-      document.getElementById('snapshotCreateModal').style.display = 'flex';
+      const modal = document.getElementById('snapshotCreateModal');
+      if (modal) modal.style.display = 'flex';
     }
 
     function closeCreateSnapshotModal() {
-      document.getElementById('snapshotCreateModal').style.display = 'none';
+      const modal = document.getElementById('snapshotCreateModal');
+      if (modal) modal.style.display = 'none';
     }
 
     async function submitCreateSnapshot() {
@@ -4749,33 +4900,47 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
       closeCreateSnapshotModal();
 
       const btn = document.getElementById('btnCreateSnapshot');
-      const origText = btn ? btn.textContent : '+ 创建新快照';
       if (btn) {
         btn.disabled = true;
-        btn.textContent = '⏳ 正在异步打包备份...';
+        btn.textContent = '⏳ 正在打包…（可关闭页面，稍后回来查看）';
       }
-      updateTaskBanner({ label: type === 'config' ? '创建仅配置快照(无会话)' : '创建完整快照' });
+      const taskLabel = type === 'config' ? '创建仅配置快照(无会话)' : '创建完整快照';
+      updateTaskBanner({
+        label: taskLabel,
+        customMsg: '正在打包…（可关闭页面，稍后回来查看）'
+      });
 
       try {
         const res = await fetch(`${adminBase}/api/snapshots/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, type }),
-          __timeoutMs: 180000
+          body: JSON.stringify({ name, type })
         });
         const data = await res.json();
-        if (data.ok) {
-          showToast('快照创建成功: ' + data.snapshot.filename + ` (${data.snapshot.typeLabel || '备份成功'})`, 'success');
+        if (res.status === 202 && data.ok && data.job) {
+          startSnapshotJobPolling(data.job);
+        } else if (res.status === 409 || data.code === 'BUSY') {
+          showToast(data.error || '当前正在执行其他任务，请稍候', 'warning');
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = '+ 创建新快照';
+          }
+          updateTaskBanner(null);
           await loadSnapshots();
         } else {
           showToast('快照创建失败: ' + (data.error || '未知错误'), 'error');
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = '+ 创建新快照';
+          }
+          updateTaskBanner(null);
+          await loadSnapshots();
         }
       } catch (err) {
-        showToast('网络请求异常: ' + err.message, 'error');
-      } finally {
+        showToast('网络请求异常: ' + (err?.message || '未知错误'), 'error');
         if (btn) {
           btn.disabled = false;
-          btn.textContent = origText;
+          btn.textContent = '+ 创建新快照';
         }
         updateTaskBanner(null);
         await loadSnapshots();

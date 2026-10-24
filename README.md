@@ -1,6 +1,6 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.1-rc.3` / `0.2.1-rc.2` / `0.2.1-alpha.5` / `0.2.1-alpha.4` / `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.8`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.1-rc.3` / `0.2.1-rc.2` / `0.2.1-alpha.5` / `0.2.1-alpha.4` / `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.9`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
@@ -58,9 +58,9 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 支持架构 | 特性与适用场景 |
 |---|---|---|---|---|---|
-| **轻量精简版 (Mini)** *(Issue #11)* | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`** | `...:0.2.1-rc.3-mini`<br>(`...:dsh-0.2.1-rc.3-mini`) | `...:0.2.8-mini`<br>(`...:v0.2.8-mini`) | **`linux/amd64`**<br>**`linux/arm64`**<br>*(ARM 仅 mini)* | **极致精简（实测 1.79GB（amd64）/ 1.82GB（arm64），原 5.3GB、缩减约 66%）**：去 Chromium/noVNC 桌面栈、去 AI 浏览器控制工具、去 Golang/gh CLI、剥离 Office wasm 与本地语音识别库；管理后台自动收敛隐藏桌面控制。**适合纯文本代码开发、低配 VPS、Apple Silicon/ARM64 机器与资源敏感型部署**；不适用需要 AI 操控浏览器进行网页抓取/截屏的场景 |
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.1-rc.3`<br>(`...:dsh-0.2.1-rc.3`) | `...:0.2.8`<br>(`...:v0.2.8`) | `linux/amd64`<br>*(仅 amd64)* | **完整纯净开发环境 (~5.3GB)**：仅包含官方 DSH 核心、统一网关、访问认证、Chromium 桌面环境、Golang 与 gh CLI 工具链，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.1-rc.3-market`<br>(`...:dsh-0.2.1-rc.3-market`) | `...:0.2.8-market`<br>(`...:v0.2.8-market`) | `linux/amd64`<br>*(仅 amd64)* | **开箱即用 (~5.3GB)**：在基础版上**预装社区应用市场 (`dshmarket`)** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **轻量精简版 (Mini)** *(Issue #11)* | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`** | `...:0.2.1-rc.3-mini`<br>(`...:dsh-0.2.1-rc.3-mini`) | `...:0.2.9-mini`<br>(`...:v0.2.9-mini`) | **`linux/amd64`**<br>**`linux/arm64`**<br>*(ARM 仅 mini)* | **极致精简（实测 1.79GB（amd64）/ 1.82GB（arm64），原 5.3GB、缩减约 66%）**：去 Chromium/noVNC 桌面栈、去 AI 浏览器控制工具、去 Golang/gh CLI、剥离 Office wasm 与本地语音识别库；管理后台自动收敛隐藏桌面控制。**适合纯文本代码开发、低配 VPS、Apple Silicon/ARM64 机器与资源敏感型部署**；不适用需要 AI 操控浏览器进行网页抓取/截屏的场景 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.1-rc.3`<br>(`...:dsh-0.2.1-rc.3`) | `...:0.2.9`<br>(`...:v0.2.9`) | `linux/amd64`<br>*(仅 amd64)* | **完整纯净开发环境 (~5.3GB)**：仅包含官方 DSH 核心、统一网关、访问认证、Chromium 桌面环境、Golang 与 gh CLI 工具链，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.1-rc.3-market`<br>(`...:dsh-0.2.1-rc.3-market`) | `...:0.2.9-market`<br>(`...:v0.2.9-market`) | `linux/amd64`<br>*(仅 amd64)* | **开箱即用 (~5.3GB)**：在基础版上**预装社区应用市场 (`dshmarket`)** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -187,7 +187,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-rc.3` 或项目版本 `:0.2.8`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-rc.3` 或项目版本 `:0.2.9`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -429,6 +429,12 @@ docker run --rm ghcr.io/misaka-link/deepseek-harness-docker:latest-mini rg --ver
 
 ## 📝 版本更新历史 (Changelog · 仅最近 3 个版本)
 
+### v0.2.9
+- 🩺 **快照创建稳定性（Issue #12）**：创建快照改为**真异步**（`202 + job`，新增 `GET /admin/api/snapshots/job`），解除 3 分钟客户端超时与反代 60s 截断；兼容 `sync:true` 同步路径。
+- 📈 **实时进度与反馈**：管理后台显示「正在打包 mm:ss · 已写入体积」，刷新自动恢复轮询；成功 / 失败 / 会话过期 / 网关重启均有明确提示；并发创建返回 `409 BUSY`。
+- ⏱️ **超时口径**：打包超时改为 `DSH_SNAPSHOT_TIMEOUT_MS`（默认 30 分钟），前端轮询上限跟随后端；**还原路径仍保持 10 分钟**。
+- 🧰 **构建体验**：`--arch both` 必须配合 `--push`（否则明确报错）；关闭 provenance/SBOM 附件清单，包页面 OS/Arch 只显示 amd64 / arm64，不再出现 `unknown/unknown`。
+
 ### v0.2.8
 - 🚀 **新增 mini 镜像 / 第三镜像变体 `mini`（`:latest-mini`，Issue #11）**：剥离 Chromium 桌面、AI 浏览器插件、Go 与 gh CLI、Office wasm 与本地语音库，C 档瘦身解压体积压缩至 **实测 1.79GB（amd64）/ 1.82GB（arm64）**（原 5.3GB、缩减约 66%）。
 - 🌍 **多架构支持**：`mini` 镜像构建并发布 `linux/amd64` 与 `linux/arm64` 双架构 Multi-Arch Manifest，原生适配 Apple Silicon 与 ARM 云服务器；明确 **ARM 版只有 mini，暂不增加其他变体**（`full` / `market` 仅支持 `linux/amd64`）。
@@ -442,13 +448,7 @@ docker run --rm ghcr.io/misaka-link/deepseek-harness-docker:latest-mini rg --ver
 - 🆕 **官方 0.2.1-rc.2 新能力**：适配 `DeepSeek-V4.1-Flash-1017` 模型上线；适配 **DeepSeek Search 与 Fetch API**，可在网页搜索设置中开启。
 - 🧭 **RC 线定位**：`rc.1` 是 0.2.1 系列首个候选版，汇总了自 `0.2.0-rc.2` 以来的全部变更；`rc.2` 在其之上仅新增上述两项能力，无破坏性变更。
 
-### v0.2.6
-- 🔼 **内置 DSH 版本更新至 `@deepseek-ai/dsh@0.2.1-alpha.5`**，兼容区间上界同步为 `<=0.2.1-alpha.5`，推荐核心与适配矩阵置顶同步指向 `0.2.1-alpha.5`；工程版本递增至 `0.2.6`。
-- 🛠️ **官方 0.2.1-alpha.5 修复**：插件页启用/停用插件后，已打开会话的 `/` 菜单技能列表不刷新；多终端重复查询与失效终端反复重试；PTC Mode 指引缺失与模型身份说明不统一；右侧栏收起时按 Page Up 导致界面左移。
-- 🧩 **官方 0.2.1-alpha.5 新增槽位**：`conversation.input.model.label`，插件可按模型渠道自定义输入框模型选择器中的名称展示。
-- ✅ **无破坏性变更**：无新增/下线包，`engines.dsh` 优先判定与官方插件市场组合包语义均不变。
-
-> 📖 **仅展示最近 3 个版本**（v0.2.8 / v0.2.7 / v0.2.6）。完整历史（含 v0.2.5 及更早）请见 [CHANGELOG.md](CHANGELOG.md)。
+> 📖 **仅展示最近 3 个版本**（v0.2.9 / v0.2.8 / v0.2.7）。完整历史（含 v0.2.6 及更早）请见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.2.8)'
+        description: 'Project version tag (e.g. 0.2.9)'
         required: false
-        default: '0.2.8'
+        default: '0.2.9'
   push:
     branches:
       - main
@@ -41,7 +41,7 @@ jobs:
           # 1. 手动 workflow_dispatch 触发
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PROJ_VER="${{ github.event.inputs.version }}"
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.8"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.9"
             echo "✔ 手动触发 (workflow_dispatch)，指定版本: ${PROJ_VER}"
 
           # 2. Git Tag 触发 (如 v0.0.9)
@@ -52,7 +52,7 @@ jobs:
           # 3. main 分支 push 触发：严格比对版本号是否变动
           else
             PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.8"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.9"
 
             PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
             echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
@@ -181,9 +181,12 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: ${{ matrix.platforms }}
-          # M10：生成 SLSA provenance 与 SBOM（供应链可追溯）
-          provenance: mode=max
-          sbom: true
+          # 关闭 buildx 的 provenance/SBOM 附件清单：它们没有 platform 字段，
+          # 会以 unknown/unknown 出现在 GitHub 包的 OS/Arch 列表里，污染架构展示。
+          # 供应链证据仍由「固定 action SHA + version.json#supply.dshIntegrity」保证；
+          # 如需恢复 SLSA 证明，把下面两行改回 provenance: mode=max / sbom: true。
+          provenance: false
+          sbom: false
           # 每次构建唯一，强制 Dockerfile 预装层缓存失效，
           # 让 plugins.market.list 里的 dshmarket@latest 真正拉到当次构建的最新版
           build-args: |

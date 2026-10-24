@@ -4,6 +4,20 @@
 
 ---
 
+## [v0.2.9] - 2026-10-24
+
+### 🩺 快照创建稳定性：异步化 + 实时进度（Issue #12）
+- **真异步任务**：`POST /admin/api/snapshots/create` 立即返回 `202 + job`，新增 `GET /admin/api/snapshots/job` 查询任务状态；保留 `sync:true` / `?sync=1` 同步兼容路径（版本切换前的自动快照走该路径）。
+- **进度与反馈**：管理后台实时显示「正在打包 mm:ss · 已写入体积」，刷新页面自动恢复轮询；任务成功 / 失败 / 会话过期 / 网关重启均有明确提示，不再出现「点了没反应」。
+- **互斥语义统一**：并发创建返回 `409 BUSY`，同步分支锁冲突同样返回 409。
+- **超时口径**：tar 打包超时改为 `DSH_SNAPSHOT_TIMEOUT_MS`（默认 30 分钟），前端轮询上限跟随后端配置；**快照还原路径仍保持 10 分钟**，避免前后端超时倒挂。
+- **健壮性**：`tar` 被信号终止时透传 `signal`（可区分 OOM / 超时）；任务状态随快照列表原子返回，消除前端两次请求间的竞态；轮询增加重叠守卫，避免重复提示。
+
+
+### 🔧 构建与发布
+- **`build.sh --arch both` 必须配合 `--push`**：多架构 manifest 无法 `--load` 到本地 docker，缺参数时明确报错退出（exit 2），不再静默只写缓存。
+- **包页面架构展示收敛**：关闭 buildx 的 provenance / SBOM 附件清单，GitHub 包页面的 OS/Arch 只显示 `linux/amd64` 与 `linux/arm64`，不再出现 `unknown/unknown` 干扰项；供应链保障仍由固定 action SHA 与 `supply.dshIntegrity` 校验保证。
+
 ## [v0.2.8] - 2026-10-24
 
 ### 🚀 新增 mini 镜像 / 第三镜像变体 `mini`（`:latest-mini`，Issue #11）

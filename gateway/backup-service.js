@@ -42,6 +42,12 @@ function getCurrentProjectVersion() {
 try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
 
 let activeTask = null; // { type: 'backup'|'restore'|'import', label: string, startedAt: number }
+let currentBackupJob = null; // { id, label, status, startedAt, finishedAt, durationMs, filename, tmpPath, sizeBytes, error }
+
+// Issue #12: tar 超时默认提升至 30 分钟 (1800000ms)，支持 DSH_SNAPSHOT_TIMEOUT_MS 环境变量配置
+const DEFAULT_SNAPSHOT_TIMEOUT_MS = Number(process.env.DSH_SNAPSHOT_TIMEOUT_MS) > 0
+  ? Number(process.env.DSH_SNAPSHOT_TIMEOUT_MS)
+  : 30 * 60 * 1000;
 
 function isBusy() {
   return activeTask !== null;
@@ -78,7 +84,7 @@ function hasPigz() {
  * 不设字节硬上限，因此不会误杀大快照（Issue #8）。
  */
 function runTarAsync(args, options = {}) {
-  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10 * 60 * 1000;
+  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : DEFAULT_SNAPSHOT_TIMEOUT_MS;
   // 给「捕获完整 stderr 用于报错」留足余量；真正的安全判定不依赖这个值
   const maxOutputBytes = Number(options.maxOutputBytes) > 0 ? Number(options.maxOutputBytes) : 64 * 1024 * 1024;
   const spawnOptions = { ...options };
@@ -126,11 +132,12 @@ function runTarAsync(args, options = {}) {
       clearTimeout(timer);
       reject(err);
     });
-    child.on('close', code => {
+    child.on('close', (code, signal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ code, stdout, stderr });
+      // Issue #12 复审：透传信号名，便于区分 OOM/SIGKILL 与普通退出码失败
+      resolve({ code, signal: signal || null, stdout, stderr });
     });
   });
 }
@@ -355,7 +362,9 @@ function classifyArchiveMemberLine(rawLine) {
 function validateArchiveMembers(archivePath, opts = {}) {
   const maxMembers = Number(opts.maxMembers) > 0 ? Number(opts.maxMembers) : DEFAULT_MAX_ARCHIVE_MEMBERS;
   const maxListingBytes = Number(opts.maxListingBytes) > 0 ? Number(opts.maxListingBytes) : DEFAULT_MAX_LISTING_BYTES;
-  const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 10 * 60 * 1000;
+  const timeoutMs = Number(opts.timeoutMs) > 0
+    ? Number(opts.timeoutMs)
+    : (Number(process.env.DSH_SNAPSHOT_TIMEOUT_MS) > 0 ? Number(process.env.DSH_SNAPSHOT_TIMEOUT_MS) : 10 * 60 * 1000);
 
   return new Promise((resolve, reject) => {
     const child = spawn('tar', ['--numeric-owner', '-tvzf', archivePath], {
@@ -580,6 +589,11 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
   const taskDesc = isConfigOnly ? '仅配置快照(无会话)' : '完整快照';
   activeTask = { type: 'backup', label: `创建${taskDesc}`, startedAt: Date.now() };
 
+  if (currentBackupJob && currentBackupJob.status === 'running') {
+    currentBackupJob.filename = filename;
+    currentBackupJob.tmpPath = tmpPath;
+  }
+
   console.log(`[backup-service] 开始异步创建${taskDesc}: ${filename}...`);
 
   try {
@@ -632,6 +646,10 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
       throw new Error('生成的快照文件大小为 0，已被清理');
     }
 
+    if (currentBackupJob && currentBackupJob.status === 'running') {
+      currentBackupJob.sizeBytes = stat.size;
+    }
+
     // 原子重命名
     fs.renameSync(tmpPath, finalPath);
     console.log(`[backup-service] ${taskDesc}创建成功: ${filename} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -680,6 +698,132 @@ async function createBackup(nameOrOpts = '', backupType = 'full') {
   } finally {
     activeTask = null;
   }
+}
+
+/**
+ * 启动后台异步备份任务（立即返回任务句柄，不阻塞 HTTP 请求）
+ * @param {string|object} nameOrOpts - 快照备注名或参数对象 { name, type }
+ * @param {string} [backupType='full'] - 备份类型: 'full' 或 'config'
+ * @returns {{ ok: boolean, job?: object, code?: string, error?: string }}
+ */
+function startBackupJob(nameOrOpts = '', backupType = 'full') {
+  if (activeTask) {
+    return {
+      ok: false,
+      code: 'BUSY',
+      error: `当前正在执行「${activeTask.label}」任务，请稍候`
+    };
+  }
+
+  let name = '';
+  let type = 'full';
+  if (typeof nameOrOpts === 'object' && nameOrOpts !== null) {
+    name = nameOrOpts.name || '';
+    type = nameOrOpts.type || nameOrOpts.backupType || 'full';
+  } else {
+    name = nameOrOpts || '';
+    type = backupType || 'full';
+  }
+
+  const isConfigOnly = type === 'config';
+  const taskDesc = isConfigOnly ? '仅配置快照(无会话)' : '完整快照';
+  const label = `创建${taskDesc}`;
+  const jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const startedAt = Date.now();
+
+  const job = {
+    id: jobId,
+    label,
+    status: 'running',
+    startedAt,
+    finishedAt: null,
+    durationMs: 0,
+    filename: null,
+    tmpPath: null,
+    sizeBytes: 0,
+    error: null
+  };
+  currentBackupJob = job;
+
+  console.log(`[backup-service] [${jobId}] 开始执行备份任务「${label}」...`);
+
+  createBackup(nameOrOpts, backupType)
+    .then(res => {
+      const durationMs = Date.now() - startedAt;
+      job.status = 'success';
+      job.finishedAt = Date.now();
+      job.durationMs = durationMs;
+      job.filename = res?.snapshot?.filename || job.filename;
+      job.sizeBytes = res?.snapshot?.sizeBytes || 0;
+      job.tmpPath = null;
+      console.log(`[backup-service] [${jobId}] 备份任务执行成功: ${job.filename} (耗时: ${(durationMs / 1000).toFixed(1)}s, 体积: ${(job.sizeBytes / 1024 / 1024).toFixed(2)} MB)`);
+    })
+    .catch(err => {
+      const durationMs = Date.now() - startedAt;
+      job.status = 'error';
+      job.finishedAt = Date.now();
+      job.durationMs = durationMs;
+      job.error = (err?.message || String(err)).slice(0, 500);
+      job.tmpPath = null;
+      console.error(`[backup-service] [${jobId}] 备份任务执行失败 (耗时: ${(durationMs / 1000).toFixed(1)}s): ${job.error}`);
+    });
+
+  return {
+    ok: true,
+    job: {
+      id: job.id,
+      label: job.label,
+      status: job.status,
+      startedAt: job.startedAt
+    }
+  };
+}
+
+/**
+ * 获取当前或最近一次快照备份任务状态
+ * @returns {object|null}
+ */
+function getBackupJob() {
+  if (!currentBackupJob) return null;
+
+  let progressBytes = 0;
+  if (currentBackupJob.status === 'running') {
+    if (currentBackupJob.tmpPath) {
+      try {
+        if (fs.existsSync(currentBackupJob.tmpPath)) {
+          progressBytes = fs.statSync(currentBackupJob.tmpPath).size || 0;
+        } else if (currentBackupJob.sizeBytes > 0) {
+          progressBytes = currentBackupJob.sizeBytes;
+        }
+      } catch {
+        progressBytes = currentBackupJob.sizeBytes || 0;
+      }
+    } else if (currentBackupJob.sizeBytes > 0) {
+      progressBytes = currentBackupJob.sizeBytes;
+    }
+  } else if (currentBackupJob.status === 'success') {
+    progressBytes = currentBackupJob.sizeBytes || 0;
+  }
+
+  const elapsedMs = currentBackupJob.status === 'running'
+    ? Math.max(0, Date.now() - currentBackupJob.startedAt)
+    : (currentBackupJob.durationMs || 0);
+
+  return {
+    id: currentBackupJob.id,
+    label: currentBackupJob.label,
+    status: currentBackupJob.status,
+    startedAt: currentBackupJob.startedAt,
+    finishedAt: currentBackupJob.finishedAt || null,
+    elapsedMs,
+    durationMs: currentBackupJob.durationMs || elapsedMs,
+    filename: currentBackupJob.filename,
+    sizeBytes: currentBackupJob.sizeBytes,
+    progressBytes,
+    error: currentBackupJob.error,
+    // Issue #12 复审：把后端超时口径下发前端，避免前端写死 30 分钟与 DSH_SNAPSHOT_TIMEOUT_MS 脱节
+    timeoutMs: DEFAULT_SNAPSHOT_TIMEOUT_MS
+  };
 }
 
 /**
@@ -871,7 +1015,8 @@ async function restoreBackup(filename, dshManager, opts = {}) {
     }
 
     extractArgs.push('-xf', snapshotPath, '-C', stagingRoot);
-    const extractRes = await runTarAsync(extractArgs);
+    // Issue #12 复审：还原路径显式保持 10 分钟超时，避免被快照创建的 30 分钟默认值污染
+    const extractRes = await runTarAsync(extractArgs, { timeoutMs: 10 * 60 * 1000 });
     if (extractRes.code !== 0) {
       fs.rmSync(stagingRoot, { recursive: true, force: true });
       throw new Error('tar 解压到 staging 失败（现网未受影响）: ' + (extractRes.stderr || '未知错误'));
@@ -1199,7 +1344,10 @@ function listBackups() {
     return {
       ok: true,
       snapshots: list,
-      activeTask: getActiveTask()
+      activeTask: getActiveTask(),
+      // Issue #12 复审：任务状态与列表原子返回，消除前端两次请求之间的竞态
+      job: getBackupJob(),
+      snapshotTimeoutMs: DEFAULT_SNAPSHOT_TIMEOUT_MS
     };
   } catch (err) {
     return { ok: false, error: err.message, snapshots: [], activeTask: getActiveTask() };
@@ -1379,6 +1527,8 @@ function getBackupPath(filename) {
 
 module.exports = {
   createBackup,
+  startBackupJob,
+  getBackupJob,
   restoreBackup,
   importBackupStream,
   listBackups,

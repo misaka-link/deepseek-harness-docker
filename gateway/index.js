@@ -988,11 +988,37 @@ async function handleAdminApi(req, res, pathname, query) {
       return sendJson(res, 200, backupService.listBackups());
     }
 
+    // Issue #12: 查询当前或最近一次快照打包后台任务状态
+    if (subPath === '/api/snapshots/job' && req.method === 'GET') {
+      return sendJson(res, 200, { ok: true, job: backupService.getBackupJob() });
+    }
+
+    // Issue #12: 默认异步非阻塞创建快照，返回 202 与 job 句柄；兼容 sync:true / ?sync=1 同步创建
     if (subPath === '/api/snapshots/create' && req.method === 'POST') {
       const body = await readJsonBody(req);
+      const isSync = (body && body.sync === true) || query.get('sync') === '1';
+      if (isSync) {
+        try {
+          const r = await backupService.createBackup(body.name, body.type || body.backupType);
+          return sendJson(res, 200, r);
+        } catch (err) {
+          // Issue #12 复审：同步分支的任务锁冲突同样返回 409，保持与异步分支语义一致
+          const msg = safeErrMsg(err);
+          if (/正在执行|请稍候再试/.test(msg)) {
+            return sendJson(res, 409, { ok: false, code: 'BUSY', error: msg });
+          }
+          return sendJson(res, 500, { ok: false, error: msg });
+        }
+      }
       try {
-        const r = await backupService.createBackup(body.name, body.type || body.backupType);
-        return sendJson(res, 200, r);
+        const r = backupService.startBackupJob(body.name, body.type || body.backupType);
+        if (!r.ok && r.code === 'BUSY') {
+          return sendJson(res, 409, r);
+        }
+        if (!r.ok) {
+          return sendJson(res, 500, r);
+        }
+        return sendJson(res, 202, r);
       } catch (err) {
         return sendJson(res, 500, { ok: false, error: safeErrMsg(err) });
       }
