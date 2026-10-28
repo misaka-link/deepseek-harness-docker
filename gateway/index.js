@@ -24,11 +24,24 @@ const { ensureUpstreamCookie, injectPolyfill, getEncodingType, decompressBuffer 
 const CAPABILITIES = require('./capabilities');
 const desktopManager = CAPABILITIES.desktop.supported ? require('./desktop-manager') : require('./desktop-stub');
 const dshManager = require('./dsh-manager');
+const { DshCoreWatchdog } = require('./dsh-watchdog');
 const backupService = require('./backup-service');
 const pluginManager = require('./plugin-manager');
 const versionService = require('./version-service');
 const { getInternalToken, verifyInternalToken } = require('./internal-token');
 const wsOrigin = require('./ws-origin');
+
+// DSH 核心运行时健康看门狗实例（bootstrap 时创建，shutdown 时停止）
+let dshWatchdog = null;
+
+// /healthz 安全读取看门狗状态：getStatus 异常不得拖垮健康检查端点
+function getWatchdogStatusSafe() {
+  try {
+    return dshWatchdog ? dshWatchdog.getStatus() : { enabled: false, running: false };
+  } catch (e) {
+    return { enabled: false, running: false, error: (e && e.message) || String(e) };
+  }
+}
 
 // ── 配置文件持久化与动态读取 ──────────────────────────────────
 const CONFIG_FILE = process.env.GATEWAY_CONFIG_FILE || '/root/.dsh/gateway.config.json';
@@ -356,7 +369,62 @@ const vncProxy = httpProxy.createProxyServer({
   changeOrigin: true
 });
 
+// ── 上游超时（Issue #14）：DSH 核心卡死时快速失败，避免浏览器无限转圈 ──────────
+// 仅作用于「等待上游响应头」阶段；收到响应头即清除，不影响流式响应与长连接。0=关闭。
+const DSH_PROXY_TIMEOUT_MS = (() => {
+  const raw = process.env.DSH_PROXY_TIMEOUT_MS;
+  if (raw === undefined || String(raw).trim() === '') return 30000;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 30000;
+})();
+
+function respondUpstreamTimeout(req, res) {
+  if (!res || typeof res.writeHead !== 'function' || res.headersSent || res.writableEnded) return;
+  const isHtml = String((req.headers && req.headers.accept) || '').includes('text/html');
+  const retry = { 'Cache-Control': 'no-store', 'Retry-After': '5' };
+  if (isHtml) {
+    res.writeHead(504, Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, retry));
+    res.end('<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta http-equiv="refresh" content="5"/><title>DeepSeek Harness - 响应超时</title><style>body{font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.box{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;max-width:480px;box-shadow:0 10px 25px -5px rgba(0,0,0,.08);text-align:center}h2{font-size:18px;margin-bottom:12px;color:#b45309}p{font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px}.btn{display:inline-block;padding:8px 16px;border-radius:8px;background:#0f172a;color:#fff;text-decoration:none;font-size:13px;font-weight:600}</style></head><body><div class="box"><h2>⏱ DeepSeek Harness 响应超时</h2><p>DSH 核心在 ' + Math.round(DSH_PROXY_TIMEOUT_MS / 1000) + ' 秒内未响应（可能已卡死）。系统正在自动检测并恢复，页面将在 5 秒后自动刷新重试。</p><a href="/admin/" class="btn">前往管理控制台 ↗</a></div></body></html>');
+  } else {
+    res.writeHead(504, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, retry));
+    res.end(JSON.stringify({ ok: false, error: 'upstream_timeout', message: 'DSH 核心响应超时（可能卡死），正在自动恢复' }));
+  }
+}
+
+// 带「等响应头」超时的 DSH 反向代理（HTTP）。收到响应头即清除计时器，不影响流式/长连接。
+function dshProxyWeb(req, res) {
+  if (!DSH_PROXY_TIMEOUT_MS) return dshProxy.web(req, res);
+  let fired = false;
+  const timer = setTimeout(() => {
+    if (fired || res.headersSent || res.writableEnded) return;
+    fired = true;
+    req.__dshProxyTimedOut = true;
+    console.warn('[dsh-proxy] 上游 ' + DSH_PROXY_TIMEOUT_MS + 'ms 未返回响应头，返回 504:', req.method, req.url);
+    try { if (req.__dshProxyReq) req.__dshProxyReq.destroy(new Error('dsh_proxy_timeout')); } catch {}
+    respondUpstreamTimeout(req, res);
+  }, DSH_PROXY_TIMEOUT_MS);
+  if (timer.unref) timer.unref();
+  req.__dshProxyTimer = timer;
+  const clear = () => { if (req.__dshProxyTimer) { clearTimeout(req.__dshProxyTimer); req.__dshProxyTimer = null; } };
+  res.on('close', clear);
+  res.on('finish', clear);
+  dshProxy.web(req, res);
+}
+
+dshProxy.on('proxyReq', (proxyReq, req) => { try { req.__dshProxyReq = proxyReq; } catch {} });
+dshProxy.on('proxyReqWs', (proxyReq, req) => {
+  try { req.__dshWsProxyReq = proxyReq; } catch {}
+  const clearWs = () => { if (req.__dshWsTimer) { clearTimeout(req.__dshWsTimer); req.__dshWsTimer = null; } };
+  proxyReq.on('upgrade', () => { req.__dshWsOpened = true; clearWs(); });
+  proxyReq.on('response', clearWs);
+  proxyReq.on('error', clearWs);
+  proxyReq.on('close', clearWs);
+});
+
 dshProxy.on('error', (err, req, res) => {
+  if (req && req.__dshProxyTimer) { clearTimeout(req.__dshProxyTimer); req.__dshProxyTimer = null; }
+  if (req && req.__dshWsTimer) { clearTimeout(req.__dshWsTimer); req.__dshWsTimer = null; }
+  if (req && (req.__dshProxyTimedOut || req.__dshWsTimedOut)) return; // 已返回 504 / WS 握手已超时，忽略被主动 destroy 引发的后续错误
   console.warn('[dsh-proxy] 上游连接等待中 (DSH 启动/停止阶段):', err.message);
   if (res && typeof res.writeHead === 'function' && !res.headersSent) {
     let errorMsg = 'DeepSeek Harness 正在启动就绪中，请稍候数秒后刷新';
@@ -399,7 +467,18 @@ dshProxy.on('error', (err, req, res) => {
   }
 });
 
+vncProxy.on('proxyReqWs', (proxyReq, req) => {
+  try { req.__vncWsProxyReq = proxyReq; } catch {}
+  const clearWs = () => { if (req.__vncWsTimer) { clearTimeout(req.__vncWsTimer); req.__vncWsTimer = null; } };
+  proxyReq.on('upgrade', () => { req.__vncWsOpened = true; clearWs(); });
+  proxyReq.on('response', clearWs);
+  proxyReq.on('error', clearWs);
+  proxyReq.on('close', clearWs);
+});
+
 vncProxy.on('error', (err, req, res) => {
+  if (req && req.__vncWsTimer) { clearTimeout(req.__vncWsTimer); req.__vncWsTimer = null; }
+  if (req && req.__vncWsTimedOut) return; // WS 握手已超时关闭，忽略被主动 destroy 引发的误导日志
   console.warn('[vnc-proxy] 上游连接等待中 (VNC 启动阶段):', err.message);
   if (res && typeof res.writeHead === 'function' && !res.headersSent) {
     // 浏览器直接导航（noVNC 页面本身）时返回独立的「启动中」页（3s 自动刷新），
@@ -428,6 +507,8 @@ const LOOPBACK_NEEDLE_2 = 'connection.isLoopback ? "host" : "memory"';
 const LOOPBACK_NEEDLE_3 = 'connection.isLoopback?"host":"memory"';
 
 dshProxy.on('proxyRes', (proxyRes, req, res) => {
+  if (req && req.__dshProxyTimer) { clearTimeout(req.__dshProxyTimer); req.__dshProxyTimer = null; }
+  if (res && res.writableEnded) { try { proxyRes.destroy(); } catch {} return; }
   // 若上游遇到临时 401，自动重新触发握手重试
   if (proxyRes.statusCode === 401) {
     dshManager.exchangeSessionCookie().catch(() => {});
@@ -1437,6 +1518,8 @@ async function handleHttpRequest(req, res) {
       vncPath: VNC_PATH,
       dsh: { running: !!dsh.running, ready: !!dsh.ready },
       desktop: { enabled: !!ds.enabled, running: !!ds.running },
+      watchdog: getWatchdogStatusSafe(),
+      proxyTimeoutMs: DSH_PROXY_TIMEOUT_MS,
       variant: CAPABILITIES.variant,
       capabilities: {
         desktop: CAPABILITIES.desktop.supported,
@@ -1498,7 +1581,7 @@ async function handleHttpRequest(req, res) {
 
   if (PUBLIC_PATHS.has(pathname)) {
     await alignHeadersForDsh(req);
-    return dshProxy.web(req, res);
+    return dshProxyWeb(req, res);
   }
 
   // 3. 统一身份鉴权校验 (未通过则统一拦截)
@@ -1650,7 +1733,7 @@ async function handleHttpRequest(req, res) {
 
   // 6. DSH 主服务转发 (/*)
   await alignHeadersForDsh(req);
-  dshProxy.web(req, res);
+  dshProxyWeb(req, res);
 }
 
 // 请求级异常兜底：单个请求出错只影响该请求，绝不拖垮整个网关进程
@@ -1726,11 +1809,37 @@ async function handleUpgrade(req, socket, head) {
     // 借着这次 WS 连接自愈重启，避免用户停在"空桌面"上。
     if (!desktopManager.getStatus().running) desktopManager.start().catch(() => {});
     req.url = '/websockify' + (parsedUrl.search || '');
+    // 上游 WS 握手超时：桌面/websockify 卡死时快速关闭客户端连接；握手成功后清除，不影响长连接
+    if (DSH_PROXY_TIMEOUT_MS) {
+      const vncWsTimer = setTimeout(() => {
+        if (req.__vncWsOpened) return;
+        req.__vncWsTimedOut = true;
+        console.warn('[vnc-proxy] WS 上游 ' + DSH_PROXY_TIMEOUT_MS + 'ms 未完成握手，关闭连接:', req.url);
+        try { if (req.__vncWsProxyReq) req.__vncWsProxyReq.destroy(new Error('vnc_ws_timeout')); } catch {}
+        try { socket.end('HTTP/1.1 504 Gateway Timeout\r\nConnection: close\r\n\r\n'); } catch {}
+      }, DSH_PROXY_TIMEOUT_MS);
+      if (vncWsTimer.unref) vncWsTimer.unref();
+      req.__vncWsTimer = vncWsTimer;
+      socket.on('close', () => { if (req.__vncWsTimer) { clearTimeout(req.__vncWsTimer); req.__vncWsTimer = null; } });
+    }
     return vncProxy.ws(req, socket, head);
   }
 
-  // 4. DSH WebSocket 握手 (/events/mux, /events/host, etc.)
+  // 4. DSH WebSocket 握手（核心 MUX 信道，如 /api/remote.mux 等；根路径 / 不挂载 WS 处理器）
   await alignHeadersForDsh(req);
+  // 上游 WS 握手超时：核心卡死时快速关闭客户端连接，避免无限等待；握手成功后清除，不影响长连接
+  if (DSH_PROXY_TIMEOUT_MS) {
+    const wsTimer = setTimeout(() => {
+      if (req.__dshWsOpened) return;
+      req.__dshWsTimedOut = true;
+      console.warn('[dsh-proxy] WS 上游 ' + DSH_PROXY_TIMEOUT_MS + 'ms 未完成握手，关闭连接:', req.url);
+      try { if (req.__dshWsProxyReq) req.__dshWsProxyReq.destroy(new Error('dsh_ws_timeout')); } catch {}
+      try { socket.end('HTTP/1.1 504 Gateway Timeout\r\nConnection: close\r\n\r\n'); } catch {}
+    }, DSH_PROXY_TIMEOUT_MS);
+    if (wsTimer.unref) wsTimer.unref();
+    req.__dshWsTimer = wsTimer;
+    socket.on('close', () => { if (req.__dshWsTimer) { clearTimeout(req.__dshWsTimer); req.__dshWsTimer = null; } });
+  }
   dshProxy.ws(req, socket, head);
 }
 
@@ -1809,6 +1918,15 @@ async function bootstrap() {
   // 启动 DSH 核心服务
   await dshManager.boot().catch(err => console.error('[dsh-manager] 启动失败:', err.message));
 
+  // 启动 DSH 核心运行时健康看门狗：检测“进程还在、端口占用、但 event loop 卡死”的场景，
+  // 连续探活失败自动重启核心（滑动窗口熔断防风暴），并把真实探活状态上报 /healthz。
+  try {
+    dshWatchdog = new DshCoreWatchdog({ dshManager });
+    dshWatchdog.start();
+  } catch (err) {
+    console.error('[gateway] 启动 DSH 看门狗失败（已忽略，不影响网关运行）:', err && err.message);
+  }
+
   // 默认首次启动自动创建初始配置快照 (自动防重复创建)
   dshManager.ensureDefaultSnapshot();
 }
@@ -1816,6 +1934,7 @@ async function bootstrap() {
 async function shutdown(exitCode = 0) {
   const code = typeof exitCode === 'number' ? exitCode : 0;
   console.log('\n[gateway] 正在退出，关闭桌面与 DSH 进程...');
+  if (dshWatchdog) { try { dshWatchdog.stop(); } catch {} }
   // 兜底：无论如何 8 秒内必须退出，避免关机流程自身卡死
   const hardTimer = setTimeout(() => { console.error('[gateway] 退出超时，强制结束'); process.exit(code); }, 8000);
   if (hardTimer.unref) hardTimer.unref();

@@ -24,7 +24,7 @@ const LOOPBACK_SNIPPET = 'const x = isLoopbackHostname(pageLocation.hostname);';
 const AUTH_SNIPPET = 'class C {\n\tisAuthenticated(request) {\n\t\treturn false;\n\t}\n}\n';
 // 0.2.1-alpha.2 起签名：新增 secure 参数（锚点必须兼容新旧两种形态）
 const AUTH_SNIPPET_NEW = 'class C {\n\tisAuthenticated(request, secure = false) {\n\t\treturn false;\n\t}\n}\n';
-const COMBO_SNIPPET = 'class R {\n\tbundleResource(method, url) {\n\t\tconst resourceUrl = url;\n\t\tconst response = this.responses.get(resourceUrl) ?? this.previousBatchResponses.get(resourceUrl) ?? this.chunkResponse(requestUrl);\n\t\treturn response;\n\t}\n}\n';
+const COMBO_SNIPPET = 'class R {\n\tbundleResource(method, url) {\n\t\tconst resourceUrl = url;\n\t\tconst response = this.responses.get(resourceUrl) ?? this.previousBatchResponses.get(resourceUrl) ?? this.chunkResponse(requestUrl);\n\t\treturn response;\n\t\treturn { status: 404 };\n\t}\n\tserveBundle = async (req, res) => {\n\t};\n}\n';
 
 function makeSandbox(name, { breakAuth = false, authSnippet = AUTH_SNIPPET, dshVersion = '0.2.1-alpha.2', clientFile = 'dsh-client-ui-layout/lib/client.js' } = {}) {
   const base = path.join(os.tmpdir(), `dsh-patch-${name}-${Date.now()}`);

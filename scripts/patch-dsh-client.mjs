@@ -21,7 +21,7 @@ const MARKER = '/* dsh-patch: loopback-host-mode-applied */';
 // ── 必需补丁追踪 ──────────────────────────────────────────────
 // 背景：本脚本靠字符串锚点给 DSH 源码打补丁，DSH 一升级锚点就可能失效。
 // 过去失效是"静默跳过 + 结尾打印成功"，本项目已因此踩过两次坑，这里改为必须显式失败。
-const REQUIRED_PATCHES = ['client-loopback', 'auth-bypass', 'combo-fallback'];
+const REQUIRED_PATCHES = ['client-loopback', 'auth-bypass', 'combo-fallback', 'bundle-selfheal'];
 const appliedPatches = new Set();
 const missedPatches = new Set();
 const markApplied = (name) => appliedPatches.add(name);
@@ -356,26 +356,36 @@ for (const searchDir of SEARCH_DIRS) {
       }
 
       // 3b. 旧 rev 已不存在（DSH 重启/换镜像后）→ 不再 404，返回自愈重载模块
+      //     锚点随上游版本漂移：
+      //       - ≤0.2.1-rc.x：bundleResource 末尾 `return { status: 404 };` 之后紧跟 serveBundle 方法；
+      //       - 0.2.2-alpha.2 起：删除 serveBundle，改由 webServer.register({ resource: fetchBundle }) 服务，
+      //         bundleResource 末尾同样是 `return { status: 404 };` 之后直接闭合类（`};`）。
+      //     返回体统一用 Buffer（新版 fetchBundle 用 heldBody() 包成 ReadableStream，只接受字节块）。
       if (!mContent.includes('/* dsh-patch: bundle-404-selfheal */')) {
-        const anchor = 'return { status: 404 };\n\t}\n\tserveBundle = async (req, res) => {';
-        if (mContent.includes(anchor)) {
-          const healBody = 'try{if(!sessionStorage.getItem("dsh-bundle-heal")){sessionStorage.setItem("dsh-bundle-heal","1");setTimeout(function(){try{sessionStorage.removeItem("dsh-bundle-heal")}catch(e){}},20000);location.reload()}}catch(e){}';
-          const replacement =
-            '/* dsh-patch: bundle-404-selfheal */' +
-            '\n\t\tif (resourceUrl.startsWith("/plugins/")) {' +
-            '\n\t\t\treturn {' +
-            '\n\t\t\t\tstatus: 200,' +
-            '\n\t\t\t\theaders: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" },' +
-            '\n\t\t\t\t...(method === "HEAD" ? {} : { body: ' + JSON.stringify(healBody) + ' })' +
-            '\n\t\t\t};' +
-            '\n\t\t}' +
-            '\n\t\treturn { status: 404 };' +
-            '\n\t}' +
-            '\n\tserveBundle = async (req, res) => {';
-          mContent = mContent.replace(anchor, replacement);
+        const healBody = 'try{if(!sessionStorage.getItem("dsh-bundle-heal")){sessionStorage.setItem("dsh-bundle-heal","1");setTimeout(function(){try{sessionStorage.removeItem("dsh-bundle-heal")}catch(e){}},20000);location.reload()}}catch(e){}';
+        const selfhealReturn =
+          '\n\t\t/* dsh-patch: bundle-404-selfheal */' +
+          '\n\t\tif (resourceUrl.startsWith("/plugins/")) {' +
+          '\n\t\t\treturn {' +
+          '\n\t\t\t\tstatus: 200,' +
+          '\n\t\t\t\theaders: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" },' +
+          '\n\t\t\t\t...(method === "HEAD" ? {} : { body: Buffer.from(' + JSON.stringify(healBody) + ') })' +
+          '\n\t\t\t};' +
+          '\n\t\t}';
+        // 旧版锚点（≤0.2.1-rc.x）
+        const OLD_ANCHOR = 'return { status: 404 };\n\t}\n\tserveBundle = async (req, res) => {';
+        // 新版锚点（0.2.2-alpha.2 起，serveBundle 已删除）
+        const NEW_ANCHOR = '\t\t\t...method === "HEAD" ? {} : { body: await response.body() }\n\t\t};\n\t\treturn { status: 404 };\n\t}\n};';
+        if (mContent.includes(OLD_ANCHOR)) {
+          mContent = mContent.replace(OLD_ANCHOR, selfhealReturn + '\n\t\t' + OLD_ANCHOR);
+          changed = true;
+        } else if (mContent.includes(NEW_ANCHOR)) {
+          mContent = mContent.replace(NEW_ANCHOR, NEW_ANCHOR.replace('\t\treturn { status: 404 };\n\t}\n};', selfhealReturn + '\n\t\treturn { status: 404 };\n\t}\n};'));
           changed = true;
         }
       }
+      if (mContent.includes('/* dsh-patch: bundle-404-selfheal */')) markApplied('bundle-selfheal');
+      else markMissed('bundle-selfheal');
 
       if (changed) {
         fs.writeFileSync(modulesTarget, mContent, 'utf8');
@@ -388,6 +398,7 @@ for (const searchDir of SEARCH_DIRS) {
       }
     } catch (err) {
       markMissed('combo-fallback');
+      markMissed('bundle-selfheal');
       console.warn(`[patch-dsh-client] 修补 client-modules 失败: ${err.message}`);
     }
   }

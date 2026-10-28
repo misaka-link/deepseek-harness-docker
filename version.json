@@ -11,31 +11,73 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.1-rc.3",
-    "dshIntegrity": "sha512-H+E9HLnHf7fJqzen84Z9Bq8ggb5xbrcbyhZjXTJLE9NabHr3zteGvTRvdvGkxPl4ov80is4WLglFmSo+/olJjg==",
+    "dshVersion": "0.2.2-alpha.2",
+    "dshIntegrity": "sha512-mdcpgF8D1eFQV8Gu3T/sYLkBwfw9h/Li0uPIxXyby1VybJgrFg8BU1Le40FiMnN+heL7k3zOMuAVe7sFq/JO4w==",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
     },
-    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.1-rc.3 来源 npm dist-tag next。"
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-alpha.2 来源 npm dist-tag alpha。"
   },
   "latest": {
-    "version": "0.2.7",
-    "releaseDate": "2026-10-17",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.7",
-    "changelog": "内置 DSH 切换至 0.2.1 候选线 @deepseek-ai/dsh@0.2.1-rc.2，兼容区间上界同步为 <=0.2.1-rc.2；适配矩阵置顶新增 0.2.1-rc.2；工程版本递增至 0.2.7；官方 0.2.1-rc.2 新增 DeepSeek-V4.1-Flash-1017 模型适配与 DeepSeek Search/Fetch API（可在网页搜索设置中开启）",
+    "version": "0.2.10",
+    "releaseDate": "2026-10-28",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.10",
+    "changelog": "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-alpha.2（npm alpha 线），兼容区间上界同步为 <=0.2.2-alpha.2；适配矩阵置顶新增 0.2.2-alpha.2；供应链 supply.dshVersion、Dockerfile 构建参数与 build.sh 出厂基准同步升级，工程版本递增至 0.2.10",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-rc.2，兼容区间上界同步为 <=0.2.1-rc.2",
-      "已适配版本矩阵置顶新增 0.2.1-rc.2（保留 0.2.1-alpha.5 及历史项），推荐核心与前端兜底同步指向 0.2.1-rc.2",
-      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-rc.2，工程版本递增至 0.2.7"
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-alpha.2，兼容区间上界同步为 <=0.2.2-alpha.2",
+      "已适配版本矩阵置顶新增 0.2.2-alpha.2（保留 0.2.1-rc.3 及历史项），推荐核心与前端兜底同步指向 0.2.2-alpha.2",
+      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.2-alpha.2，工程版本递增至 0.2.10",
+      "适配 0.2.2-alpha.2 新版 dsh-client-modules（移除 serveBundle，改用 webServer.register/fetchBundle），补丁 bundle-404-selfheal 增加新锚点并纳入必需补丁校验，修复重启/切版后旧 rev 404 白屏不自愈"
     ],
     "dshChangelogList": [
-      "适配 DeepSeek-V4.1-Flash-1017 模型上线",
-      "适配 DeepSeek Search 与 Fetch API，可在网页搜索设置中开启",
-      "0.2.1 系列首个候选版（rc.1）汇总了自 0.2.0-rc.2 以来的变更：自定义插件索引源、让 Agent 创建插件入口、插件启停/更新的依赖同步与热重载、可选极简模式与 Claude Code/Codex 组合包、开发者工具组合包、CoT 机器翻译、Git Worktrees、working_directory 工具、SSH helper 运行时等"
+      "新增插件管理富文本详情，支持更新第三方插件包（热更新失败自动回滚旧版本）",
+      "支持引用聊天文本、复制完整会话为 Markdown、工作步骤收起后保留全部助手文字回复，并新增日/西/法/德/俄/巴葡多语言界面",
+      "新增实验性个性化推荐、开发者工具-统计、变更请求与工作树、subagent_oar（委派本机 Codex/Claude CLI）等插件",
+      "远程连接默认启用 WebSocket 压缩，Web 静态资源支持 ETag 304 条件请求",
+      "破坏性/行为变更：最低 Node.js 提升至 24.9；官方组合包列表改由 @deepseek-ai/dsh-official-bundles 导出；自定义插件需迁移异步会话投影、tools.resolve/executable 与提示词组装接口；PTC 工具执行拆分为按 Agent 作用域插件，旧 tools.mode / DSH_TOOLS_MODE 需迁移",
+      "升级 pi-ai 至 1.3.0；未声明容量的自定义模型默认上下文/输出调整为 1M/128K"
     ]
   },
   "history": {
+    "0.2.9": {
+      "version": "0.2.9",
+      "releaseDate": "2026-10-24",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.9",
+      "changelog": "修复 Issue #12 快照创建超时/无反馈：异步任务 + 实时进度 + 409 互斥；build.sh --arch both 必须配合 --push；关闭 provenance/SBOM 附件清单",
+      "changelogList": [
+        "快照创建改为真异步任务（202 + job，新增 GET /admin/api/snapshots/job），解除客户端与反代超时；并发创建返回 409 BUSY",
+        "管理后台显示实时打包进度，成功/失败/会话过期/网关重启均有明确提示；打包超时改为 DSH_SNAPSHOT_TIMEOUT_MS（默认 30 分钟）",
+        "build.sh --arch both 必须配合 --push，缺参数明确报错；关闭 buildx provenance/SBOM 附件清单"
+      ]
+    },
+    "0.2.8": {
+      "version": "0.2.8",
+      "releaseDate": "2026-10-24",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.8",
+      "changelog": "新增 mini 镜像（:latest-mini）与 ARM64 双架构，C 档瘦身至实测 1.79GB；单一能力真源与运行期硬闸；内置 DSH 升级至 0.2.1-rc.3",
+      "changelogList": [
+        "新增第三镜像变体 mini（:latest-mini），剥离 Chromium/noVNC 桌面栈、AI 浏览器工具、Golang/gh CLI、Office wasm 与本地语音库，解压体积由约 5.3GB 降至实测 1.79GB（amd64）/1.82GB（arm64）",
+        "mini 镜像发布 linux/amd64 与 linux/arm64 双架构 Multi-Arch Manifest（full/market 仅 amd64）",
+        "新增 gateway/capabilities.js 作为运行时变体能力唯一真源，mini 下 /vnc/* 返回 404、桌面控制 API 返回 403 CAPABILITY_UNAVAILABLE",
+        "内置官方 DSH 引擎升级至 @deepseek-ai/dsh@0.2.1-rc.3，工程版本递增至 0.2.8"
+      ]
+    },
+    "0.2.7": {
+      "version": "0.2.7",
+      "releaseDate": "2026-10-17",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.7",
+      "changelog": "内置 DSH 切换至 0.2.1 候选线 @deepseek-ai/dsh@0.2.1-rc.2，兼容区间上界同步为 <=0.2.1-rc.2；适配矩阵置顶新增 0.2.1-rc.2；工程版本递增至 0.2.7；官方 0.2.1-rc.2 新增 DeepSeek-V4.1-Flash-1017 模型适配与 DeepSeek Search/Fetch API（可在网页搜索设置中开启）",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.1-rc.2，兼容区间上界同步为 <=0.2.1-rc.2",
+        "已适配版本矩阵置顶新增 0.2.1-rc.2（保留 0.2.1-alpha.5 及历史项），推荐核心与前端兜底同步指向 0.2.1-rc.2",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.1-rc.2，工程版本递增至 0.2.7"
+      ],
+      "dshChangelogList": [
+        "适配 DeepSeek-V4.1-Flash-1017 模型上线",
+        "适配 DeepSeek Search 与 Fetch API，可在网页搜索设置中开启"
+      ]
+    },
     "0.2.6": {
       "version": "0.2.6",
       "releaseDate": "2026-10-17",
@@ -354,9 +396,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.1-rc.3",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.1-rc.3",
+    "recommendedDsh": "0.2.2-alpha.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.2-alpha.2",
     "adaptedVersions": [
+      "0.2.2-alpha.2",
       "0.2.1-rc.3",
       "0.2.1-rc.2",
       "0.2.1-alpha.5",

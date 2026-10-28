@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.1-rc.3` / `0.2.1-rc.2` / `0.2.1-alpha.5` / `0.2.1-alpha.4` / `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.9`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.2-alpha.2` / `0.2.1-rc.3` / `0.2.1-rc.2` / `0.2.1-alpha.5` / `0.2.1-alpha.4` / `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.10`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像统一提供 **`:latest`**（完整纯净版）、**`:latest-market`**（预装市场版）与 **`:latest-mini`**（轻量无浏览器版），开箱即用；其中 **`mini` 镜像支持 `linux/amd64` 与 `linux/arm64` 双架构 Multi-Arch Manifest**（根据主机平台架构自动拉取适配），**明确 ARM 版只有 mini，暂不增加其他变体**（`full` / `market` 仅支持 `linux/amd64`）。每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.1-rc.3`、`:0.2.1-rc.3-market`、`:0.2.1-rc.3-mini`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.8`、`:0.2.8-market`、`:0.2.8-mini`），精确锁定本容器套件自身的版本。
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.2-alpha.2`、`:0.2.2-alpha.2-market`、`:0.2.2-alpha.2-mini`），精确锁定底层 DSH 官方引擎；  
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.10`、`:0.2.10-market`、`:0.2.10-mini`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维；同时**内置「DSH 容器助手」插件**（移动端视口防黑屏适配、接管官方远程登录弹窗、登录态检测与手机号隐私打码）。
 
@@ -38,7 +38,7 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 静态资源版本化隔离，配合 `dsh-browser-desktop` 插件，AI 可自主操控网页与实时截屏 |
 
-| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.1-rc.3) |
+| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.2-alpha.2) |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，完美支持 DeepSeek-V41-Flash 等最新模型 |
@@ -58,9 +58,9 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 支持架构 | 特性与适用场景 |
 |---|---|---|---|---|---|
-| **轻量精简版 (Mini)** *(Issue #11)* | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`** | `...:0.2.1-rc.3-mini`<br>(`...:dsh-0.2.1-rc.3-mini`) | `...:0.2.9-mini`<br>(`...:v0.2.9-mini`) | **`linux/amd64`**<br>**`linux/arm64`**<br>*(ARM 仅 mini)* | **极致精简（实测 1.79GB（amd64）/ 1.82GB（arm64），原 5.3GB、缩减约 66%）**：去 Chromium/noVNC 桌面栈、去 AI 浏览器控制工具、去 Golang/gh CLI、剥离 Office wasm 与本地语音识别库；管理后台自动收敛隐藏桌面控制。**适合纯文本代码开发、低配 VPS、Apple Silicon/ARM64 机器与资源敏感型部署**；不适用需要 AI 操控浏览器进行网页抓取/截屏的场景 |
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.1-rc.3`<br>(`...:dsh-0.2.1-rc.3`) | `...:0.2.9`<br>(`...:v0.2.9`) | `linux/amd64`<br>*(仅 amd64)* | **完整纯净开发环境 (~5.3GB)**：仅包含官方 DSH 核心、统一网关、访问认证、Chromium 桌面环境、Golang 与 gh CLI 工具链，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.1-rc.3-market`<br>(`...:dsh-0.2.1-rc.3-market`) | `...:0.2.9-market`<br>(`...:v0.2.9-market`) | `linux/amd64`<br>*(仅 amd64)* | **开箱即用 (~5.3GB)**：在基础版上**预装社区应用市场 (`dshmarket`)** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **轻量精简版 (Mini)** *(Issue #11)* | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`** | `...:0.2.2-alpha.2-mini`<br>(`...:dsh-0.2.2-alpha.2-mini`) | `...:0.2.10-mini`<br>(`...:v0.2.10-mini`) | **`linux/amd64`**<br>**`linux/arm64`**<br>*(ARM 仅 mini)* | **极致精简（实测 1.79GB（amd64）/ 1.82GB（arm64），原 5.3GB、缩减约 66%）**：去 Chromium/noVNC 桌面栈、去 AI 浏览器控制工具、去 Golang/gh CLI、剥离 Office wasm 与本地语音识别库；管理后台自动收敛隐藏桌面控制。**适合纯文本代码开发、低配 VPS、Apple Silicon/ARM64 机器与资源敏感型部署**；不适用需要 AI 操控浏览器进行网页抓取/截屏的场景 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.2-alpha.2`<br>(`...:dsh-0.2.2-alpha.2`) | `...:0.2.10`<br>(`...:v0.2.10`) | `linux/amd64`<br>*(仅 amd64)* | **完整纯净开发环境 (~5.3GB)**：仅包含官方 DSH 核心、统一网关、访问认证、Chromium 桌面环境、Golang 与 gh CLI 工具链，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.2-alpha.2-market`<br>(`...:dsh-0.2.2-alpha.2-market`) | `...:0.2.10-market`<br>(`...:v0.2.10-market`) | `linux/amd64`<br>*(仅 amd64)* | **开箱即用 (~5.3GB)**：在基础版上**预装社区应用市场 (`dshmarket`)** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -187,7 +187,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-rc.3` 或项目版本 `:0.2.9`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-alpha.2` 或项目版本 `:0.2.10`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -202,7 +202,7 @@ docker run -d \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-rc.3-market` 或项目版本 `:0.2.8-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-alpha.2-market` 或项目版本 `:0.2.10-market`)*
 
 #### 选项 C：启动轻量精简版 (默认 `:latest-mini`，无浏览器，实测 1.82GB，支持 amd64/arm64)
 ```bash
@@ -216,7 +216,7 @@ docker run -d \
   -v $PWD/data/snapshots:/root/.dsh-snapshots \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-mini
 ```
-*(注：Mini 镜像无需挂载 `./data/browser` 目录；ARM64 主机直接支持自动选架构；若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.1-rc.3-mini` 或项目版本 `:0.2.8-mini`；完整说明详见上方 [Mini 镜像快速启动](#-mini-镜像快速启动))*
+*(注：Mini 镜像无需挂载 `./data/browser` 目录；ARM64 主机直接支持自动选架构；若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-alpha.2-mini` 或项目版本 `:0.2.10-mini`；完整说明详见上方 [Mini 镜像快速启动](#-mini-镜像快速启动))*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -363,6 +363,15 @@ docker compose -f docker-compose.mini.yml up -d
 
 ## 📝 版本更新历史 (Changelog · 仅最近 3 个版本)
 
+### v0.2.10
+- 🔼 **内置 DSH 升级至 `@deepseek-ai/dsh@0.2.2-alpha.2`**（npm `alpha` 线），兼容区间上界同步为 `<=0.2.2-alpha.2`，推荐核心与适配矩阵置顶同步指向 `0.2.2-alpha.2`；工程版本递增至 `0.2.10`。
+- 🆕 **官方 0.2.2-alpha.2 新能力**：插件管理支持富文本详情与第三方插件包更新（热更新失败自动回滚）；支持引用聊天文本、复制完整会话为 Markdown、多语言界面；新增实验性个性化推荐、开发者工具-统计、变更请求与工作树、`subagent_oar`（委派本机 Codex/Claude CLI）等插件。
+- ⚡ **体验与性能**：远程连接默认启用 WebSocket 压缩、Web 静态资源支持 ETag 304；搜索优先提供 Search API 长摘要。
+- 🧩 **适配 `dsh-client-modules` 新版 bundle 服务架构**：0.2.2-alpha.2 移除 `serveBundle` 改由 `webServer.register({ resource: fetchBundle })` 提供插件包；补丁 `bundle-404-selfheal` 增加新锚点并纳入必需补丁校验，修复重启 / 切版后旧 `rev` 404 白屏不自愈的问题。
+- 🛡️ **网关稳定性：新增 DSH 核心运行时健康看门狗**（`gateway/dsh-watchdog.js`）：周期探活核心端口，连续失败自动重启（滑动窗口限流防风暴），启动/停止/安装/还原期间自动跳过；`/healthz` 增加 `watchdog` 真实探活状态，修复「核心卡死但 healthz 假绿」。
+- ⏱️ **反代上游超时（快速失败）**：`dshProxy` 增加“等待上游响应头”超时（默认 30s，`DSH_PROXY_TIMEOUT_MS` 可配，0 关闭），核心卡死时 `GET /` 约 30s 返回 504（自动刷新页/JSON），收到响应头即清除、不影响流式；WS 握手同样超时快速关闭。
+- ⚠️ **破坏性/行为变更**：最低 Node.js 提升至 24.9；官方组合包列表改由 `@deepseek-ai/dsh-official-bundles` 导出；自定义插件需迁移异步会话投影、`tools.resolve/executable` 与提示词组装接口，旧 `tools.mode` / `DSH_TOOLS_MODE` 需迁移；`pi-ai` 升级至 1.3.0。
+
 ### v0.2.9
 - 🩺 **快照创建稳定性（Issue #12）**：创建快照改为**真异步**（`202 + job`，新增 `GET /admin/api/snapshots/job`），解除 3 分钟客户端超时与反代 60s 截断；兼容 `sync:true` 同步路径。
 - 📈 **实时进度与反馈**：管理后台显示「正在打包 mm:ss · 已写入体积」，刷新自动恢复轮询；成功 / 失败 / 会话过期 / 网关重启均有明确提示；并发创建返回 `409 BUSY`。
@@ -377,12 +386,8 @@ docker compose -f docker-compose.mini.yml up -d
 - 🔼 **内置 DSH 切换至 0.2.1 候选线 `@deepseek-ai/dsh@0.2.1-rc.3`**，兼容区间上界同步为 `<=0.2.1-rc.3`，推荐核心与适配矩阵置顶同步指向 `0.2.1-rc.3`；工程版本递增至 `0.2.8`。
 - 📦 **编排与脚本自适应**：新增 `docker-compose.mini.yml`（去 `./data/browser` 挂载），装配脚本感知变体防缺包，配套新增依赖瘦身脚本 `prune-runtime-deps.mjs` 与自动化验收脚本 `scripts/remote-verify-mini.sh`。
 
-### v0.2.7
-- 🔼 **内置 DSH 切换至 0.2.1 候选线 `@deepseek-ai/dsh@0.2.1-rc.2`**，兼容区间上界同步为 `<=0.2.1-rc.2`，推荐核心与适配矩阵置顶同步指向 `0.2.1-rc.2`；工程版本递增至 `0.2.7`。
-- 🆕 **官方 0.2.1-rc.2 新能力**：适配 `DeepSeek-V4.1-Flash-1017` 模型上线；适配 **DeepSeek Search 与 Fetch API**，可在网页搜索设置中开启。
-- 🧭 **RC 线定位**：`rc.1` 是 0.2.1 系列首个候选版，汇总了自 `0.2.0-rc.2` 以来的全部变更；`rc.2` 在其之上仅新增上述两项能力，无破坏性变更。
 
-> 📖 **仅展示最近 3 个版本**（v0.2.9 / v0.2.8 / v0.2.7）。完整历史（含 v0.2.6 及更早）请见 [CHANGELOG.md](CHANGELOG.md)。
+> 📖 **仅展示最近 3 个版本**（v0.2.10 / v0.2.9 / v0.2.8）。完整历史（含 v0.2.6 及更早）请见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
