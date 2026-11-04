@@ -11,35 +11,61 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.2-alpha.2",
-    "dshIntegrity": "sha512-mdcpgF8D1eFQV8Gu3T/sYLkBwfw9h/Li0uPIxXyby1VybJgrFg8BU1Le40FiMnN+heL7k3zOMuAVe7sFq/JO4w==",
+    "dshVersion": "0.2.2-alpha.3",
+    "dshIntegrity": "sha512-ffV06fOgiOeIJOmA3EgPj+U6azJrsLACiscLj9t+AfM7p9p14bMzErWRhgeC8nizBTyQ2ckxkPQtj4Pqon8mGw==",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
     },
-    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-alpha.2 来源 npm dist-tag alpha。"
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-alpha.3 来源 npm dist-tag alpha。"
   },
   "latest": {
-    "version": "0.2.10",
-    "releaseDate": "2026-10-28",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.10",
-    "changelog": "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-alpha.2（npm alpha 线），兼容区间上界同步为 <=0.2.2-alpha.2；适配矩阵置顶新增 0.2.2-alpha.2；供应链 supply.dshVersion、Dockerfile 构建参数与 build.sh 出厂基准同步升级，工程版本递增至 0.2.10",
+    "version": "0.2.11",
+    "releaseDate": "2026-11-04",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.11",
+    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-alpha.3，兼容区间上界同步为 <=0.2.2-alpha.3；适配矩阵置顶新增 0.2.2-alpha.3；供应链 supply.dshVersion、Dockerfile DSH_VERSION 与 build.sh 出厂基准同步升级，工程版本递增至 0.2.11",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-alpha.2，兼容区间上界同步为 <=0.2.2-alpha.2",
-      "已适配版本矩阵置顶新增 0.2.2-alpha.2（保留 0.2.1-rc.3 及历史项），推荐核心与前端兜底同步指向 0.2.2-alpha.2",
-      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.2-alpha.2，工程版本递增至 0.2.10",
-      "适配 0.2.2-alpha.2 新版 dsh-client-modules（移除 serveBundle，改用 webServer.register/fetchBundle），补丁 bundle-404-selfheal 增加新锚点并纳入必需补丁校验，修复重启/切版后旧 rev 404 白屏不自愈"
+      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-alpha.3，兼容区间上界同步为 <=0.2.2-alpha.3",
+      "已适配版本矩阵置顶新增 0.2.2-alpha.3（保留 0.2.2-alpha.2 及历史项），推荐核心与前端兜底同步指向 0.2.2-alpha.3",
+      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.2-alpha.3，工程版本递增至 0.2.11",
+      "修复 patch-dsh-client.mjs 在纯净 npm 安装树下漏扫嵌套子包、必需补丁未命中可能被静默放行的问题，必需补丁校验改为强制全覆盖",
+      "修复 DSH 容器助手登录弹窗被设置面板遮挡的问题：弹窗改为 ReactDOM.createPortal 挂载至 document.body，保证在视口中居中显示",
+      "优化 DSH 容器助手左下角登录入口卡样式：紧凑布局、状态胶囊、全宽主按钮与摘要截断，减少侧栏占用并提升可读性",
+      "DSH 容器助手左下角登录入口卡新增关闭按钮：关闭状态持久化到 localStorage，完成登录后自动清除，刷新后不再自动出现"
     ],
     "dshChangelogList": [
-      "新增插件管理富文本详情，支持更新第三方插件包（热更新失败自动回滚旧版本）",
-      "支持引用聊天文本、复制完整会话为 Markdown、工作步骤收起后保留全部助手文字回复，并新增日/西/法/德/俄/巴葡多语言界面",
-      "新增实验性个性化推荐、开发者工具-统计、变更请求与工作树、subagent_oar（委派本机 Codex/Claude CLI）等插件",
-      "远程连接默认启用 WebSocket 压缩，Web 静态资源支持 ETag 304 条件请求",
-      "破坏性/行为变更：最低 Node.js 提升至 24.9；官方组合包列表改由 @deepseek-ai/dsh-official-bundles 导出；自定义插件需迁移异步会话投影、tools.resolve/executable 与提示词组装接口；PTC 工具执行拆分为按 Agent 作用域插件，旧 tools.mode / DSH_TOOLS_MODE 需迁移",
-      "升级 pi-ai 至 1.3.0；未声明容量的自定义模型默认上下文/输出调整为 1M/128K"
+      "支持统一右键与键盘菜单，覆盖会话、工作区和侧边栏，并支持开发者扩展",
+      "文件预览支持常驻目录树和文件定位功能；文本与 Markdown 预览在刷新后保留阅读位置",
+      "实验性「变更请求与工作树」统一代码审查与工作树入口，支持查看本地及 PR 差异并将选中代码交由 Agent",
+      "改善手机端侧栏导航与窄屏布局，保持会话标题稳定，菜单和浮窗优先保持在可见视口内",
+      "Trajectory 支持独立折叠子调用并保留失败工具真实返回文本；优化对话中思考内容的展示效果",
+      "通过 pi-ai 接入的模型在会话图片超过请求数量上限时自动省略最早图片继续请求，避免持续报错",
+      "修复加载更早压缩会话后聊天停止更新、包含旧版子代理历史会话打不开与搜索失败的问题",
+      "「自动化任务」改为统一宿主级管理，支持手动创建、直接编辑与会话预填提示创建",
+      "同步 Cordis Core 至 4.0.0-rc.11、Loader 至 1.0.0-rc.8、Include 至 1.1.1，统一配置与持久化行为"
     ]
   },
   "history": {
+    "0.2.10": {
+      "version": "0.2.10",
+      "releaseDate": "2026-10-28",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.10",
+      "changelog": "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-alpha.2（npm alpha 线），兼容区间上界同步为 <=0.2.2-alpha.2；适配矩阵置顶新增 0.2.2-alpha.2；供应链 supply.dshVersion、Dockerfile 构建参数与 build.sh 出厂基准同步升级，工程版本递增至 0.2.10",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-alpha.2，兼容区间上界同步为 <=0.2.2-alpha.2",
+        "已适配版本矩阵置顶新增 0.2.2-alpha.2（保留 0.2.1-rc.3 及历史项），推荐核心与前端兜底同步指向 0.2.2-alpha.2",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.2-alpha.2，工程版本递增至 0.2.10",
+        "适配 0.2.2-alpha.2 新版 dsh-client-modules（移除 serveBundle，改用 webServer.register/fetchBundle），补丁 bundle-404-selfheal 增加新锚点并纳入必需补丁校验，修复重启/切版后旧 rev 404 白屏不自愈"
+      ],
+      "dshChangelogList": [
+        "新增插件管理富文本详情，支持更新第三方插件包（热更新失败自动回滚旧版本）",
+        "支持引用聊天文本、复制完整会话为 Markdown、工作步骤收起后保留全部助手文字回复，并新增日/西/法/德/俄/巴葡多语言界面",
+        "新增实验性个性化推荐、开发者工具-统计、变更请求与工作树、subagent_oar（委派本机 Codex/Claude CLI）等插件",
+        "远程连接默认启用 WebSocket 压缩，Web 静态资源支持 ETag 304 条件请求",
+        "破坏性/行为变更：最低 Node.js 提升至 24.9；官方组合包列表改由 @deepseek-ai/dsh-official-bundles 导出；自定义插件需迁移异步会话投影、tools.resolve/executable 与提示词组装接口；PTC 工具执行拆分为按 Agent 作用域插件，旧 tools.mode / DSH_TOOLS_MODE 需迁移",
+        "升级 pi-ai 至 1.3.0；未声明容量的自定义模型默认上下文/输出调整为 1M/128K"
+      ]
+    },
     "0.2.9": {
       "version": "0.2.9",
       "releaseDate": "2026-10-24",
@@ -396,9 +422,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.2-alpha.2",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.2-alpha.2",
+    "recommendedDsh": "0.2.2-alpha.3",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.2-alpha.3",
     "adaptedVersions": [
+      "0.2.2-alpha.3",
       "0.2.2-alpha.2",
       "0.2.1-rc.3",
       "0.2.1-rc.2",

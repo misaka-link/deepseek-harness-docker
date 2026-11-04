@@ -4,6 +4,25 @@
 
 ---
 
+## [v0.2.11] - 2026-11-04
+
+### 🔼 内置 DSH 更新
+- 内置官方 DSH 引擎升级至 `@deepseek-ai/dsh@0.2.2-alpha.3`（工程版本 `0.2.11`）；兼容区间上界 `<=0.2.2-alpha.3`，推荐核心与管理控制台/前端兜底矩阵同步更新。
+
+### 🆕 上游关键变更
+- **统一右键与键盘菜单**：统一右键与键盘菜单覆盖会话、工作区与侧边栏，支持开发者扩展。
+- **文件预览与常驻目录树**：文件预览支持常驻目录树和文件定位功能；文本与 Markdown 预览在刷新后保留阅读位置。
+- **变更请求与工作树**：实验性「变更请求与工作树」统一代码审查与工作树入口，支持查看本地及 PR 差异并将选中代码交由 Agent。
+- **Cordis 依赖同步**：同步 Cordis Core 至 4.0.0-rc.11、Loader 至 1.0.0-rc.8、Include 至 1.1.1，统一配置与持久化行为。
+- **工具与文件防护默认行为调整**：`apply_patch` 默认关闭；文件先读与外部修改防护默认关闭。
+
+### 🔧 适配与修复
+- 供应链固定基准（`supply.dshVersion`、`Dockerfile` 中的 `DSH_VERSION` 与 `build.sh` 出厂版本）同步升级至 `0.2.2-alpha.3`，完整性校验哈希更新至 `sha512-ffV06fOgiOeIJOmA3EgPj+U6azJrsLACiscLj9t+AfM7p9p14bMzErWRhgeC8nizBTyQ2ckxkPQtj4Pqon8mGw==`。
+- 修复客户端补丁脚本在纯净 npm 安装树（无顶层软链）下漏扫嵌套子包、必需补丁未命中可能被静默放行的问题：`patch-dsh-client.mjs` 自动识别 `dsh/node_modules/@deepseek-ai` 深度目录，并将 `REQUIRED_PATCHES` 未命中判定改为强制全覆盖。
+- 修复 DSH 容器助手登录弹窗被设置面板遮挡、未在视口居中显示的问题：登录弹窗改为 `ReactDOM.createPortal` 挂载至 `document.body`，不再受 `shell.overlay` 层叠上下文限制。
+- 优化 DSH 容器助手左下角登录入口卡样式：紧凑布局、标题单行省略、徽标独立成行、状态胶囊、全宽主按钮与摘要截断，减少侧栏占用并提升可读性。
+- 为左下角登录入口卡新增关闭按钮：关闭状态持久化到 `localStorage`（`dsh-container-helper:onboarding-dismissed`），刷新页面后不再自动出现；完成 DeepSeek 登录后自动清除该状态。
+
 ## [v0.2.10] - 2026-10-29
 
 ### 🔼 内置 DSH 更新

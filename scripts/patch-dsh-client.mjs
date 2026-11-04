@@ -7,14 +7,20 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // 测试/调试用：DSH_PATCH_ONLY_DIR 存在时只扫描该目录，避免误改环境中其它 DSH 副本
 const ONLY_DIR = process.env.DSH_PATCH_ONLY_DIR;
-const SEARCH_DIRS = ONLY_DIR ? [ONLY_DIR] : [
+const SEARCH_DIRS = (ONLY_DIR ? [
+  path.join(ONLY_DIR, 'dsh/node_modules/@deepseek-ai'),
+  ONLY_DIR
+] : [
+  process.env.DSH_INSTALL_DIR ? path.join(process.env.DSH_INSTALL_DIR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai') : null,
   process.env.DSH_INSTALL_DIR ? path.join(process.env.DSH_INSTALL_DIR, 'lib/node_modules/@deepseek-ai') : null,
   '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai',
   '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai',
   '/usr/local/lib/node_modules/@deepseek-ai',
   '/opt/dsh/lib/node_modules/@deepseek-ai',
   '/app/node_modules/@deepseek-ai'
-].filter(Boolean);
+]).filter(Boolean).filter(dir => {
+  try { return fs.existsSync(dir); } catch { return false; }
+});
 
 const MARKER = '/* dsh-patch: loopback-host-mode-applied */';
 
@@ -37,6 +43,7 @@ let loopbackSeen = false;
 function readInstalledDshVersion() {
   const candidates = [
     ONLY_DIR ? path.join(ONLY_DIR, 'dsh/package.json') : null,
+    ONLY_DIR ? path.join(ONLY_DIR, '../../package.json') : null,
     process.env.DSH_INSTALL_DIR ? path.join(process.env.DSH_INSTALL_DIR, 'lib/node_modules/@deepseek-ai/dsh/package.json') : null,
     '/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json',
     '/opt/dsh/lib/node_modules/@deepseek-ai/dsh/package.json'
@@ -464,6 +471,10 @@ warnIfVersionOutOfRange();
 
 // 必需补丁必须命中：否则说明 DSH 源码锚点已漂移，补丁"静默失效"比启动失败更危险
 if (loopbackSeen) markApplied('client-loopback'); else markMissed('client-loopback');
+// 严密防护：凡是声明为必需补丁、却未被任何目录成功标记为 applied 的，一律记入 missedPatches
+for (const req of REQUIRED_PATCHES) {
+  if (!appliedPatches.has(req)) missedPatches.add(req);
+}
 // 同一补丁在任一目录命中即视为满足（多份 DSH 副本时，只读副本失败不算致命）
 for (const name of appliedPatches) missedPatches.delete(name);
 console.log(`[patch-dsh-client] 必需补丁状态: 已应用=[${[...appliedPatches].join(', ') || '无'}] 未命中=[${[...missedPatches].join(', ') || '无'}]`);

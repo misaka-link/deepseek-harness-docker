@@ -1,6 +1,6 @@
 {
   "name": "@dsh-custom/dsh-container-helper",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "DSH 容器助手：集成移动端视口防黑屏适配、远程/反代登录中继与敏感信息脱敏",
   "type": "module",
   "main": "./index.js",

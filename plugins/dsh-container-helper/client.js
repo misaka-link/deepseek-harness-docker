@@ -3,6 +3,7 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const module = { exports: {} };
     const React = require('react');
+    const ReactDOM = require('react-dom');
 
     const zh = typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
     const L = {
@@ -12,6 +13,9 @@ window.__ModuleLoader__.load({
       desc: zh
         ? '远程/反向代理访问时，DeepSeek 平台只接受 localhost 回调。可复制或手动打开登录链接；登录完成后把浏览器地址栏里的回调链接粘贴到下方即可完成登录。'
         : 'When accessed remotely or behind a reverse proxy, DeepSeek only accepts a localhost callback. Copy or manually open the sign-in link; after signing in, paste the callback link from the browser address bar below.',
+      descCompact: zh
+        ? '远程/反代环境下登录 DeepSeek 账号：复制登录链接完成授权，再把回调链接粘贴回来。'
+        : 'Sign in to DeepSeek remotely: copy the sign-in link, authorize, then paste the callback URL back here.',
       status: zh ? '登录状态' : 'Status',
       idle: zh ? '未登录' : 'Signed out',
       starting: zh ? '正在获取登录链接…' : 'Requesting sign-in link…',
@@ -61,6 +65,18 @@ window.__ModuleLoader__.load({
       el.id = STYLE_ID;
       el.textContent = [
         '.dshdlq-card{background:var(--dsw-alias-bg-layer-2,#fff);border:1px solid var(--dsw-alias-border-l3,#e2e8f0);border-radius:12px;padding:20px 24px;color:var(--dsw-alias-label-primary,#0f172a);font-size:13px;line-height:1.7}',
+        '.dshdlq-card--compact{padding:14px 14px 13px;border-radius:14px;background:linear-gradient(180deg,var(--dsw-alias-bg-layer-2,#fff) 0%,var(--dsw-alias-bg-layer-1,#f8fafc) 100%);border-color:var(--dsw-alias-border-l2,#e2e8f0);box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 28px -22px rgba(15,23,42,.45)}',
+        '.dshdlq-card--compact .dshdlq-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:7px;position:relative;padding-right:22px}',
+        '.dshdlq-card--compact .dshdlq-card-close{position:absolute;top:-3px;right:-2px;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:0 0;color:var(--dsw-alias-label-tertiary,#94a3b8);font-size:18px;line-height:20px;cursor:pointer}',
+        '.dshdlq-card--compact .dshdlq-card-close:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(15,23,42,.06));color:var(--dsw-alias-label-primary,#0f172a)}',
+        '.dshdlq-card--compact .dshdlq-title{width:100%;min-width:0;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        '.dshdlq-card--compact .dshdlq-badge{font-size:10px;line-height:1.2;padding:1px 6px;border-radius:6px;white-space:nowrap}',
+        '.dshdlq-card--compact .dshdlq-desc{font-size:11.5px;line-height:1.55;margin:0 0 9px;color:var(--dsw-alias-label-secondary,#64748b);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}',
+        '.dshdlq-card--compact .dshdlq-row{gap:7px;margin-top:8px}',
+        '.dshdlq-card--compact .dshdlq-status{justify-content:space-between;font-size:11px;padding:5px 8px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover,rgba(15,23,42,.045))}',
+        '.dshdlq-card--compact .dshdlq-btn{width:100%;height:36px;border-radius:9px;font-weight:600}',
+        '.dshdlq-card--compact .dshdlq-primary{background:linear-gradient(180deg,#1f2937,#111827);border-color:transparent;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.12)}',
+        '.dshdlq-card--compact .dshdlq-primary:hover{background:linear-gradient(180deg,#111827,#0b1220)}',
         '.dshdlq-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}',
         '.dshdlq-title{font-size:15px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px}',
         '.dshdlq-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--dsw-alias-state-business-tertiary,#e0f2fe);color:var(--dsw-alias-state-business-primary,#0284c7)}',
@@ -102,6 +118,16 @@ window.__ModuleLoader__.load({
     // ── 偏好设置（localStorage，按浏览器保存）────────────────────
     const PREFS_KEY = 'dsh-container-helper:prefs';
     const LEGACY_PREFS_KEY = 'dsh-deepseek-remote-login:prefs';
+    const ONBOARDING_DISMISSED_KEY = 'dsh-container-helper:onboarding-dismissed';
+    function isOnboardingDismissed() {
+      try { return typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_DISMISSED_KEY) === '1'; } catch (e) { return false; }
+    }
+    function dismissOnboarding() {
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem(ONBOARDING_DISMISSED_KEY, '1'); } catch (e) {}
+    }
+    function clearOnboardingDismissed() {
+      try { if (typeof localStorage !== 'undefined') localStorage.removeItem(ONBOARDING_DISMISSED_KEY); } catch (e) {}
+    }
     let prefs = { blurByDefault: false, nickname: '', mobileScrollLock: true };
     function loadPrefs() {
       try {
@@ -283,6 +309,7 @@ window.__ModuleLoader__.load({
       else if (accountState) signedIn = accountState.status === 'credential-stored';
       else signedIn = !!p;
       checked = true;
+      if (signedIn) clearOnboardingDismissed();
       notify();
       refreshSensitive();
     }
@@ -312,6 +339,7 @@ window.__ModuleLoader__.load({
               const a = state && state.attempt;
               if (state && state.status === 'credential-stored') {
                 signedIn = true; checked = true;
+                clearOnboardingDismissed();
                 if (!profile) { fetchProfile().then((p) => { if (p) profile = p; notify(); }); }
                 setUi({ busy: false, link: '', input: '', msg: '', msgKind: '', copied: false });
               } else if (isActiveAttempt(state)) {
@@ -376,7 +404,7 @@ window.__ModuleLoader__.load({
           await new Promise((r) => setTimeout(r, 900));
           picked = pick(await callStart());
         }
-        if (picked.status === 'credential-stored') { signedIn = true; checked = true; setUi({ busy: false, open: true }); notify(); return; }
+        if (picked.status === 'credential-stored') { signedIn = true; checked = true; clearOnboardingDismissed(); setUi({ busy: false, open: true }); notify(); return; }
         if (picked.url) setUi({ busy: false, link: picked.url, msg: L.noAuto, msgKind: '' });
         else setUi({ busy: false, msgKind: 'err', msg: zh ? '未取到登录链接，请点击「重新获取」。' : 'No sign-in link was returned; click Retry.' });
       } catch (e) {
@@ -580,7 +608,7 @@ window.__ModuleLoader__.load({
       const color = props.signedIn
         ? 'var(--dsw-alias-state-success-primary,#15803d)'
         : props.error ? 'var(--dsw-alias-state-error-primary,#dc2626)' : 'var(--dsw-alias-label-primary,#0f172a)';
-      return React.createElement('div', { className: 'dshdlq-row', style: { marginTop: props.tight ? '0' : '10px' } },
+      return React.createElement('div', { className: 'dshdlq-row dshdlq-status', style: { marginTop: props.tight ? '0' : '10px' } },
         React.createElement('span', { style: { color: 'var(--dsw-alias-label-secondary,#64748b)' } }, L.status + ': '),
         React.createElement('strong', { style: { color } }, props.text)
       );
@@ -678,7 +706,7 @@ window.__ModuleLoader__.load({
         React.createElement('h3', { className: 'dshdlq-title' }, isSignedIn() ? '✅ ' : '🔑 ', isSignedIn() ? L.signedInLabel : L.title),
         React.createElement('button', { type: 'button', className: 'dshdlq-btn', onClick: () => setUi({ open: false }) }, L.close)
       );
-      return React.createElement('div', { className: 'dshdlq-overlay', onClick: (e) => { if (e.target === e.currentTarget) setUi({ open: false }); } },
+      return ReactDOM.createPortal(React.createElement('div', { className: 'dshdlq-overlay', onClick: (e) => { if (e.target === e.currentTarget) setUi({ open: false }); } },
         React.createElement('div', { className: 'dshdlq-dialog' },
           head,
           isSignedIn()
@@ -701,7 +729,7 @@ window.__ModuleLoader__.load({
                 s.msg ? React.createElement('div', { className: 'dshdlq-msg ' + (s.msgKind === 'ok' ? 'dshdlq-ok' : s.msgKind === 'err' ? 'dshdlq-err' : '') }, s.msg) : null
               )
         )
-      );
+      ), document.body);
     }
 
     function RemoteLoginOverlay() {
@@ -712,20 +740,28 @@ window.__ModuleLoader__.load({
 
     // 官方 settings.models.sign-in 插槽的接替者：未配置 API Key 时，模型设置页原本靠官方
     // 登录引导；补丁把官方弹窗置空后必须由这里顶上，否则该区域会变成空白死区。
-    function ModelsSignInEntry() {
+    function ModelsSignInEntry(props) {
       ensureStyles();
       const s = useUi();
+      const [dismissed, setDismissed] = React.useState(() => isOnboardingDismissed());
       useMount(ensureAccount);
+      if (dismissed) return null;
+      const dismiss = () => {
+        dismissOnboarding();
+        setDismissed(true);
+        try { if (props && typeof props.complete === 'function') props.complete(); } catch (e) {}
+      };
       const active = isActiveAttempt(accountState);
-      return React.createElement('div', { className: 'dshdlq-card' },
+      return React.createElement('div', { className: 'dshdlq-card dshdlq-card--compact' },
         React.createElement('div', { className: 'dshdlq-head' },
           React.createElement('h3', { className: 'dshdlq-title' }, isSignedIn() ? '✅ ' : '🔑 ', L.section),
-          React.createElement('span', { className: 'dshdlq-badge' }, L.badge)
+          React.createElement('span', { className: 'dshdlq-badge' }, L.badge),
+          React.createElement('button', { type: 'button', className: 'dshdlq-card-close', 'aria-label': L.close, title: L.close, onClick: dismiss }, '×')
         ),
         isSignedIn()
           ? React.createElement(SignedInBody, null)
           : React.createElement(React.Fragment, null,
-              React.createElement('p', { className: 'dshdlq-desc' }, L.desc),
+              React.createElement('p', { className: 'dshdlq-desc' }, L.descCompact),
               React.createElement(StatusRow, {
                 tight: true,
                 error: s.msgKind === 'err',
