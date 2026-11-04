@@ -32,9 +32,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 全局安装 DeepSeek Harness 官方 CLI 与 pnpm (固定版本 + 校验完整性 + 安装期不执行包脚本)
-ARG DSH_VERSION="0.2.2-alpha.3"
+ARG DSH_VERSION="0.2.2-rc.1"
 ARG PNPM_VERSION="12.5.1"
-ARG DSH_INTEGRITY="sha512-ffV06fOgiOeIJOmA3EgPj+U6azJrsLACiscLj9t+AfM7p9p14bMzErWRhgeC8nizBTyQ2ckxkPQtj4Pqon8mGw=="
+ARG DSH_INTEGRITY="sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg=="
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
     echo "===> [builder] 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \

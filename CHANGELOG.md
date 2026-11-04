@@ -4,6 +4,24 @@
 
 ---
 
+## [v0.2.12] - 2026-11-04
+
+### 🔼 内置 DSH 更新
+- 内置官方 DSH 引擎升级至 `@deepseek-ai/dsh@0.2.2-rc.1`（工程版本 `0.2.12`）；兼容区间上界 `<=0.2.2-rc.1`，推荐核心与管理控制台/前端兜底矩阵同步更新。
+
+### 🆕 上游关键变更
+- **移动端与窄屏适配**：优化软键盘交互、导航与窄屏布局，菜单和操作入口保持可用。
+- **聊天文本引用与历史复制**：支持将聊天文本作为引用插入输入框，完整历史会话可复制为 Markdown。
+- **插件与实验特性**：新增实验性「变更请求与工作树」、个性化推荐、`subagent_oar`、开发者工具-统计等插件；插件管理支持富文本详情与第三方插件更新回滚。
+- **Cordis 依赖同步**：同步 Cordis Core 至 4.1.0、Loader 至 1.1.0、Include 至 1.1.0，统一配置访问、条目变更与持久化行为。
+- **工具与文件防护默认行为调整**：`apply_patch` 默认关闭；文件先读与外部修改防护默认关闭。
+
+### 🔧 适配与验证
+- 供应链固定基准（`supply.dshVersion`、`Dockerfile` 中的 `DSH_VERSION` 与 `build.sh` 出厂版本）同步升级至 `0.2.2-rc.1`，完整性校验哈希更新至 `sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg==`。
+- 适配 rc.1 最低 Node.js 24.9 要求（镜像底座 Node 24 已满足）；PTC Node 控制通道改用 birpc（SSH 协议 2→3），旧 `tools.mode` / `DSH_TOOLS_MODE` 需迁移。
+- 在纯净 npm 安装树下验证客户端补丁链：`auth-bypass`、`bundle-selfheal`、`combo-fallback`、`client-loopback` 四项必需补丁全部命中。
+- DSH 容器助手登录弹窗居中、左下角入口卡紧凑样式与关闭状态持久化能力保持正常。
+
 ## [v0.2.11] - 2026-11-04
 
 ### 🔼 内置 DSH 更新
