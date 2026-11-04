@@ -20,17 +20,14 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-rc.1 来源 npm dist-tag next。"
   },
   "latest": {
-    "version": "0.2.12",
-    "releaseDate": "2026-11-04",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.12",
-    "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-rc.1，兼容区间上界同步为 <=0.2.2-rc.1；适配矩阵置顶新增 0.2.2-rc.1；供应链 supply.dshVersion、Dockerfile DSH_VERSION 与 build.sh 出厂基准同步升级，工程版本递增至 0.2.12",
+    "version": "0.2.13",
+    "releaseDate": "2026-11-05",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.13",
+    "changelog": "修复 DSH 容器助手与容器浏览器插件在 DSH 切换中文后仍显示英文的问题（issue #16）：插件改为跟随 ctx.locale 实时刷新；工程版本递增至 0.2.13",
     "changelogList": [
-      "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-rc.1，兼容区间上界同步为 <=0.2.2-rc.1",
-      "已适配版本矩阵置顶新增 0.2.2-rc.1（保留 0.2.2-alpha.3 及历史项），推荐核心与前端兜底同步指向 0.2.2-rc.1",
-      "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.2-rc.1，工程版本递增至 0.2.12",
-      "适配 rc.1 最低 Node.js 24.9 要求（镜像底座 Node 24 已满足），同步 Cordis Core 4.1.0 / Loader 1.1.0 / Include 1.1.0",
-      "完成纯净 npm 安装树补丁兼容验证：auth-bypass、bundle-selfheal、combo-fallback、client-loopback 四项必需补丁全部命中",
-      "DSH 容器助手保持登录弹窗居中、左下角入口卡紧凑样式与关闭状态记忆能力"
+      "修复 DSH 容器助手与容器浏览器插件语言不跟随 DSH locale 的问题（issue #16），切换中文后设置页、入口卡与导航标签均实时更新",
+      "插件改为读取 ctx.locale.getSnapshot().active 并订阅 locale 变化重新渲染；保留原有登录弹窗、关闭记忆与上传功能",
+      "工程版本递增至 0.2.13"
     ],
     "dshChangelogList": [
       "完善手机和平板适配，优化软键盘交互、导航与窄屏布局",
@@ -45,6 +42,31 @@
     ]
   },
   "history": {
+    "0.2.12": {
+      "version": "0.2.12",
+      "releaseDate": "2026-11-04",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.12",
+      "changelog": "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-rc.1，兼容区间上界同步为 <=0.2.2-rc.1；适配矩阵置顶新增 0.2.2-rc.1；供应链 supply.dshVersion、Dockerfile DSH_VERSION 与 build.sh 出厂基准同步升级，工程版本递增至 0.2.12",
+      "changelogList": [
+        "内置 DSH 版本更新至 @deepseek-ai/dsh@0.2.2-rc.1，兼容区间上界同步为 <=0.2.2-rc.1",
+        "已适配版本矩阵置顶新增 0.2.2-rc.1（保留 0.2.2-alpha.3 及历史项），推荐核心与前端兜底同步指向 0.2.2-rc.1",
+        "供应链 supply.dshVersion、Dockerfile 构建参数 DSH_VERSION 与 build.sh 出厂基准同步升级至 0.2.2-rc.1，工程版本递增至 0.2.12",
+        "适配 rc.1 最低 Node.js 24.9 要求（镜像底座 Node 24 已满足），同步 Cordis Core 4.1.0 / Loader 1.1.0 / Include 1.1.0",
+        "完成纯净 npm 安装树补丁兼容验证：auth-bypass、bundle-selfheal、combo-fallback、client-loopback 四项必需补丁全部命中",
+        "DSH 容器助手保持登录弹窗居中、左下角入口卡紧凑样式与关闭状态记忆能力"
+      ],
+      "dshChangelogList": [
+        "完善手机和平板适配，优化软键盘交互、导航与窄屏布局",
+        "支持聊天文本引用、完整历史会话复制为 Markdown、工作步骤收起后保留全部助手文字回复",
+        "新增实验性「变更请求与工作树」、个性化推荐、subagent_oar、开发者工具-统计等插件",
+        "插件管理支持富文本详情、第三方插件更新及失败回滚",
+        "远程连接默认启用 WebSocket 压缩，Web 静态资源支持 ETag 304 条件请求",
+        "修复 Gemini OpenAI 兼容接口工具调用思考签名丢失、图片超限自动省略等问题",
+        "最低 Node.js 提升至 24.9；同步 Cordis Core 4.1.0、Loader 1.1.0、Include 1.1.0",
+        "PTC Node 控制通道改用 birpc（SSH 协议 2→3）；旧 tools.mode / DSH_TOOLS_MODE 需迁移",
+        "apply_patch 工具默认关闭；文件先读与外部修改防护默认关闭"
+      ]
+    },
     "0.2.11": {
       "version": "0.2.11",
       "releaseDate": "2026-11-04",

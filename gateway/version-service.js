@@ -99,7 +99,7 @@ class VersionService {
     } catch (e) {
       console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
     }
-    return '0.2.12';
+    return '0.2.13';
   }
 
   getLocalMeta() {

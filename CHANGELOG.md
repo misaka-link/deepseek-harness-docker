@@ -4,6 +4,12 @@
 
 ---
 
+## [v0.2.13] - 2026-11-05
+
+### 🛠️ 修复
+- 修复 DSH 容器助手与容器浏览器插件在 DSH 切换中文后仍显示英文的问题（Issue #16）：插件改为读取 `ctx.locale.getSnapshot().active` 并订阅 locale 变化实时刷新，设置导航、Container Browser 设置页与 DSH Container Helper 入口卡同步更新。
+- 插件版本：`@dsh-custom/dsh-browser-desktop` 1.0.2、`@dsh-custom/dsh-container-helper` 1.0.4；工程版本递增至 0.2.13。
+
 ## [v0.2.12] - 2026-11-04
 
 ### 🔼 内置 DSH 更新

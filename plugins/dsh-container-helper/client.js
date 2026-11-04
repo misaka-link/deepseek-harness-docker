@@ -5,58 +5,85 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const ReactDOM = require('react-dom');
 
-    const zh = typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
-    const L = {
-      section: zh ? 'DSH 容器助手' : 'DSH Container Helper',
-      title: zh ? 'DeepSeek 账号登录' : 'DeepSeek account sign-in',
-      badge: zh ? '内置容器套件组件' : 'Builtin Suite Component',
-      desc: zh
+    let pluginCtx = null;
+    let zh = typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
+    function getLocaleService() {
+      if (!pluginCtx) return null;
+      try { return typeof pluginCtx.get === 'function' ? pluginCtx.get('locale') : pluginCtx.locale; } catch (e) { return pluginCtx.locale || null; }
+    }
+    function detectZh() {
+      const loc = getLocaleService();
+      const snap = loc && typeof loc.getSnapshot === 'function' ? loc.getSnapshot() : null;
+      if (snap && snap.active) return String(snap.active).toLowerCase().startsWith('zh');
+      return typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
+    }
+    function syncLocale() {
+      const next = detectZh();
+      if (next !== zh) { zh = next; L = makeL(zh); }
+    }
+    function useLocaleSync() {
+      const [, force] = React.useState(0);
+      React.useEffect(() => {
+        syncLocale();
+        const loc = getLocaleService();
+        if (!loc || typeof loc.subscribe !== 'function') return;
+        return loc.subscribe(() => { syncLocale(); force(v => v + 1); });
+      }, []);
+    }
+    function makeL(isZh) {
+      return {
+      section: isZh ? 'DSH 容器助手' : 'DSH Container Helper',
+      title: isZh ? 'DeepSeek 账号登录' : 'DeepSeek account sign-in',
+      badge: isZh ? '内置容器套件组件' : 'Builtin Suite Component',
+      desc: isZh
         ? '远程/反向代理访问时，DeepSeek 平台只接受 localhost 回调。可复制或手动打开登录链接；登录完成后把浏览器地址栏里的回调链接粘贴到下方即可完成登录。'
         : 'When accessed remotely or behind a reverse proxy, DeepSeek only accepts a localhost callback. Copy or manually open the sign-in link; after signing in, paste the callback link from the browser address bar below.',
-      descCompact: zh
+      descCompact: isZh
         ? '远程/反代环境下登录 DeepSeek 账号：复制登录链接完成授权，再把回调链接粘贴回来。'
         : 'Sign in to DeepSeek remotely: copy the sign-in link, authorize, then paste the callback URL back here.',
-      status: zh ? '登录状态' : 'Status',
-      idle: zh ? '未登录' : 'Signed out',
-      starting: zh ? '正在获取登录链接…' : 'Requesting sign-in link…',
-      waiting: zh ? '等待登录' : 'Waiting for sign in',
-      getLink: zh ? '获取登录链接' : 'Get sign-in link',
-      open: zh ? '打开登录链接' : 'Open sign-in link',
-      copy: zh ? '复制登录链接' : 'Copy sign-in link',
-      copied: zh ? '已复制 ✓' : 'Copied ✓',
-      linkLabel: zh ? '登录链接' : 'Sign-in link',
-      cbLabel: zh ? '回调链接' : 'Callback link',
-      cbPlaceholder: zh ? '把地址栏里的 http://localhost:.../oauth/callback?code=...&state=... 整段粘贴到这里' : 'Paste the whole http://localhost:.../oauth/callback?code=...&state=... link here',
-      submit: zh ? '完成登录' : 'Finish sign-in',
-      submitting: zh ? '提交中…' : 'Submitting…',
-      close: zh ? '关闭' : 'Close',
-      cancel: zh ? '取消' : 'Cancel',
-      retry: zh ? '重新获取' : 'Retry',
-      emptyLink: zh ? '请先粘贴回调链接' : 'Please paste the callback link first',
-      okMsg: zh ? '回调已送达 DSH，正在确认登录状态…' : 'Callback delivered to DSH; confirming the sign-in state…',
-      noAuto: zh ? '已关闭自动跳转：请点击「打开登录链接」或复制后手动打开。' : 'Auto-open is disabled: click "Open sign-in link" or copy it and open manually.',
-      signedInLabel: zh ? '已登录' : 'Signed in',
-      accountLine: zh ? '账号' : 'Account',
-      nicknameLine: zh ? '昵称' : 'Nickname',
-      signedInHint: zh ? '当前环境已登录 DeepSeek 账号，无需再次登录。' : 'This environment is already signed in to DeepSeek; no further sign-in is needed.',
-      recheck: zh ? '重新检测' : 'Re-check',
-      checking: zh ? '检测中…' : 'Checking…',
+      status: isZh ? '登录状态' : 'Status',
+      idle: isZh ? '未登录' : 'Signed out',
+      starting: isZh ? '正在获取登录链接…' : 'Requesting sign-in link…',
+      waiting: isZh ? '等待登录' : 'Waiting for sign in',
+      getLink: isZh ? '获取登录链接' : 'Get sign-in link',
+      open: isZh ? '打开登录链接' : 'Open sign-in link',
+      copy: isZh ? '复制登录链接' : 'Copy sign-in link',
+      copied: isZh ? '已复制 ✓' : 'Copied ✓',
+      linkLabel: isZh ? '登录链接' : 'Sign-in link',
+      cbLabel: isZh ? '回调链接' : 'Callback link',
+      cbPlaceholder: isZh ? '把地址栏里的 http://localhost:.../oauth/callback?code=...&state=... 整段粘贴到这里' : 'Paste the whole http://localhost:.../oauth/callback?code=...&state=... link here',
+      submit: isZh ? '完成登录' : 'Finish sign-in',
+      submitting: isZh ? '提交中…' : 'Submitting…',
+      close: isZh ? '关闭' : 'Close',
+      cancel: isZh ? '取消' : 'Cancel',
+      retry: isZh ? '重新获取' : 'Retry',
+      emptyLink: isZh ? '请先粘贴回调链接' : 'Please paste the callback link first',
+      okMsg: isZh ? '回调已送达 DSH，正在确认登录状态…' : 'Callback delivered to DSH; confirming the sign-in state…',
+      noAuto: isZh ? '已关闭自动跳转：请点击「打开登录链接」或复制后手动打开。' : 'Auto-open is disabled: click "Open sign-in link" or copy it and open manually.',
+      signedInLabel: isZh ? '已登录' : 'Signed in',
+      accountLine: isZh ? '账号' : 'Account',
+      nicknameLine: isZh ? '昵称' : 'Nickname',
+      signedInHint: isZh ? '当前环境已登录 DeepSeek 账号，无需再次登录。' : 'This environment is already signed in to DeepSeek; no further sign-in is needed.',
+      recheck: isZh ? '重新检测' : 'Re-check',
+      checking: isZh ? '检测中…' : 'Checking…',
       // 偏好设置
-      prefsTitle: zh ? '显示与隐私' : 'Display & privacy',
-      mobileScrollLock: zh ? '移动端防下拉黑屏与滚动锁定' : 'Mobile viewport scroll lock (prevent pull-down void)',
-      mobileScrollLockHint: zh
+      prefsTitle: isZh ? '显示与隐私' : 'Display & privacy',
+      mobileScrollLock: isZh ? '移动端防下拉黑屏与滚动锁定' : 'Mobile viewport scroll lock (prevent pull-down void)',
+      mobileScrollLockHint: isZh
         ? '锁定移动端外层页面视口，防止触屏下拉或收起软键盘时整个界面上卷留出大片黑屏；聊天记录与侧边栏内部正常滚动（默认开启）。'
         : 'Lock the outer viewport on mobile to prevent touch gestures and keyboard dismissal from scrolling the whole page into a blank dark void, while keeping internal chat and panels scrolling smoothly (enabled by default).',
-      blurDefault: zh ? '默认模糊敏感信息（手机号 / 邮箱）' : 'Blur sensitive info by default (phone / email)',
-      blurDefaultHint: zh ? '开启后页面中的手机号、邮箱会自动打码；双击任意手机号可随时模糊 / 还原。' : 'When on, phone numbers and emails on the page are masked automatically; double-click any phone number to blur or restore it.',
-      nickLabel: zh ? '自定义显示昵称' : 'Custom display name',
-      nickPlaceholder: zh ? '留空则显示真实账号（如 186******50）' : 'Leave empty to show the real account (e.g. 186******50)',
-      nickHint: zh ? '设置后，页面中所有显示该手机号的位置（含左下角账号栏）都会改为显示昵称。' : 'Once set, every place that shows this phone number (including the bottom-left account bar) displays the nickname instead.',
-      save: zh ? '保存' : 'Save',
-      saved: zh ? '已保存 ✓' : 'Saved ✓',
-      reset: zh ? '恢复默认' : 'Reset',
-      blurHint: zh ? '提示：双击页面中任意位置的手机号即可模糊 / 还原（便于截图留档）。' : 'Tip: double-click any phone number on the page to blur or restore it (useful before taking screenshots).',
-    };
+      blurDefault: isZh ? '默认模糊敏感信息（手机号 / 邮箱）' : 'Blur sensitive info by default (phone / email)',
+      blurDefaultHint: isZh ? '开启后页面中的手机号、邮箱会自动打码；双击任意手机号可随时模糊 / 还原。' : 'When on, phone numbers and emails on the page are masked automatically; double-click any phone number to blur or restore it.',
+      nickLabel: isZh ? '自定义显示昵称' : 'Custom display name',
+      nickPlaceholder: isZh ? '留空则显示真实账号（如 186******50）' : 'Leave empty to show the real account (e.g. 186******50)',
+      nickHint: isZh ? '设置后，页面中所有显示该手机号的位置（含左下角账号栏）都会改为显示昵称。' : 'Once set, every place that shows this phone number (including the bottom-left account bar) displays the nickname instead.',
+      save: isZh ? '保存' : 'Save',
+      saved: isZh ? '已保存 ✓' : 'Saved ✓',
+      reset: isZh ? '恢复默认' : 'Reset',
+      blurHint: isZh ? '提示：双击页面中任意位置的手机号即可模糊 / 还原（便于截图留档）。' : 'Tip: double-click any phone number on the page to blur or restore it (useful before taking screenshots).',
+      };
+    }
+    let L = makeL(zh);
 
     const STYLE_ID = 'dsh-container-helper-css';
     function ensureStyles() {
@@ -105,7 +132,6 @@ window.__ModuleLoader__.load({
     }
 
     // ── 状态 ─────────────────────────────────────────────────────
-    let pluginCtx = null;
     let accountState = null;   // 来自 watch 流（可能一直不可用）
     let signedIn = false;      // 登录状态判定结果
     let profile = null;        // { id, avatarUrl, name, contact }
@@ -733,6 +759,7 @@ window.__ModuleLoader__.load({
     }
 
     function RemoteLoginOverlay() {
+      useLocaleSync();
       const s = useUi();
       useMount(ensureAccount);
       return s.open ? React.createElement(SignInDialog) : null;
@@ -741,6 +768,7 @@ window.__ModuleLoader__.load({
     // 官方 settings.models.sign-in 插槽的接替者：未配置 API Key 时，模型设置页原本靠官方
     // 登录引导；补丁把官方弹窗置空后必须由这里顶上，否则该区域会变成空白死区。
     function ModelsSignInEntry(props) {
+      useLocaleSync();
       ensureStyles();
       const s = useUi();
       const [dismissed, setDismissed] = React.useState(() => isOnboardingDismissed());
@@ -775,6 +803,7 @@ window.__ModuleLoader__.load({
     }
 
     function RemoteLoginSection() {
+      useLocaleSync();
       ensureStyles();
       const s = useUi();
       useMount(ensureAccount);
@@ -805,6 +834,7 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       pluginCtx = ctx;
+      syncLocale();
       ensureStyles();   // 必须先于任何打码 class 生效注入样式，否则会出现「已打码但不模糊」的窗口
       loadPrefs();
       startAccountStream(ctx);
@@ -827,7 +857,7 @@ window.__ModuleLoader__.load({
             name: 'settings.section',
             id: 'dsh-container-helper',
             order: 46,
-            label: () => L.section
+            label: () => (detectZh() ? 'DSH 容器助手' : 'DSH Container Helper')
           }, RemoteLoginSection);
         });
         ctx.slots.inject('shell.overlay', () => {

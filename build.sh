@@ -11,7 +11,7 @@ set -e
 #     --push  构建后推送到 registry（多架构 manifest 无法 load 到本地，必须推送）
 
 IMAGE_NAME="deepseek-harness-docker"
-PROJ_VER="0.2.12"
+PROJ_VER="0.2.13"
 NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 # 预装层缓存刷新键：默认用当前时间戳，保证每次构建都重新执行预装层，
 # 让 plugins.market.list 里的 @latest 插件（dshmarket）拉到最新版。
