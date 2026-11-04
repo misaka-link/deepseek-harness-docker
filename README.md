@@ -168,7 +168,7 @@ docker compose -f docker-compose.mini.yml down -v
   docker run --rm ghcr.io/misaka-link/deepseek-harness-docker:latest-mini node -e "require('node-pty')"
   ```
 - ⚠️ **低配 ARM 设备构建注意事项**：
-  若在类似 865bt（高通骁龙 865 移植 Linux）或低配单板机等物理 ARM 设备上进行**本地镜像构建**，宿主机**必须预留 ≥3GB 空闲内存**。构建期间原生编译 `node-pty`、`sharp`、`@vscode/ripgrep` 等 C/C++ 原生模块以及安装 DSH 核心包时内存消耗较高，曾因内存不足触发 Linux 内核 OOM-killer 中断构建。
+  若在低配 ARM64 单板机等物理 ARM 设备上进行**本地镜像构建**，宿主机**必须预留 ≥3GB 空闲内存**。构建期间原生编译 `node-pty`、`sharp`、`@vscode/ripgrep` 等 C/C++ 原生模块以及安装 DSH 核心包时内存消耗较高，曾因内存不足触发 Linux 内核 OOM-killer 中断构建。
 
 ## 🚀 Docker 一键梭哈
 

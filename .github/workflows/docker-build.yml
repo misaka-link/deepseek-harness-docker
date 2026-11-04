@@ -99,7 +99,7 @@ jobs:
             latest_tag: "latest-market"
             platforms: "linux/amd64"
           # 【Issue #11】新增 mini 镜像 (C 档瘦身 + 双架构 linux/amd64,linux/arm64)
-          # 注：CI 中的 QEMU arm64 仅作为多架构 manifest 兜底；arm64 真实运行与原生性能验收以 865bt 原生环境为准。
+          # 注：CI 中的 QEMU arm64 仅作为多架构 manifest 兜底；arm64 真实运行与原生性能验收以 ARM64 原生环境为准。
           - variant: mini
             node_image: "node:24-trixie-slim"
             build_variant: mini
@@ -115,7 +115,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # 【Issue #11】配置 QEMU 支持多架构构建 (mini 需要 linux/arm64，QEMU 仅兜底，arm64 验收以 865bt 原生为准)
+      # 【Issue #11】配置 QEMU 支持多架构构建 (mini 需要 linux/arm64，QEMU 仅兜底，arm64 验收以 ARM64 原生环境为准)
       - name: Set up QEMU
         if: contains(matrix.platforms, 'arm64')
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
