@@ -32,9 +32,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 全局安装 DeepSeek Harness 官方 CLI 与 pnpm (固定版本 + 校验完整性 + 安装期不执行包脚本)
-ARG DSH_VERSION="0.2.2-rc.1"
+ARG DSH_VERSION="0.2.2-rc.2"
 ARG PNPM_VERSION="12.5.1"
-ARG DSH_INTEGRITY="sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg=="
+ARG DSH_INTEGRITY="sha512-J727r2C471x2cYXGjqZ0D9T1ZyaYQDFH/Ynx8iq+85oslM4nky5YTBnbAuTtxMhW7nhY8wuAEfjjFCQ+K6Swgw=="
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
     echo "===> [builder] 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \
@@ -201,6 +201,7 @@ RUN set -eux; \
         novnc \
         websockify \
         chromium \
+        chromium-l10n \
         fontconfig \
         fonts-wqy-zenhei \
         fonts-wqy-microhei \
@@ -209,6 +210,9 @@ RUN set -eux; \
       mkdir -p /etc/fonts; \
       printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <alias>\n    <family>sans-serif</family>\n    <prefer>\n      <family>WenQuanYi Zen Hei</family>\n      <family>Noto Color Emoji</family>\n      <family>Symbola</family>\n    </prefer>\n  </alias>\n  <alias>\n    <family>serif</family>\n    <prefer>\n      <family>WenQuanYi Zen Hei</family>\n      <family>Noto Color Emoji</family>\n      <family>Symbola</family>\n    </prefer>\n  </alias>\n  <alias>\n    <family>monospace</family>\n    <prefer>\n      <family>WenQuanYi Micro Hei Mono</family>\n      <family>Noto Color Emoji</family>\n      <family>Symbola</family>\n    </prefer>\n  </alias>\n  <alias>\n    <family>emoji</family>\n    <prefer>\n      <family>Noto Color Emoji</family>\n      <family>Symbola</family>\n    </prefer>\n  </alias>\n</fontconfig>\n' > /etc/fonts/local.conf; \
       fc-cache -f; \
+      find /usr/lib/chromium/locales -mindepth 1 -maxdepth 1 -type f ! -name 'zh-CN.pak' ! -name 'zh-TW.pak' ! -name 'en-US.pak' ! -name 'en-GB.pak' ! -name 'ja.pak' ! -name 'es.pak' ! -name 'fr.pak' ! -name 'de.pak' ! -name 'ru.pak' ! -name 'pt-BR.pak' -delete; \
+      mkdir -p /etc/chromium/policies/managed; \
+      printf '{"CommandLineFlagSecurityWarningsEnabled": false}\n' > /etc/chromium/policies/managed/disable-flag-warning.json; \
       apt-get clean; \
       rm -rf /var/lib/apt/lists/*; \
     else \

@@ -228,6 +228,32 @@ function patchAccountLoginOrigin(searchDir) {
   }
 }
 
+function patchAccountLoginOriginRc2(searchDir) {
+  // rc.2 起账号服务包由 dsh-deepseek-account-platform 迁移为 dsh-deepseek-account
+  const target = path.join(searchDir, 'dsh-deepseek-account/lib/index.js');
+  if (!fs.existsSync(target)) return;
+  try {
+    let content = fs.readFileSync(target, 'utf8');
+    if (content.includes('/* dsh-patch: account-loopback-callback */')) {
+      console.log('[patch-dsh-client] DeepSeek 账号回调 origin 归一补丁已存在: ' + target);
+      return;
+    }
+    const anchor = '\t\tthrow new PlatformAuthError("protocol");\n\t}\n\tconst explicitPort = ';
+    if (!content.includes(anchor)) {
+      console.warn('[patch-dsh-client] ⚠️ DeepSeek 账号回调 origin 归一补丁未命中（锚点漂移，非必需）: ' + target);
+      return;
+    }
+    const injected = '\t\tthrow new PlatformAuthError("protocol");\n\t}\n'
+      + '\t/* dsh-patch: account-loopback-callback */ if ((url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) { const __dshPort = url.port || (url.protocol === "https:" ? "443" : "80"); url = new URL("http://localhost:" + __dshPort + "/"); value = url.href; }\n'
+      + '\tconst explicitPort = ';
+    content = content.replace(anchor, injected);
+    fs.writeFileSync(target, content, 'utf8');
+    console.log('[patch-dsh-client] 成功归一 DeepSeek 账号登录回调 origin 为 loopback [account-loopback-callback]: ' + target);
+  } catch (err) {
+    console.warn('[patch-dsh-client] 归一 DeepSeek 账号回调 origin 失败: ' + err.message);
+  }
+}
+
 // 6.6 DeepSeek 账号登录弹窗：改为由本套件内置插件接管，并取消「自动跳转」
 //   官方弹窗（dsh-client-ui-settings-account）在点击 Sign in 时会预开一个标签页并自动跳转，
 //   且弹窗内没有「回调链接」输入。这里：
@@ -260,7 +286,18 @@ function patchAccountDialog(searchDir) {
       // d) 左下角账号菜单「Sign in」被点击时，广播事件唤起本套件插件的弹窗
       //    用逗号运算符保持单语句，避免破坏其后的 else 分支
       ['\t\t\t\t\t\t\t} else if (id === "signin") beginSignIn();',
-       '\t\t\t\t\t\t\t} else if (id === "signin") (beginSignIn(), window.dispatchEvent(new CustomEvent("dsh-container-helper:open")), window.dispatchEvent(new CustomEvent("dsh-deepseek-remote-login:open"))); /* dsh-patch: account-signin-notify */']
+       '\t\t\t\t\t\t\t} else if (id === "signin") (beginSignIn(), window.dispatchEvent(new CustomEvent("dsh-container-helper:open")), window.dispatchEvent(new CustomEvent("dsh-deepseek-remote-login:open"))); /* dsh-patch: account-signin-notify */'],
+      // rc.2 起客户端被打包压缩为单行，锚点形态变化（反引号、无空格）
+      ['this.popup=window.open(\x60about:blank\x60,\x60_blank\x60)',
+       'this.popup=null /* dsh-patch: account-no-auto-open */'],
+      ['if(this.popup&&!this.popup.closed)this.popup.location.replace(this.destination(attempt.authorizeUrl))',
+       'if(false)this.popup.location.replace(this.destination(attempt.authorizeUrl)); /* dsh-patch: account-no-auto-open */'],
+      ['account.loginVisible&&!account.onboarding&&(0,react_jsx_runtime.jsx)(SignInDialog,{',
+       'false&&(0,react_jsx_runtime.jsx)(SignInDialog,{ /* dsh-patch: account-overlay-dialog-replaced */'],
+      ['else if(id===\x60signin\x60)beginSignIn();',
+       'else if(id===\x60signin\x60)(beginSignIn(),window.dispatchEvent(new CustomEvent("dsh-container-helper:open")),window.dispatchEvent(new CustomEvent("dsh-deepseek-remote-login:open"))); /* dsh-patch: account-signin-notify */'],
+      ['inject:()=>operations},AccountOnboarding)',
+       'inject:()=>operations},/* dsh-patch: account-dialog-replaced */()=>null)']
     ];
     let changed = false;
     for (const [from, to] of edits) {
@@ -324,6 +361,7 @@ for (const searchDir of SEARCH_DIRS) {
 
   // 2.5 DeepSeek 账号登录回调 origin 归一（远程/反代场景可用）
   patchAccountLoginOrigin(searchDir);
+  patchAccountLoginOriginRc2(searchDir);
 
   // 2.6 DeepSeek 账号登录弹窗由内置插件接管 + 关闭自动跳转
   patchAccountDialog(searchDir);

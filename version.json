@@ -11,34 +11,34 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.2-rc.1",
-    "dshIntegrity": "sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg==",
+    "dshVersion": "0.2.2-rc.2",
+    "dshIntegrity": "sha512-J727r2C471x2cYXGjqZ0D9T1ZyaYQDFH/Ynx8iq+85oslM4nky5YTBnbAuTtxMhW7nhY8wuAEfjjFCQ+K6Swgw==",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
     },
-    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-rc.1 来源 npm dist-tag next。"
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-rc.2 来源 npm dist-tag next。"
   },
   "latest": {
-    "version": "0.2.13",
-    "releaseDate": "2026-11-05",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.13",
-    "changelog": "修复 DSH 容器助手与容器浏览器插件在 DSH 切换中文后仍显示英文的问题（issue #16）：插件改为跟随 ctx.locale 实时刷新；工程版本递增至 0.2.13",
+    "version": "0.2.14",
+    "releaseDate": "2026-11-12",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.14",
+    "changelog": "内置 DSH 升级至 0.2.2-rc.2；容器 Chromium 补齐 chromium-l10n 语言包并支持 UI 语言跟随 DSH 设置（Issue #17）；隐藏 --no-sandbox 提示条；工程版本递增至 0.2.14",
     "changelogList": [
-      "修复 DSH 容器助手与容器浏览器插件语言不跟随 DSH locale 的问题（issue #16），切换中文后设置页、入口卡与导航标签均实时更新",
-      "插件改为读取 ctx.locale.getSnapshot().active 并订阅 locale 变化重新渲染；保留原有登录弹窗、关闭记忆与上传功能",
-      "工程版本递增至 0.2.13"
+      "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-rc.2（npm next），兼容区间上界同步为 <=0.2.2-rc.2，适配矩阵置顶新增 0.2.2-rc.2",
+      "适配 rc.2 账号服务包改名（dsh-deepseek-account）与压缩客户端补丁锚点，4 个必需补丁全部命中",
+      "容器 Chromium 安装 chromium-l10n 并精简为 DSH 8 语言对应的 10 个语言包（约 6MB），修复 Issue #17 中文 UI 缺失",
+      "新增 DSH 语言到 Chromium UI 语言同步：读取 cordis.patch.yml，zh/en/ja 等 8 语言跟随，语言切换自动重启桌面",
+      "通过 Chromium 企业策略隐藏 --no-sandbox 的「不受支持命令行标记」提示条",
+      "工程版本递增至 0.2.14"
     ],
     "dshChangelogList": [
-      "完善手机和平板适配，优化软键盘交互、导航与窄屏布局",
-      "支持聊天文本引用、完整历史会话复制为 Markdown、工作步骤收起后保留全部助手文字回复",
-      "新增实验性「变更请求与工作树」、个性化推荐、subagent_oar、开发者工具-统计等插件",
-      "插件管理支持富文本详情、第三方插件更新及失败回滚",
-      "远程连接默认启用 WebSocket 压缩，Web 静态资源支持 ETag 304 条件请求",
-      "修复 Gemini OpenAI 兼容接口工具调用思考签名丢失、图片超限自动省略等问题",
-      "最低 Node.js 提升至 24.9；同步 Cordis Core 4.1.0、Loader 1.1.0、Include 1.1.0",
-      "PTC Node 控制通道改用 birpc（SSH 协议 2→3）；旧 tools.mode / DSH_TOOLS_MODE 需迁移",
-      "apply_patch 工具默认关闭；文件先读与外部修改防护默认关闭"
+      "Git Worktree 支持按分支、提交和文件类型审阅改动，并处理 GitHub 评审与同步进度",
+      "SubAgent 支持具名与多层协作，AgentTeam 可按会话开启、共用成员与任务面板",
+      "桌面端支持在设置中切换正式版与开发版更新渠道",
+      "改善代码审阅、侧栏插件收纳、菜单定位、暗色文件树、聊天上下文与 Agent 终端体验",
+      "修复插件加载失败导致 Web 页面无法启动、PTC 子代理消息重复唤醒、会话历史卡住、中文目标栏状态混淆等问题",
+      "升级 Zod 4.6.6 / Stagehand 4.4.0；npm 安装包含匹配源码与文档"
     ]
   },
   "history": {
@@ -466,12 +466,35 @@
         "新增仓库根目录专用 version.json 与多通道极速 CDN 容灾分发",
         "核心版本切换安全弹窗新增破坏性重大重构防呆阻断警告"
       ]
+    },
+    "0.2.13": {
+      "version": "0.2.13",
+      "releaseDate": "2026-11-05",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.13",
+      "changelog": "修复 DSH 容器助手与容器浏览器插件在 DSH 切换中文后仍显示英文的问题（issue #16）：插件改为跟随 ctx.locale 实时刷新；工程版本递增至 0.2.13",
+      "changelogList": [
+        "修复 DSH 容器助手与容器浏览器插件语言不跟随 DSH locale 的问题（issue #16），切换中文后设置页、入口卡与导航标签均实时更新",
+        "插件改为读取 ctx.locale.getSnapshot().active 并订阅 locale 变化重新渲染；保留原有登录弹窗、关闭记忆与上传功能",
+        "工程版本递增至 0.2.13"
+      ],
+      "dshChangelogList": [
+        "完善手机和平板适配，优化软键盘交互、导航与窄屏布局",
+        "支持聊天文本引用、完整历史会话复制为 Markdown、工作步骤收起后保留全部助手文字回复",
+        "新增实验性「变更请求与工作树」、个性化推荐、subagent_oar、开发者工具-统计等插件",
+        "插件管理支持富文本详情、第三方插件更新及失败回滚",
+        "远程连接默认启用 WebSocket 压缩，Web 静态资源支持 ETag 304 条件请求",
+        "修复 Gemini OpenAI 兼容接口工具调用思考签名丢失、图片超限自动省略等问题",
+        "最低 Node.js 提升至 24.9；同步 Cordis Core 4.1.0、Loader 1.1.0、Include 1.1.0",
+        "PTC Node 控制通道改用 birpc（SSH 协议 2→3）；旧 tools.mode / DSH_TOOLS_MODE 需迁移",
+        "apply_patch 工具默认关闭；文件先读与外部修改防护默认关闭"
+      ]
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.2-rc.1",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.2-rc.1",
+    "recommendedDsh": "0.2.2-rc.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.2-rc.2",
     "adaptedVersions": [
+      "0.2.2-rc.2",
       "0.2.2-rc.1",
       "0.2.2-alpha.3",
       "0.2.2-alpha.2",

@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { resolveDesktopLang, mapLocale } = require('./locale-sync');
 const net = require('net');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -35,6 +36,8 @@ class DesktopManager {
       screenshotQuality: process.env.DSH_SCREENSHOT_QUALITY || 'high',
       screenshotDir: process.env.DSH_SCREENSHOT_DIR || '',
       userDataDir: process.env.CHROME_USER_DATA_DIR || '/root/.config/chromium',
+      // 容器 Chromium UI 语言：启动时由 DSH 语言偏好解析（Issue #17）
+      lang: '',
       logsDir: '/tmp/dsh-desktop'
     };
 
@@ -62,6 +65,21 @@ class DesktopManager {
 
   checkIdleWatchdog() {
     if (!this.running) return;
+    // Issue #17：DSH 语言设置变化后，自动重启桌面以同步 Chromium UI 语言
+    if (!this._langSyncInFlight) {
+      const desired = resolveDesktopLang();
+      if (desired && desired !== this.config.lang) {
+        this._langSyncInFlight = true;
+        console.log(`[desktop-manager] 检测到 DSH 语言变化 (${this.config.lang || 'unset'} -> ${desired})，重启桌面以同步 UI 语言...`);
+        // 保留 AI 设定的工作时长（restart 的 stop 阶段会清空 expiresAt）
+        const remainingMs = this.expiresAt ? this.expiresAt - Date.now() : 0;
+        const durationMinutes = remainingMs > 0 ? Math.max(1, Math.ceil(remainingMs / 60000)) : undefined;
+        this.restart({ lang: desired, durationMinutes })
+          .catch((e) => console.warn('[desktop-manager] 语言同步重启失败:', e.message))
+          .finally(() => { this._langSyncInFlight = false; });
+        return;
+      }
+    }
     const now = Date.now();
 
     // 1. Check AI-specified duration expiration
@@ -117,6 +135,8 @@ class DesktopManager {
     const reqHeight = options.height ? Number(options.height) : null;
     const reqCdp = typeof options.enableCdp === 'boolean' ? options.enableCdp : null;
     const reqCdpPort = Number(options.cdpPort) ? Number(options.cdpPort) : null;
+    // 语言：显式 options.lang > DSH 语言偏好 > 环境 LANG（Issue #17）
+    const desiredLang = mapLocale(options.lang) || resolveDesktopLang();
 
     if (this.running) {
       // 运行中：先校验真实健康度，避免“标志为真但进程已死”导致启动被短路
@@ -126,8 +146,9 @@ class DesktopManager {
                            (reqHeight && reqHeight !== this.config.height);
         const cdpChanged = (reqCdp !== null && reqCdp !== this.config.enableCdp) ||
                            (reqCdpPort !== null && reqCdpPort !== this.config.cdpPort);
-        if (resChanged || cdpChanged) {
-          console.log(`[desktop-manager] 收到运行时配置变更 (分辨率/CDP)，重新应用...`);
+        const langChanged = desiredLang !== this.config.lang;
+        if (resChanged || cdpChanged || langChanged) {
+          console.log(`[desktop-manager] 收到运行时配置变更 (分辨率/CDP/语言)，重新应用...`);
           // 直接调用内部方法，绝不通过公共 start/stop/restart，避免队列自等待死锁
           await this._stopInternal();
           return this._startInternal(options);
@@ -220,19 +241,29 @@ class DesktopManager {
     ], { logFile: 'novnc.log' });
 
     // 5. Start Chromium
+    this.config.lang = desiredLang;
     const chromeArgs = [
       `--user-data-dir=${this.config.userDataDir}`,
       '--window-position=0,0',
-      `--window-size=${width},${height}`,
-      'about:blank'
+      `--window-size=${width},${height}`
     ];
+    // 让浏览器本体 UI 跟随 DSH 语言；必须在 URL 之前传入
+    if (this.config.lang) chromeArgs.push(`--lang=${this.config.lang}`);
+    chromeArgs.push('about:blank');
     if (this.config.enableCdp) {
       chromeArgs.push(
         '--remote-debugging-address=127.0.0.1',
         `--remote-debugging-port=${this.config.cdpPort}`
       );
     }
-    this._spawnTracked('chromium', 'chromium-docker', chromeArgs, { env, logFile: 'chromium.log' });
+    // 实测：Chromium 的 --lang 优先级低于 LANGUAGE/LANG 环境变量，
+    // 必须为 Chromium 子进程单独覆盖 LANGUAGE，否则镜像默认的 zh_CN 会压过 --lang。
+    const chromeEnv = { ...env };
+    if (this.config.lang) {
+      const posix = this.config.lang.replace(/-/g, '_');
+      chromeEnv.LANGUAGE = `${posix}:${this.config.lang.split('-')[0]}`;
+    }
+    this._spawnTracked('chromium', 'chromium-docker', chromeArgs, { env: chromeEnv, logFile: 'chromium.log' });
 
     this.running = true;
     this.unhealthy = false;
@@ -464,6 +495,7 @@ class DesktopManager {
       enableSidebarTab: !!this.config.enableSidebarTab,
       screenshotQuality: this.config.screenshotQuality,
       screenshotDir: this.config.screenshotDir,
+      lang: this.config.lang,
       idleSeconds: this.running ? Math.floor((now - this.lastActivity) / 1000) : 0
     };
   }
@@ -478,6 +510,7 @@ class DesktopManager {
     if (typeof patch.enableSidebarTab === 'boolean') this.config.enableSidebarTab = patch.enableSidebarTab;
     if (typeof patch.screenshotQuality === 'string') this.config.screenshotQuality = patch.screenshotQuality;
     if (typeof patch.screenshotDir === 'string') this.config.screenshotDir = patch.screenshotDir;
+    if (typeof patch.lang === 'string' && mapLocale(patch.lang)) this.config.lang = mapLocale(patch.lang);
     return this.config;
   }
 

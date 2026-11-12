@@ -4,6 +4,23 @@
 
 ---
 
+## [v0.2.14] - 2026-11-12
+
+### 🔼 内置 DSH 更新
+- 内置官方 DSH 引擎升级至 `@deepseek-ai/dsh@0.2.2-rc.2`（npm `next`）；兼容区间上界 `<=0.2.2-rc.2`，推荐核心与适配矩阵置顶同步指向 `0.2.2-rc.2`；工程版本递增至 `0.2.14`。
+- 供应链同步：`version.json` 的 `supply.dshVersion` / `dshIntegrity`、`Dockerfile` 的 `DSH_VERSION` / `DSH_INTEGRITY`、`build.sh` 出厂基准。
+
+### 🛠️ 修复
+- **容器 Chromium 无法显示中文 / 不跟随 DSH 语言（Issue #17）**：安装 `chromium-l10n` 并精简为 DSH 8 语言对应的 10 个 `.pak`（约 6MB）；新增 `gateway/locale-sync.js`，读取 DSH `cordis.patch.yml` 语言偏好并映射到 Chromium locale；`desktop-manager` 注入 `--lang` 并为 Chromium 子进程覆盖 `LANGUAGE`，语言切换自动重启桌面；支持 `DSH_DESKTOP_LANG` 单进程覆盖。
+- **隐藏 `--no-sandbox` 安全提示条**：写入 Chromium 企业策略 `CommandLineFlagSecurityWarningsEnabled=false`（仅隐藏提示，不改变沙箱状态）。
+
+### 🧪 适配与验证
+- 适配 rc.2 账号服务包改名（`dsh-deepseek-account`）与压缩客户端补丁锚点；4 个必需补丁（`auth-bypass` / `client-loopback` / `combo-fallback` / `bundle-selfheal`）在 rc.2 npm 包上全部命中，账号 origin / 弹窗补丁同步命中。
+- 单元测试：`locale-sync` 30/30、`version-matrix-sync` 56/0、`version-range-fix` 90/0。
+- 远程 market 镜像构建成功并通过容器 E2E：DSH `0.2.2-rc.2`、插件工具注册正常、DSH 语言 zh↔en 切换与 Chromium 中文 UI 正常。
+
+---
+
 ## [v0.2.13] - 2026-11-05
 
 ### 🛠️ 修复

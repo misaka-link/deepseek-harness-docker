@@ -25,7 +25,7 @@ const ok = (cond, msg) => {
 };
 const eq = (actual, expected, msg) => ok(actual === expected, `${msg} (期望 ${expected}，实际 ${actual})`);
 
-const RANGE = '>=0.1.2-rc.1 <=0.2.2-rc.1';
+const RANGE = '>=0.1.2-rc.1 <=0.2.2-rc.2';
 
 // ── 单例默认导出（向后兼容路径） ──────────────────────────────────────────
 const versionService = require('../gateway/version-service');
@@ -67,7 +67,8 @@ eq(satisfiesRange('0.2.0',      RANGE), true,  '0.2.0 IN（<=0.2.1-rc.2，上界
 eq(satisfiesRange('0.2.1',      RANGE), true, '0.2.1 IN（正式版低于 0.2.2-rc.1 上界）');
 eq(satisfiesRange('0.2.2',      RANGE), false, '0.2.2 OUT（正式版高于 0.2.2-rc.1）');
 eq(satisfiesRange('0.2.2-alpha.2', RANGE), true, '0.2.2-alpha.2 IN（低于 0.2.2-rc.1 上界）');
-eq(satisfiesRange('0.2.2-rc.1', RANGE), true, '0.2.2-rc.1 IN（闭区间上界）');
+eq(satisfiesRange('0.2.2-rc.1', RANGE), true, '0.2.2-rc.1 IN（仍在区间内）');
+eq(satisfiesRange('0.2.2-rc.2', RANGE), true, '0.2.2-rc.2 IN（闭区间上界）');
 eq(satisfiesRange('0.2.2-alpha.4', RANGE), true, '0.2.2-alpha.4 IN（低于 0.2.2-rc.1 上界）');
 eq(satisfiesRange('0.3.0',      RANGE), false, '0.3.0 OUT');
 // 边界补充
@@ -147,6 +148,9 @@ eq(okAlpha2.isAdapted, true, '0.2.2-alpha.2 → isAdapted=true');
 const okRc1 = versionService.evaluateTargetVersion('0.2.2-rc.1');
 eq(okRc1.level, 'success', '0.2.2-rc.1 → 官方深度适配 success');
 eq(okRc1.isAdapted, true, '0.2.2-rc.1 → isAdapted=true');
+const okRc2Upper = versionService.evaluateTargetVersion('0.2.2-rc.2');
+eq(okRc2Upper.level, 'success', '0.2.2-rc.2 → 官方深度适配 success');
+eq(okRc2Upper.isAdapted, true, '0.2.2-rc.2 → isAdapted=true');
 const warnLow = versionService.evaluateTargetVersion('0.1.4');
 eq(warnLow.level, 'warning', '0.1.4 → warning（降级格式风险）');
 

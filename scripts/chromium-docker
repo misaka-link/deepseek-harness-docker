@@ -1,5 +1,11 @@
 #!/bin/sh
 # Chromium container launcher wrapper
+# Issue #17：可选单进程覆盖 UI 语言（正常由 desktop-manager 传 --lang）
+if [ -n "${DSH_DESKTOP_LANG:-}" ]; then
+  # Chromium 的 --lang 会被镜像默认的 LANGUAGE 压制，单进程覆盖必须同时导出 LANGUAGE
+  export LANGUAGE="${DSH_DESKTOP_LANG}"
+  set -- --lang="${DSH_DESKTOP_LANG}" "$@"
+fi
 exec /usr/bin/chromium \
   --no-sandbox \
   --disable-dev-shm-usage \
