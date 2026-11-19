@@ -1,5 +1,6 @@
 const fs = require('fs');
 const zlib = require('zlib');
+const { writeFileAtomicSync } = require('./atomic-write');
 
 const LOG_FILE = process.env.DSH_WEB_LOG || '/tmp/dsh-web.log';
 const TOKEN_FILE_AUTO = process.env.DSH_TOKEN_FILE_AUTO || '/tmp/dsh-launch-token';
@@ -46,7 +47,8 @@ function scanTokenOnce() {
     if (latest) {
       state.token = latest;
       state.source = 'log';
-      try { fs.writeFileSync(TOKEN_FILE_AUTO, latest, { mode: 0o600 }); fs.chmodSync(TOKEN_FILE_AUTO, 0o600); } catch {}
+      // 原子写：半截令牌会让网关与 DSH 鉴权对不上，表现为「免密换权偶发失败」
+      try { writeFileAtomicSync(TOKEN_FILE_AUTO, latest, { mode: 0o600 }); } catch {}
       return latest;
     }
   }

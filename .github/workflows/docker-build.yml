@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.2.14)'
+        description: 'Project version tag (e.g. 0.2.15)'
         required: false
-        default: '0.2.14'
+        default: '0.2.15'
   push:
     branches:
       - main
@@ -41,7 +41,7 @@ jobs:
           # 1. 手动 workflow_dispatch 触发
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PROJ_VER="${{ github.event.inputs.version }}"
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.14"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.15"
             echo "✔ 手动触发 (workflow_dispatch)，指定版本: ${PROJ_VER}"
 
           # 2. Git Tag 触发 (如 v0.0.9)
@@ -52,7 +52,7 @@ jobs:
           # 3. main 分支 push 触发：严格比对版本号是否变动
           else
             PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.14"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.15"
 
             PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
             echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
@@ -68,6 +68,42 @@ jobs:
           PROJ_VER="${PROJ_VER#v}"
           echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
           echo "should_build=${SHOULD_BUILD}" >> $GITHUB_OUTPUT
+
+      # 【Issue #19】套件版本号一致性硬门禁（tag / build.sh / version.json / gateway/package.json / CI 默认值）
+      # 背景：v0.2.14 漏改 gateway/package.json，镜像内「本地 0.2.13 vs version.json 0.2.14」自相矛盾，
+      # 管理面板永久误报「发现新版」，且错版本号被写进每个快照 sidecar 元数据。
+      # 任一项不一致即 fail —— 绝不产出「版本号自相矛盾」的镜像。
+      - name: Suite version consistency gate
+        run: |
+          set -euo pipefail
+          node scripts/suite-version-sync-test.mjs
+          RELEASE_VER="${{ steps.version_detector.outputs.project_version }}"
+          PKG_VER=$(node -p "require('./gateway/package.json').version")
+          echo "发布版本 = ${RELEASE_VER} | gateway/package.json = ${PKG_VER}"
+          if [ "${RELEASE_VER}" != "${PKG_VER}" ]; then
+            echo "::error::版本号不一致：本次发布 ${RELEASE_VER} != gateway/package.json ${PKG_VER}；请同步递增 build.sh / version.json / gateway/package.json / CI 默认值"
+            exit 1
+          fi
+
+      # 回归测试门禁：本轮新增的修复全部带回归测试，必须在 CI 里真的跑起来，
+      # 否则「有测试」只是仓库里的摆设（子代理审查 P2-3）。
+      - name: Regression test suite
+        run: |
+          set -euo pipefail
+          node scripts/atomic-write-test.mjs
+          node scripts/npx-cache-heal-test.mjs
+          node scripts/pnpm-dlx-cache-test.mjs
+          node scripts/patch-interrupt-safety-test.mjs
+          node scripts/patch-required-test.mjs
+          node scripts/version-matrix-sync-test.mjs
+          node scripts/dsh-version-validation-test.mjs
+          node scripts/unreleased-cleanup-check.mjs
+
+      # 【发版前强制】浏览器视觉审核证据门禁（仅 tag 触发时强制，普通 push 不受影响）。
+      # 没有 doc/release/v<版本>/*.png 证据 = 没做过视觉审核 = 不允许发版（Issue #19 的教训）。
+      - name: Release visual review gate
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/release-visual-review-check.mjs
 
   build-and-push:
     name: Build and Push (${{ matrix.variant }})
@@ -189,6 +225,10 @@ jobs:
           sbom: false
           # 每次构建唯一，强制 Dockerfile 预装层缓存失效，
           # 让 plugins.market.list 里的 dshmarket@latest 真正拉到当次构建的最新版
+          #
+          # 【Issue #19】SUITE_VERSION：套件工程版本注入。缺失该行会让镜像内 DSH_SUITE_VERSION 为空，
+          # 「构建期注入为权威」退化为只依赖 gateway/package.json（正是 v0.2.15 漏改的那份）。
+          # 注意：块标量（|）内的 # 是内容而非注释，故本说明必须写在 build-args 键之上。
           build-args: |
             NODE_IMAGE=${{ matrix.node_image }}
             VARIANT=${{ matrix.build_variant }}
@@ -199,6 +239,7 @@ jobs:
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
             DSH_VERSION=${{ steps.docker_meta.outputs.dsh_version }}
             DSH_INTEGRITY=${{ steps.docker_meta.outputs.dsh_integrity }}
+            SUITE_VERSION=${{ needs.check-version.outputs.project_version }}
             MARKET_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             USE_CHINA_MIRROR=0
           tags: ${{ steps.docker_meta.outputs.tags }}

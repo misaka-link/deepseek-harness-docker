@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { resolveProjectVersion, describeProjectVersion } = require('./project-version');
 
 function parseSemver(v = '') {
   const clean = String(v).replace(/^v/, '').trim();
@@ -89,17 +90,17 @@ class VersionService {
     return Boolean(this._isRemoteMeta && this.cachedMeta);
   }
 
+  /**
+   * 本地运行版本（Issue #19）。
+   *
+   * 统一走 gateway/project-version.js 的取值链（构建期注入 > package.json > version.json），
+   * 并且**不再硬编码兜底版本号**：读不到时返回 null，由 check() 的 isSemver 守卫判定为
+   * 「无更新提示」，而不是拿一个具体旧版本号去和 latest 比较后误报「发现新版」。
+   *
+   * @returns {string|null}
+   */
   getLocalProjectVersion() {
-    try {
-      const pkgPath = path.join(__dirname, 'package.json');
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        if (pkg.version) return pkg.version;
-      }
-    } catch (e) {
-      console.warn('[version-service] 读取本地 package.json 版本失败:', e.message);
-    }
-    return '0.2.13';
+    return resolveProjectVersion();
   }
 
   getLocalMeta() {
@@ -156,9 +157,9 @@ class VersionService {
         }
       },
       compatibility: {
-        recommendedDsh: '0.2.2-rc.2',
-        supportedDshRange: '>=0.1.2-rc.1 <=0.2.2-rc.2',
-        adaptedVersions: ['0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
+        recommendedDsh: '0.2.2-rc.5',
+        supportedDshRange: '>=0.1.2-rc.1 <=0.2.2-rc.5',
+        adaptedVersions: ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
         rules: [
           {
             pattern: '<0.1.5-rc.1',
@@ -260,7 +261,7 @@ class VersionService {
   evaluateTargetVersion(targetVersion, meta = null) {
     const m = meta || this.getLiveMeta();
     const rules = m.compatibility?.rules || [];
-    const adapted = m.compatibility?.adaptedVersions || ['0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+    const adapted = m.compatibility?.adaptedVersions || ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
     const isAdapted = adapted.includes(targetVersion);
 
@@ -301,7 +302,10 @@ class VersionService {
   async check(force = false, dshManager = null) {
     const meta = await this.fetchRemoteMeta(force);
     const currentProjectVer = this.getLocalProjectVersion();
-    const latestProjectVer = meta.latest?.version || currentProjectVer;
+    // 远端 latest 必须是合法 semver 才能参与比较；否则（脏数据/被篡改）回落当前版本，
+    // 避免面板把 "garbage" 当成最新版本显示成「vgarbage」（子代理对抗验证 P2-5）。
+    const rawLatestProjectVer = meta.latest?.version;
+    const latestProjectVer = isSemver(rawLatestProjectVer) ? rawLatestProjectVer : currentProjectVer;
     const hasProjectUpdate = isSemver(latestProjectVer) && isSemver(currentProjectVer)
       && compareSemver(latestProjectVer, currentProjectVer) > 0;
 
@@ -360,9 +364,11 @@ class VersionService {
 
     // 依据是否有新版，动态提供对应版本的更新内容说明与清单
     const currentHist = meta.history?.[currentProjectVer];
+    // Issue #19：currentProjectVer 可能为 null（版本未知），禁止拼出 "当前版本 (vnull)"
+    const currentVerLabel = currentProjectVer ? 'v' + currentProjectVer : '未知';
     const updateTitle = hasProjectUpdate
       ? `新版本 (v${latestProjectVer}) 更新内容`
-      : `当前版本 (v${currentProjectVer}) 更新内容`;
+      : `当前版本 (${currentVerLabel}) 更新内容`;
     const activeReleaseDate = (hasProjectUpdate ? meta.latest?.releaseDate : (currentHist?.releaseDate || meta.latest?.releaseDate)) || '';
     const activeReleaseUrl = (hasProjectUpdate ? meta.latest?.releaseUrl : (currentHist?.releaseUrl || meta.latest?.releaseUrl)) || meta.repo?.projectReleases || 'https://github.com/misaka-link/deepseek-harness-docker/releases';
     const activeChangelog = (hasProjectUpdate ? meta.latest?.changelog : (currentHist?.changelog || meta.latest?.changelog)) || '';
@@ -422,5 +428,7 @@ versionService.isSemver = isSemver;
 versionService.compareSemver = compareSemver;
 versionService.matchSemverPattern = matchSemverPattern;
 versionService.satisfiesRange = satisfiesRange;
+// Issue #19：版本来源诊断（供 /api/status 输出，便于事后判断「这个镜像是哪次构建产出的」）
+versionService.describeProjectVersion = describeProjectVersion;
 
 module.exports = versionService;

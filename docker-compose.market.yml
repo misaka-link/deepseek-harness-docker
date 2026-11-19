@@ -62,3 +62,13 @@ services:
       - ./data/snapshots:/root/.dsh-snapshots
       # 4. Chromium 用户数据缓存（可选持久化保存浏览器登录状态与 Cookies）
       - ./data/browser:/root/.config/chromium
+      # 5. npm / npx 缓存（Issue #18）：MCP 工具（如 `npx -y xxx mcp`）的安装缓存。
+      #    不挂载时每次重建容器都要重新下载；慢网下极易在「写完签名前」被超时打断，
+      #    导致 MCP 永久报 ENOENT: Could not read package.json（重启也无法自愈）。
+      #    挂载后首次装好即可长期复用。体积随工具增长，可 `du -sh ./data/npm` 查看并按需清理。
+      #    非 root 部署（user: 1001）请改为 ./data/npm:/home/dsh/.npm 并 chown 1001:1001。
+      - ./data/npm:/root/.npm
+      # 6. pnpm 缓存（Issue #18）：`pnpx` / `pnx` / `pnpm dlx` 起的 MCP 工具安装缓存。
+      #    与 npx 同源问题：缺清单时报 ERR_PNPM_CLI_DLX_READ_MANIFEST 且不自愈。
+      #    已有网关侧自愈兜底，故可安全持久化（首次装好即可长期复用）。
+      - ./data/pnpm-cache:/root/.cache/pnpm

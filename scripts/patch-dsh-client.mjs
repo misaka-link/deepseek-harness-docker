@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +24,67 @@ const SEARCH_DIRS = (ONLY_DIR ? [
 });
 
 const MARKER = '/* dsh-patch: loopback-host-mode-applied */';
+
+// ── 中断安全（Issue #18 同款教训）──────────────────────────────
+// 历史实现有两个缺陷，会制造「看起来已打补丁、实际是截断文件」的永久砖机状态：
+//   1) fs.writeFileSync 就地覆盖（先截断再写），进程被杀会留下半截源文件 → DSH 启动即 SyntaxError；
+//   2) 补丁标记写在文件**开头**，截断后标记仍在 → 幂等判定直接跳过 → 永不修复。
+// 现在：写入一律「临时文件 + rename」原子替换；标记改写到**文件末尾**（标记存在 ⇒ 正文完整）；
+// 首次改写前留一份 <file>.dsh-orig；若仍发现「有标记但语法不合法」，从备份还原后重打。
+function syntaxOk(file) {
+  // node --check 对未知扩展名会直接抛 ERR_UNKNOWN_FILE_EXTENSION（exit 1），
+  // 因此 .dsh-orig / .tmp 这类文件必须先复制成 .js 再检查，否则「备份是否合法」永远判否。
+  let target = file;
+  let probe = null;
+  const ext = path.extname(file).toLowerCase();
+  if (!['.js', '.cjs', '.mjs'].includes(ext)) {
+    probe = file + '.' + process.pid + '.check.js';
+    try {
+      fs.copyFileSync(file, probe);
+      target = probe;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const r = spawnSync(process.execPath, ['--check', target], { encoding: 'utf8' });
+    return r.status === 0;
+  } catch {
+    return false;
+  } finally {
+    if (probe) { try { fs.unlinkSync(probe); } catch {} }
+  }
+}
+
+function writeFileAtomic(target, content) {
+  // 注意后缀必须是 .js：node --check 对未知扩展名直接抛 ERR_UNKNOWN_FILE_EXTENSION，
+  // 会让「写入前自检」永远判定失败（曾导致所有必需补丁都写不进去）
+  const tmp = target + '.dsh-patch-' + process.pid + '.tmp.js';
+  try {
+    fs.writeFileSync(tmp, content, 'utf8');
+    // 落盘前自检：内容不合法就绝不替换目标文件。
+    // 否则「锚点仍在但源文件已残缺」的输入会被写成语法错误的文件，而且下次运行还会
+    // 以为「已打补丁」——形成静默的永久坏文件（子代理对抗验证的 P1）。
+    if (!syntaxOk(tmp)) {
+      console.error('[patch-dsh-client] [FATAL] 打补丁后的内容语法不合法，已放弃写入: ' + target);
+      throw new Error('patched content failed syntax check');
+    }
+    // 首次改写前保留原始文件，作为「截断后无法重打」时的终极回滚源；
+    // 但只在源文件本身合法时才备份 —— 否则备份下来的就是坏文件，恢复时只会把坏文件再写回去。
+    const bak = target + '.dsh-orig';
+    if (!fs.existsSync(bak) && fs.existsSync(target)) {
+      if (syntaxOk(target)) {
+        fs.copyFileSync(target, bak);
+      } else {
+        console.warn('[patch-dsh-client] ⚠️ 源文件语法不合法，跳过备份（避免备份坏文件）: ' + target);
+      }
+    }
+    fs.renameSync(tmp, target); // 原子替换：读者看到的要么是完整旧文件，要么是完整新文件
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch {}
+    throw e;
+  }
+}
 
 // ── 必需补丁追踪 ──────────────────────────────────────────────
 // 背景：本脚本靠字符串锚点给 DSH 源码打补丁，DSH 一升级锚点就可能失效。
@@ -166,7 +228,7 @@ function patchServerConnection(baseDir) {
             signature,
             signature + '\n\t\t/* dsh-patch: auth-bypass-all */ return true;'
           );
-          fs.writeFileSync(connTarget, cContent, 'utf8');
+          writeFileAtomic(connTarget, cContent);
           markApplied('auth-bypass');
           console.log(`[patch-dsh-client] 成功修补服务端免鉴权直连 (由网关统一收口认证): ${connTarget}`);
         } else {
@@ -186,7 +248,7 @@ function patchServerConnection(baseDir) {
       let pContent = fs.readFileSync(pickerTarget, 'utf8');
       if (pContent.includes('const home = homedir();') && !pContent.includes('process.env.DSH_WORKSPACE')) {
         pContent = pContent.replace('const home = homedir();', 'const home = process.env.DSH_WORKSPACE || homedir();');
-        fs.writeFileSync(pickerTarget, pContent, 'utf8');
+        writeFileAtomic(pickerTarget, pContent);
         console.log(`[patch-dsh-client] 成功对齐目录选择器默认根路径为 DSH_WORKSPACE: ${pickerTarget}`);
       }
     } catch (err) {
@@ -221,7 +283,7 @@ function patchAccountLoginOrigin(searchDir) {
       + '\t/* dsh-patch: account-loopback-callback */ if ((url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) { const __dshPort = url.port || (url.protocol === "https:" ? "443" : "80"); url = new URL("http://localhost:" + __dshPort + "/"); value = url.href; }\n'
       + '\tconst explicitPort = ';
     content = content.replace(anchor, injected);
-    fs.writeFileSync(target, content, 'utf8');
+    writeFileAtomic(target, content);
     console.log(`[patch-dsh-client] 成功归一 DeepSeek 账号登录回调 origin 为 loopback [account-loopback-callback]: ${target}`);
   } catch (err) {
     console.warn(`[patch-dsh-client] 归一 DeepSeek 账号回调 origin 失败: ${err.message}`);
@@ -247,7 +309,7 @@ function patchAccountLoginOriginRc2(searchDir) {
       + '\t/* dsh-patch: account-loopback-callback */ if ((url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) { const __dshPort = url.port || (url.protocol === "https:" ? "443" : "80"); url = new URL("http://localhost:" + __dshPort + "/"); value = url.href; }\n'
       + '\tconst explicitPort = ';
     content = content.replace(anchor, injected);
-    fs.writeFileSync(target, content, 'utf8');
+    writeFileAtomic(target, content);
     console.log('[patch-dsh-client] 成功归一 DeepSeek 账号登录回调 origin 为 loopback [account-loopback-callback]: ' + target);
   } catch (err) {
     console.warn('[patch-dsh-client] 归一 DeepSeek 账号回调 origin 失败: ' + err.message);
@@ -310,7 +372,7 @@ function patchAccountDialog(searchDir) {
       changed = true;
     }
     if (changed) {
-      fs.writeFileSync(target, c, 'utf8');
+      writeFileAtomic(target, c);
       console.log(`[patch-dsh-client] 成功接管 DeepSeek 账号弹窗并关闭自动跳转: ${target}`);
     }
   } catch (err) {
@@ -332,6 +394,38 @@ for (const searchDir of SEARCH_DIRS) {
     try {
       let content = fs.readFileSync(file, 'utf8');
       if (content.includes(MARKER)) {
+        // 标记存在 ≠ 文件完整：旧版本「标记前置 + 非原子写」会留下带标记的截断文件。
+        // 用语法自检兜底；不合法则从 .dsh-orig 还原后重打补丁。
+        if (syntaxOk(file)) {
+          // 健康且已打过补丁。若没有备份（旧版脚本留下的文件），现在补一份：
+          // 备份的是「当前已补丁内容」，万一将来被截断，还原回来仍能通过下面的 MARKER 复检。
+          const bakForLater = file + '.dsh-orig';
+          try {
+            if (!fs.existsSync(bakForLater)) fs.copyFileSync(file, bakForLater);
+          } catch {}
+          loopbackSeen = true;
+          continue;
+        }
+        const bak = file + '.dsh-orig';
+        if (fs.existsSync(bak) && syntaxOk(bak)) {
+          content = fs.readFileSync(bak, 'utf8');
+          console.warn(`[patch-dsh-client] 检测到被截断的已补丁文件，已从备份还原后重打: ${file}`);
+        } else if (fs.existsSync(bak)) {
+          console.error(`[patch-dsh-client] [FATAL] 备份文件本身语法不合法，拒绝用它还原（会把坏文件写回去）: ${bak}`);
+          console.error('[patch-dsh-client] [FATAL] 修复方式：删除该文件与备份后重装 DSH 内核，或重建容器。');
+          process.exitCode = 1;
+          continue;
+        } else {
+          console.error(`[patch-dsh-client] [FATAL] 文件含补丁标记但语法不合法，且无备份可还原: ${file}`);
+          console.error('[patch-dsh-client] [FATAL] 该文件已损坏（旧版补丁在写入途中被打断）。修复方式：重建容器，或删除该文件后重装 DSH 内核。');
+          process.exitCode = 1;
+          continue;
+        }
+      }
+
+      // 从备份还原回来时，备份内容可能本身就是「已补丁」的（旧版脚本的 .dsh-orig 可能晚于补丁创建），
+      // 此时 REPLACEMENTS 不再命中，必须重新判定 MARKER，否则会误报「必需补丁未命中」。
+      if (content.includes(MARKER)) {
         loopbackSeen = true;
         continue;
       }
@@ -345,8 +439,9 @@ for (const searchDir of SEARCH_DIRS) {
       }
 
       if (modified) {
-        content = `${MARKER}\n${content}`;
-        fs.writeFileSync(file, content, 'utf8');
+        // 标记写在末尾：截断只会发生在中间，标记丢失即说明正文不完整，可被下一次运行识别
+        content = `${content}\n${MARKER}`;
+        writeFileAtomic(file, content);
         console.log(`[patch-dsh-client] 成功修补客户端: ${file}`);
         patchedCount++;
         loopbackSeen = true;
@@ -433,7 +528,7 @@ for (const searchDir of SEARCH_DIRS) {
       else markMissed('bundle-selfheal');
 
       if (changed) {
-        fs.writeFileSync(modulesTarget, mContent, 'utf8');
+        writeFileAtomic(modulesTarget, mContent);
         markApplied('combo-fallback');
         console.log(`[patch-dsh-client] 成功修补 combo 插件包版本自愈兼容机制: ${modulesTarget}`);
       }
@@ -458,7 +553,7 @@ for (const searchDir of SEARCH_DIRS) {
           'function SettingsDocumentAction(',
           'function SettingsDocumentAction(props) { return null; }\n\t\tfunction __ignored_SettingsDocumentAction('
         );
-        fs.writeFileSync(generalClientTarget, gContent, 'utf8');
+        writeFileAtomic(generalClientTarget, gContent);
         console.log(`[patch-dsh-client] 成功消除“配置文件”按钮: ${generalClientTarget}`);
       }
     } catch (err) {
@@ -472,12 +567,20 @@ for (const searchDir of SEARCH_DIRS) {
     try {
       let mContent = fs.readFileSync(modelsClientTarget, 'utf8');
       if (mContent.includes('function WelcomeNotice(') && !mContent.includes('/* dsh-patch: welcome-notice-bypass */')) {
+        const before = mContent;
+        // 锚点必须容忍空白差异：rc.4 里是 `function WelcomeNotice(props){const{...`（大括号前没有空格），
+        // 早期写成 `function WelcomeNotice(props) {` 时 replace 会空转，却仍然打印「成功」——
+        // 于是弹窗照旧出现，而日志显示已修好（典型的「假成功」，与 Issue #19 同类）。
         mContent = mContent.replace(
-          'function WelcomeNotice(props) {',
+          /function WelcomeNotice\(props\)\s*\{/,
           '/* dsh-patch: welcome-notice-bypass */ function WelcomeNotice(props) { props?.complete?.(); return null;'
         );
-        fs.writeFileSync(modelsClientTarget, mContent, 'utf8');
-        console.log(`[patch-dsh-client] 成功跳过内测声明弹窗: ${modelsClientTarget}`);
+        if (mContent === before) {
+          console.warn(`[patch-dsh-client] ⚠️ 内测声明弹窗锚点未命中（DSH 上游签名已变）: ${modelsClientTarget}`);
+        } else {
+          writeFileAtomic(modelsClientTarget, mContent);
+          console.log(`[patch-dsh-client] 成功跳过内测声明弹窗: ${modelsClientTarget}`);
+        }
       }
     } catch (err) {
       console.warn(`[patch-dsh-client] 跳过内测声明弹窗失败: ${err.message}`);
@@ -495,7 +598,7 @@ for (const searchDir of SEARCH_DIRS) {
           'export { SettingsConflictError,',
           polyfill + 'export { settingsNamespace, SettingsConflictError,'
         );
-        fs.writeFileSync(settingsTarget, sContent, 'utf8');
+        writeFileAtomic(settingsTarget, sContent);
         console.log(`[patch-dsh-client] 成功修补 dsh-settings 的 settingsNamespace 导出: ${settingsTarget}`);
       }
     } catch (err) {

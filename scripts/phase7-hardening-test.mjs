@@ -222,8 +222,14 @@ await check('日志不回显 Cookie 内容片段', () => {
 });
 await check('version-service 不再静默吞异常', () => {
   const s = read('gateway/version-service.js');
-  assert.ok(/读取本地 package\.json 版本失败/.test(s));
+  // Issue #19 后：本地工程版本读取统一委派给 gateway/project-version.js，
+  // 「读取失败要留痕」的契约随之迁移到该模块（读取失败 warn 一次，不再每请求刷屏）。
+  assert.ok(/resolveProjectVersion/.test(s), 'getLocalProjectVersion 应委派给统一读取入口');
   assert.ok(/读取本地版本元数据失败/.test(s));
+  const pv = read('gateway/project-version.js');
+  assert.ok(/读取 gateway\/package\.json 版本失败/.test(pv), 'project-version 读取 package.json 失败必须留痕');
+  assert.ok(/读取套件版本来源失败/.test(pv), 'project-version 读取 version.json 失败必须留痕');
+  assert.ok(!/return '\d+\.\d+\.\d+/.test(pv), 'project-version 不得硬编码版本号兜底');
 });
 await check('install-plugin 使用原子写', () => {
   const s = read('scripts/install-plugin.mjs');

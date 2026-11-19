@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const net = require('net');
+const { writeFileAtomicSync } = require('./atomic-write');
 
 let AUTH_TOKEN = (process.env.AUTH_TOKEN || process.env.ACCESS_CODE || '').trim();
 const COOKIE_NAME = 'dsh_auth_session';
@@ -32,7 +33,8 @@ function initSigningSecret() {
     if (!fs.existsSync(secretDir)) {
       fs.mkdirSync(secretDir, { recursive: true, mode: 0o700 });
     }
-    fs.writeFileSync(secretFile, generated, { encoding: 'utf8', mode: 0o600 });
+    // 原子写：避免中断留下半截密钥（读取端会当成有效密钥用，等于静默降低签名强度）
+    writeFileAtomicSync(secretFile, generated, { mode: 0o600 });
     console.log('[auth] 已初始化并持久化安全 Session 签名密钥至:', secretFile);
   } catch (e) {
     console.warn('[auth] 持久化 session_secret 失败，将临时保存在内存中:', e.message);

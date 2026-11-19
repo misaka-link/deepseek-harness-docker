@@ -9,6 +9,7 @@ const {
   removeSidecar,
   inspectArchive
 } = require('./snapshot-manifest');
+const { resolveProjectVersion } = require('./project-version');
 
 // Issue #9: 统一数据类目录单一事实源（创建侧仅配置模式排除项与还原侧仅配置模式保留项共用）
 const DATA_ENTRIES = ['sessions', 'attachments', 'storages', 'plugin-data', 'logs', 'cache'];
@@ -28,15 +29,21 @@ function getCurrentDshVersion() {
     const vMeta = JSON.parse(fs.readFileSync(path.join(__dirname, '../version.json'), 'utf8'));
     if (vMeta?.supply?.dshVersion) return vMeta.supply.dshVersion;
   } catch {}
-  return '0.1.7-rc.2';
+  // 绝不编造具体版本号：取不到就返回 null（快照元数据标「未知」比标一个错误版本更诚实）
+  return null;
 }
 
+/**
+ * 套件工程版本（写入快照 sidecar 的 projectVersion / dockerSuiteVersion）。
+ *
+ * Issue #19：这里原先独立读 gateway/package.json，并硬编码 '0.1.9' 兜底，与 version-service
+ * 各自维护一份取值逻辑；v0.2.14 漏改 package.json 后，所有快照元数据被标成 0.2.13。
+ * 现统一走 project-version.js；取不到时返回 null（前端显示「未标记」），绝不编造版本号。
+ *
+ * @returns {string|null}
+ */
 function getCurrentProjectVersion() {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-    if (pkg.version) return pkg.version;
-  } catch {}
-  return '0.1.9';
+  return resolveProjectVersion();
 }
 
 try { fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true }); } catch {}
@@ -1095,14 +1102,25 @@ async function restoreBackup(filename, dshManager, opts = {}) {
     const targetPkgJson = path.join(webProfileDir, 'package.json');
     if (fs.existsSync(targetPkgJson) && (!fs.existsSync(targetNodeModules) || fs.readdirSync(targetNodeModules).length === 0)) {
       console.log('[backup-service] 检测到快照未包含完整的 node_modules，正在通过 pnpm 自动补全依赖...');
-      await new Promise(resolve => {
+      // 退出码必须判定：pnpm 因网络中断/被杀而失败时，node_modules 只装了一半，
+      // DSH 仍可能部分起来 —— 若不判码，还原接口会返回成功，用户拿到的是"半残"环境。
+      const pnpmCode = await new Promise(resolve => {
         const pnpmInstall = spawn('pnpm', ['install', '--no-frozen-lockfile'], {
           cwd: webProfileDir,
           stdio: 'ignore'
         });
-        pnpmInstall.on('close', resolve);
-        pnpmInstall.on('error', resolve);
+        pnpmInstall.on('close', code => resolve(typeof code === 'number' ? code : -1));
+        pnpmInstall.on('error', () => resolve(-1));
       });
+      if (pnpmCode !== 0) {
+        throw new Error('快照还原后补全依赖失败（pnpm install 退出码 ' + pnpmCode + '），已回滚到还原前状态');
+      }
+      // 产物校验：装完仍是空目录同样视为失败（抛错会触发外层 rollback）
+      let installedCount = 0;
+      try { installedCount = fs.readdirSync(targetNodeModules).length; } catch {}
+      if (installedCount === 0) {
+        throw new Error('快照还原后 node_modules 仍为空（pnpm install 未产生有效产物）');
+      }
     }
 
     // 6. 执行权限自愈与补丁

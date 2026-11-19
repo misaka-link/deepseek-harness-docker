@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { writeFileAtomicSync } = require('./atomic-write');
 
 const DEFAULT_TOKEN_FILE = path.join(process.env.DSH_HOME || '/root', '.dsh/.internal-api-token');
 
@@ -41,8 +42,8 @@ function generateToken() {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
   } catch {}
-  fs.writeFileSync(file, token + '\n', { mode: 0o600 });
-  try { fs.chmodSync(file, 0o600); } catch {}
+  // 原子写：中断留下的半截密钥会被当作有效密钥读取，导致网关与插件鉴权不一致
+  writeFileAtomicSync(file, token + '\n', { mode: 0o600 });
   return token;
 }
 

@@ -32,9 +32,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 全局安装 DeepSeek Harness 官方 CLI 与 pnpm (固定版本 + 校验完整性 + 安装期不执行包脚本)
-ARG DSH_VERSION="0.2.2-rc.2"
+ARG DSH_VERSION="0.2.2-rc.5"
 ARG PNPM_VERSION="12.5.1"
-ARG DSH_INTEGRITY="sha512-J727r2C471x2cYXGjqZ0D9T1ZyaYQDFH/Ynx8iq+85oslM4nky5YTBnbAuTtxMhW7nhY8wuAEfjjFCQ+K6Swgw=="
+ARG DSH_INTEGRITY="sha512-cNbp12tLYLUTXaVli7zwwMjzmmEVCD1PRldg4oKtXM4+lFYckcaliMS2PU/FoThB4iAN/fKOSID0nrtRZU4Gjw=="
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
     echo "===> [builder] 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \
@@ -110,6 +110,10 @@ ARG VARIANT=full
 ARG INSTALL_DESKTOP=1
 ARG INSTALL_GO=1
 ARG PRUNE_LEVEL=full
+# 【Issue #19】套件工程版本：由 build.sh 以 --build-arg SUITE_VERSION="${PROJ_VER}" 注入，
+# 落为 ENV DSH_SUITE_VERSION，作为「本镜像由哪次构建产出」的权威来源。
+# 取值链见 gateway/project-version.js；发版一致性由 scripts/suite-version-sync-test.mjs 强制。
+ARG SUITE_VERSION=""
 
 LABEL maintainer="DeepSeek Harness Community"
 LABEL description="Production Docker image for DeepSeek Harness with Container Browser, VNC, and Aesthetic Auth Gateway"
@@ -117,6 +121,7 @@ LABEL org.opencontainers.image.variant="${VARIANT}"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DSH_VARIANT=${VARIANT} \
+    DSH_SUITE_VERSION=${SUITE_VERSION} \
     DSH_INSTALL_DIR=/usr/local \
     DSH_WORKSPACE=/workspace \
     PROXY_PORT=3080 \

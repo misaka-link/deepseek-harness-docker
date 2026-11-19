@@ -4,6 +4,48 @@
 
 ---
 
+## [v0.2.15] - 2026-11-18
+
+### 🔼 内置 DSH 更新
+- 内置官方 DSH 引擎升级至 `@deepseek-ai/dsh@0.2.2-rc.5`（npm `next`）；兼容区间上界 `<=0.2.2-rc.5`，推荐核心与适配矩阵置顶同步指向 `0.2.2-rc.5`，并保留 `0.2.2-rc.3` 于适配清单（已在用 rc.3 的容器不会被判为「未适配」）；工程版本递增至 `0.2.15`。
+- 供应链同步：`version.json` 的 `supply.dshVersion` / `dshIntegrity`、`Dockerfile` 的 `DSH_VERSION` / `DSH_INTEGRITY`、`build.sh` 出厂基准。
+- 适配验证：rc.5 纯净安装树下 4 个必需补丁（`auth-bypass` / `client-loopback` / `combo-fallback` / `bundle-selfheal`）全部命中；账号 origin 归一、目录选择器根路径、设置项隐藏等可选补丁同步命中。
+
+### 🛠️ 修复
+- **MCP 服务永久 `server is disconnected`，重启容器也不恢复（Issue #18）**：`npx` 与 `pnpm dlx` 的缓存都是「先解包 `node_modules`、最后才写清单」，被 MCP 启动超时打断后目录永久半成品，之后每次调用都在读清单处失败且**永不重装**（`ENOENT: Could not read package.json` / `ERR_PNPM_CLI_DLX_READ_MANIFEST`）。新增 `gateway/npx-cache.js` 与 `gateway/pnpm-dlx-cache.js`：以依赖闭包校验为前提补写清单，闭包不完整则删目录重装（tarball 在 `_cacache` 中，重装无需重新下载）；网关每 60s 自愈一次 + 容器启动时自愈一次；新增 `./data/npm`、`./data/pnpm-cache` 持久化。
+- **管理面板永久误报「容器套件 v0.2.13 · 发现新版」（Issue #19）**：v0.2.14 发版漏改 `gateway/package.json`，镜像内「本地版本」与 `version.json` 自相矛盾，且该错值会被写进快照 sidecar 元数据。现统一为唯一读取入口 `gateway/project-version.js`（构建期注入 `DSH_SUITE_VERSION` > `package.json` > `version.json`），删除两处硬编码兜底，新增 40 项版本一致性门禁（CI + 本地 pre-push hook）。
+- **客户端补丁可能留下「已打补丁的截断文件」导致 DSH 无法启动**：原实现用 `writeFileSync` 就地覆盖且把补丁标记写在文件开头，进程被杀后文件只剩半截但标记仍在，幂等判定直接跳过、永不修复。现改为「临时文件 + rename」原子写、标记移到文件末尾、首次改写前留 `.dsh-orig` 备份，并在语法自检失败时从备份还原重打。
+- **核心目录自愈只判「目录存在」**：`cp -a` → `rm -rf` 的退化路径中途被打断会留下「目录在、`lib/bin.js` 没了」的状态，自愈不会触发。现改为 `package.json` + `lib/bin.js` + 非空 `node_modules` 三要素判定；回滚点从按目录名字典序改为按 mtime 选择，并逐个校验完整性。
+- **快照还原忽略 `pnpm install` 退出码**：依赖补全失败/中断仍返回成功，用户拿到半残环境。现要求退出码为 0 且 `node_modules` 非空，否则触发回滚。
+- **远程同步清单漂移**：`scripts/remote-sync.mjs` 的手写文件清单漏掉 `gateway/capabilities.js` / `desktop-stub.js` / `dsh-watchdog.js`，构建能「成功」但镜像里网关 `MODULE_NOT_FOUND` 起不来。现改为按目录遍历收集。
+- **npx 自愈的两个隐患**：不再删除「空目录」（npm 的 `mkdir` 与取锁之间隔着联网解析与交互确认，窗口可达数分钟）；安装是否真的跑完改由**文件级入口校验**判定（见下方第二轮加固），不再依赖 `node_modules/.package-lock.json`——该假设已被实测证伪。
+- **配置与密钥类文件仍是「先截断再写」（本轮新发现）**：`gateway.config.json`（含 `authToken`）、`.session_secret`、内部令牌、DSH 启动令牌四处直接用 `writeFileSync` 覆盖，被打断后读取端 `catch` 静默回落——表现为「配置莫名清空 / 口令丢失 / 签名密钥变短」，比直接报错更难排查。新增 `gateway/atomic-write.js`（临时文件 + rename，权限位在 rename 前设好），四处改为原子写；新增 `scripts/atomic-write-test.mjs`（12 项，含「写入失败不破坏原文件」与「关键文件必须走原子写」的静态断言）。
+- **pnpm dlx 孤儿 build 目录永不回收**：以 `<hash>/pkg` 软链为当前有效 build，其余静默后回收。
+
+- **「跳过内测声明弹窗」补丁空转，日志却谎报成功**：替换锚点写死为 `function WelcomeNotice(props) {`（大括号前带空格），而 DSH 实际是 `function WelcomeNotice(props){const{…`（无空格），`String.replace` 静默空转、文件一字未改，日志照样打印「成功跳过内测声明弹窗」——DSH Web 首屏每次都被「预览版说明」弹窗挡住。现改为正则容忍空白差异，且内容未变化时只告警、不报成功。
+- **构建脚本的镜像名不可覆盖**：`build.sh` 原先硬编码 `IMAGE_NAME="deepseek-harness-docker"`，测试构建只能靠 `sed` 改这一行，仓库一同步就被覆盖回默认值，结果把测试镜像打成了生产名字。现改为 `IMAGE_NAME="${IMAGE_NAME:-deepseek-harness-docker}"`。
+### 🛡️ 交叉验证后的加固（第二轮，两名子代理独立审查）
+
+- **自愈只校验「目录/清单」，不校验文件内容（P1）**：包目录存在但入口文件缺失（解包中断的典型形态）时会被判健康，甚至在根签名缺失时主动补签名，让坏目录永久合法化。新增 `gateway/installed-tree.js` 做**文件级**校验（按 `main` 解析入口文件、要求非空），npx 与 pnpm dlx 两侧接入。同时**证伪并移除**了「`node_modules/.package-lock.json` = reify 完成标记」的假设——实测增量 reify 全程该文件都在（是上次安装留下的旧锁），拿它当闸门只会在旧 npm 环境下反复删健康缓存。
+- **补丁脚本「标记丢失的截断」会静默写坏文件（P1）**：锚点仍在但标记丢失时，旧逻辑会 exit 0 写入语法非法内容，且 `.dsh-orig` 备份的正是坏文件 → 每次启动「还原坏备份 → 重打 → 再坏」无限循环。现在：写入前对临时文件做语法自检，不合法直接 FATAL 不落盘；备份本身不合法时拒绝还原；对旧版遗留的「有标记但无备份」文件自动补一份备份。
+- **网关顶层 require 新模块会让整个网关起不来（P1）**：`tool-cache-healer` / `atomic-write` 改为可选依赖加载，缺文件时降级为「不自愈 / 普通写」而不是 MODULE_NOT_FOUND——正是本轮修过的「同步漏文件 → 镜像起不来」的形态。
+- **pnpm dlx 没有锁协议（P1）**：`pnpm` 不像 npm 有 `concurrency.lock`，慢网下「已建 node_modules、正在解包」的安装可能被静默期判定为半成品删掉。现在检测到活跃 pnpm 进程就整轮跳过，手动触发的静默期也从 5s 提高到 120s。
+- **`.bin` 链接缺失不再删整目录**：用户 `.npmrc` 设 `bin-links=false` 时，健康缓存会被每 60s 删一次。现降级为告警。
+- **核心入口按 `package.json#bin` 推导**：硬编码 `lib/bin.js` 在上游改布局时会把健康核心判成残缺，进而被旧回滚点覆盖（静默降级）。
+- **版本/元数据不再编造**：远端 `latest` 非合法 semver 时回落当前版本（面板不再显示 `vgarbage`）；快照 sidecar 的 DSH 版本取不到时返回 `null` 而不是硬编码 `0.1.7-rc.2`。
+- **`remote-sync.mjs` 的 `scripts/` 也改为目录遍历**（此前只修了 gateway/plugins，scripts/ 仍是手写清单，92 个文件只同步 65 个）。
+- **门禁与 CI 补强**：版本一致性门禁的正则支持 `v` 前缀（此前 README 里 `:v0.2.14` 陈旧标签 40/40 全过却查不出）；CI 新增「回归测试」步骤，真正执行 8 个测试脚本；README 的 `docker run` 示例补上 MCP 缓存挂载。
+
+### 🧪 测试与门禁
+- 新增回归测试：`npx-cache-heal-test`（38 项）、`pnpm-dlx-cache-test`（19 项）、`patch-interrupt-safety-test`（21 项）、`suite-version-sync-test`（40 项）、`atomic-write-test`（12 项）、`unreleased-cleanup-check`、`release-visual-review-check`。
+- 既有套件同步：`version-matrix-sync` 59/0、`version-range-fix` 95/0、`dsh-version-validation` 34/0、`locale-sync` 30/0、`backup-version-compatibility` 25/0。
+- 真机验证（amd64 构建机，独立 tag，未触碰生产）：容器内复现 npx 与 pnpm dlx 故障并验证自愈；`DSH_SUITE_VERSION` 注入生效；运行期定时自愈在 85s 内修好植入的半成品缓存。
+
+- **视觉审核（v0.2.15）**：管理后台总览 / 版本中心弹窗 / DSH Web 首屏 / noVNC 桌面 / 快照列表 共 5 张实机截图，逐张人工核对通过，见 `doc/release/v0.2.15/`。审核要点：套件版本胶囊显示 `v0.2.15` 且**无「发现新版」**（Issue #19 的可视验收点）；版本中心「本地运行 v0.2.15 = 远端最新 v0.2.15」；DSH 核心 `v0.2.2-rc.5` 标「官方深度适配」；快照列表「创建环境版本」列正确写入；DSH Web 首屏无残留「预览版说明」弹窗。
+
+### 📌 升级提示
+- 新增两个可选挂载：`./data/npm:/root/.npm`、`./data/pnpm-cache:/root/.cache/pnpm`（用于 MCP 工具缓存持久化）。不挂载也能正常工作（有自愈兜底），但每次重建容器需要重新下载。
+- 若曾手动改过容器内 `/app/gateway/package.json` 以消除版本误报，升级后该改动会被镜像覆盖，无需再改。
 ## [v0.2.14] - 2026-11-12
 
 ### 🔼 内置 DSH 更新

@@ -80,6 +80,19 @@ which pnpm >/dev/null 2>&1 && pnpm config set registry "${NPM_REG}" 2>/dev/null 
 find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/dev/null || true
 find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true
 
+# 1.02 工具缓存清单自愈（Issue #18）
+#   npx 与 pnpm dlx 都是「先解包 node_modules、最后才写清单」：
+#     · npx      → 缺 package.json 时报 ENOENT: Could not read package.json
+#     · pnpm dlx → 缺 package.json 时报 ERR_PNPM_CLI_DLX_READ_MANIFEST
+#   慢网下被 MCP 启动超时打断后会永久停在半成品状态，且包管理器**不会自愈**。
+#   启动时补写清单（闭包不完整则删目录重装），运行期另有网关定时自愈兜底。
+# 非 root 部署（compose 文档化的 user: 1001 + DSH_HOME）时缓存位于 $HOME 下，不能硬编码 /root
+_TOOL_CACHE_NPM="${HOME:-/root}/.npm/_npx"
+_TOOL_CACHE_PNPM="${XDG_CACHE_HOME:-${HOME:-/root}/.cache}/pnpm/dlx"
+if [ -d "${_TOOL_CACHE_NPM}" ] || [ -d "${_TOOL_CACHE_PNPM}" ]; then
+  node /app/scripts/tool-cache-heal.mjs --boot --quiet 2>&1 | sed 's/^/[entrypoint] /' || true
+fi
+
 # 1.1 修复 .dsh 目录与凭据文件的严格权限 (DSH 凭据服务强制校验 mode 600，拒绝 777/644 等跨权限读取崩溃)
 if [ -d "${DSH_DIR}" ]; then
   chmod 700 "${DSH_DIR}" 2>/dev/null || true
@@ -103,16 +116,53 @@ CORE_DIR="${CORE_PARENT}/dsh"
 
 # 1.15.1 中断自愈：活动核心缺失（上次原子置换被打断）时从最新回滚点还原，避免容器变砖
 # 优先用临时回滚点 (.dsh-rollback-tmp-*)，若无再退而使用受保护的单槽位备件 (.dsh-rollback-preserved)（保命优先于保留）
-if [ ! -d "${CORE_DIR}" ]; then
-  _rb="$(ls -1d "${CORE_PARENT}"/.dsh-rollback-tmp-* 2>/dev/null | sort | tail -1 || true)"
-  if [ -z "${_rb}" ] || [ ! -d "${_rb}" ]; then
-    if [ -d "${CORE_PARENT}/.dsh-rollback-preserved" ]; then
-      _rb="${CORE_PARENT}/.dsh-rollback-preserved"
+# 完整性判定：只看「目录存在」会漏掉最危险的场景 —— moveDirOrCopy 的 EXDEV 退化路径
+# （cp -a 之后 rm -rf 源目录）在删除中途被打断时，目录还在但内容残缺，
+# 此时 dsh 软链指向不存在的 lib/bin.js，网关会无限重启且永不自愈。
+# 核心入口文件判定：优先认 lib/bin.js，其次读 package.json 的 bin 字段。
+# 硬编码单一布局的风险：上游一旦改目录结构，健康核心会被判「残缺」，
+# 进而被回滚点覆盖成旧版本 —— 一次静默降级（子代理审查 P2-12）。
+_core_entry_ok() {
+  [ -f "$1/lib/bin.js" ] && return 0
+  _entry=$(node -e "try{const p=require(process.argv[1]+'/package.json');const b=p.bin;const v=typeof b==='string'?b:(b&&Object.values(b)[0]);process.stdout.write(v||'')}catch(e){}" "$1" 2>/dev/null)
+  [ -n "${_entry}" ] && [ -f "$1/${_entry}" ]
+}
+
+_core_ok() {
+  [ -d "${CORE_DIR}" ] \
+    && [ -f "${CORE_DIR}/package.json" ] \
+    && [ -d "${CORE_DIR}/node_modules" ] \
+    && [ -n "$(ls -A "${CORE_DIR}/node_modules" 2>/dev/null)" ] \
+    && _core_entry_ok "${CORE_DIR}"
+}
+
+if ! _core_ok; then
+  _rb=""
+  # 按 mtime 从新到旧遍历（sort 按目录名会把 pid 位数不同的旧目录排到前面），
+  # 且逐个校验完整性 —— 中断留下的残缺回滚点绝不能被 mv 成活动核心。
+  for _cand in $(ls -1dt "${CORE_PARENT}"/.dsh-rollback-tmp-* 2>/dev/null); do
+    if [ -f "${_cand}/package.json" ] && [ -n "$(ls -A "${_cand}/node_modules" 2>/dev/null)" ] && _core_entry_ok "${_cand}"; then
+      _rb="${_cand}"
+      break
     fi
+  done
+  if [ -z "${_rb}" ] && [ -d "${CORE_PARENT}/.dsh-rollback-preserved" ] \
+     && [ -f "${CORE_PARENT}/.dsh-rollback-preserved/package.json" ] \
+     && [ -f "${CORE_PARENT}/.dsh-rollback-preserved/lib/bin.js" ]; then
+    _rb="${CORE_PARENT}/.dsh-rollback-preserved"
   fi
   if [ -n "${_rb}" ] && [ -d "${_rb}" ]; then
-    echo "[entrypoint] ⚠️ 检测到活动核心缺失，正在从回滚点恢复: ${_rb}"
+    echo "[entrypoint] ⚠️ 检测到活动核心缺失或不完整，正在从回滚点恢复: ${_rb}"
+    # 目标残缺时先清空，避免 mv 到非空目录失败
+    [ -d "${CORE_DIR}" ] && rm -rf "${CORE_DIR}" 2>/dev/null || true
     mv "${_rb}" "${CORE_DIR}" 2>/dev/null || true
+    if _core_ok; then
+      echo "[entrypoint] ✅ 核心已从回滚点恢复"
+    else
+      echo "[entrypoint] ❌ 回滚点恢复后核心仍不完整，请检查镜像或手动重装 DSH" >&2
+    fi
+  elif [ -d "${CORE_DIR}" ]; then
+    echo "[entrypoint] ❌ 活动核心目录存在但内容残缺，且无可用的完整回滚点；DSH 可能无法启动" >&2
   fi
 fi
 

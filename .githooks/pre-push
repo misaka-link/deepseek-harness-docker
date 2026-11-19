@@ -1,0 +1,44 @@
+#!/bin/sh
+# 【Issue #19】推送前版本号自洽门禁（可入库的自动门禁，不依赖本地私有脚本）
+#
+# 背景：v0.2.14 漏改 gateway/package.json，导致镜像内「本地 0.2.13 vs version.json 0.2.14」
+# 自相矛盾，管理面板永久误报「发现新版」。规则写在 PROJECT_RULES.md 第四条第 4 款，
+# 但「靠人工记忆执行」的规则等于没写，故用 git hook 变成不可跳过的门禁。
+#
+# 启用（每台机器一次性）：
+#     git config core.hooksPath .githooks
+#
+# 临时跳过（仅在明确知道自己在做什么时）：
+#     git push --no-verify
+
+#
+# 已知限制：校验的是**当前工作区**，而非被推送的那个提交。发版中途只改了一部分版本号时，
+# 推送任何分支/标签都会被拦（这是有意为之：宁可误拦，也不放出内部不自洽的镜像）。
+# 确需绕过请用 `git push --no-verify`，并在推送后补跑一次门禁。
+
+set -e
+
+# 环境缺失不应被误报成「版本号不一致」
+command -v node >/dev/null 2>&1 || {
+  echo "[pre-push] 未找到 node，无法执行版本号门禁；请先安装 Node.js 或改用 --no-verify（后果自负）"
+  exit 1
+}
+
+echo "[pre-push] 套件版本号一致性门禁 ..."
+if ! node scripts/suite-version-sync-test.mjs; then
+  echo ""
+  echo "[pre-push] ❌ 版本号不一致，推送已阻断。"
+  echo "           请按 PROJECT_RULES.md 第四条第 1 款同步递增 5 处版本号后重试。"
+  exit 1
+fi
+
+# 本地私有守卫（含敏感材料/内网地址扫描）存在时才执行；该脚本被 .gitignore 忽略，不随仓库分发
+if [ -f scripts/local-prepush-guard.mjs ]; then
+  echo "[pre-push] 本地敏感材料守卫 ..."
+  if ! node scripts/local-prepush-guard.mjs; then
+    echo "[pre-push] ❌ 本地守卫未通过，推送已阻断。"
+    exit 1
+  fi
+fi
+
+echo "[pre-push] ✅ 门禁全部通过"

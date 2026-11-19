@@ -1418,7 +1418,7 @@
         <div style="position:relative;">
           <div class="badge-status-pill badge-status-success" id="headerProjectBadge" onclick="toggleProjectDropdown(event)" title="点击查看容器套件版本与更新内容">
             <span class="badge-dot"></span>
-            <span id="headerProjectText">容器套件 v0.1.2</span>
+            <span id="headerProjectText">容器套件 v—</span>
             <svg style="width:10px;height:10px;margin-left:2px;opacity:0.75;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
@@ -1437,11 +1437,11 @@
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; font-size:12px;">
               <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:6px 10px;">
                 <span style="color:var(--text-muted); display:block; font-size:11px;">本地运行版本</span>
-                <strong id="popoverCurrentVer" style="color:var(--text-main);">v0.1.2</strong>
+                <strong id="popoverCurrentVer" style="color:var(--text-main);">v—</strong>
               </div>
               <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:6px 10px;">
                 <span style="color:var(--text-muted); display:block; font-size:11px;">远端最新发布</span>
-                <strong id="popoverLatestVer" style="color:var(--primary);">v0.1.2</strong>
+                <strong id="popoverLatestVer" style="color:var(--primary);">v—</strong>
               </div>
             </div>
 
@@ -1449,13 +1449,13 @@
             <div style="background:#f8fafc; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px; font-size:12px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="color:var(--text-main); font-weight:700; font-size:11px;">🎯 适配官方 DSH 核心版本：</span>
-                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.2.2-rc.2</span>
+                <span class="badge-chip chip-green" id="popoverCompatBadge" style="font-size:10px; padding:1px 6px;">推荐 v0.2.2-rc.5</span>
               </div>
               <div style="color:var(--text-muted); font-size:11px; margin-bottom:5px;">
-                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.2-rc.2</code>
+                兼容支持范围：<code id="popoverCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.2-rc.5</code>
               </div>
               <div id="popoverCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
-                <span class="badge-chip chip-green">0.2.2-rc.2</span><span class="badge-chip chip-green">0.2.2-rc.1</span>
+                <span class="badge-chip chip-green">0.2.2-rc.5</span><span class="badge-chip chip-green">0.2.2-rc.4</span><span class="badge-chip chip-green">0.2.2-rc.2</span><span class="badge-chip chip-green">0.2.2-rc.1</span>
                 <span class="badge-chip chip-green">0.2.2-alpha.2</span>
                 <span class="badge-chip chip-green">0.2.1-rc.3</span>
                 <span class="badge-chip chip-green">0.2.1-rc.2</span>
@@ -1561,7 +1561,7 @@
     <div class="mobile-menu-version-card">
       <div class="mobile-version-row">
         <span class="mobile-version-label">📦 套件版本:</span>
-        <strong id="mobileMenuProjectVer">v0.1.2</strong>
+        <strong id="mobileMenuProjectVer">v—</strong>
       </div>
       <div class="mobile-version-row">
         <span class="mobile-version-label">⚡ DSH 核心:</span>
@@ -2492,11 +2492,11 @@
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px; margin-bottom:10px;">
                 <div style="background:#ffffff; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:6px 8px;">
                   <span style="color:var(--text-muted); display:block; font-size:11px;">本地运行</span>
-                  <strong id="hubProjectCurrent" style="color:var(--text-main); font-size:13px;">v0.1.2</strong>
+                  <strong id="hubProjectCurrent" style="color:var(--text-main); font-size:13px;">v—</strong>
                 </div>
                 <div style="background:#ffffff; border:1px solid var(--card-border); border-radius:var(--radius-sm); padding:6px 8px;">
                   <span style="color:var(--text-muted); display:block; font-size:11px;">远端最新</span>
-                  <strong id="hubProjectLatest" style="color:var(--primary); font-size:13px;">v0.1.2</strong>
+                  <strong id="hubProjectLatest" style="color:var(--primary); font-size:13px;">v—</strong>
                 </div>
               </div>
 
@@ -2547,12 +2547,12 @@
                 <span class="badge-chip chip-gray" id="hubCompatSourceBadge" style="font-size:10px; margin-left:6px;">📦 本地离线规则</span>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; line-height:1.5;">
-                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.2.2-rc.2</strong> (已深度适配)</div>
-                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.2-rc.2</code></div>
+                <div>推荐核心：<strong id="hubCompatRecommended" style="color:var(--text-main);">v0.2.2-rc.4</strong> (已深度适配)</div>
+                <div>兼容范围：<code id="hubCompatRange" style="color:var(--primary); font-size:11px;">>=0.1.2-rc.1 <=0.2.2-rc.5</code></div>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:5px;">已预置深度适配版本：</div>
               <div id="hubCompatChips" style="display:flex; gap:4px; flex-wrap:wrap;">
-                <span class="badge-chip chip-green">0.2.2-rc.2</span><span class="badge-chip chip-green">0.2.2-rc.1</span>
+                <span class="badge-chip chip-green">0.2.2-rc.5</span><span class="badge-chip chip-green">0.2.2-rc.4</span><span class="badge-chip chip-green">0.2.2-rc.2</span><span class="badge-chip chip-green">0.2.2-rc.1</span>
                 <span class="badge-chip chip-green">0.2.2-alpha.2</span>
                 <span class="badge-chip chip-green">0.2.1-rc.3</span>
                 <span class="badge-chip chip-green">0.2.1-rc.2</span>
@@ -3055,7 +3055,7 @@
         const pText = document.getElementById('headerProjectText');
         if (pBadge && pText) {
           pBadge.className = `badge-status-pill badge-status-${proj.level || 'success'}`;
-          let pLabel = `容器套件 v${proj.current || '0.1.2'}`;
+          let pLabel = '容器套件 ' + suiteVerText(proj.current);
           if (proj.level === 'danger') {
             pLabel += ' • 不再兼容 ⛔';
           } else if (proj.hasUpdate) {
@@ -3158,9 +3158,9 @@
 
       // 容器套件卡片渲染
       const curElem = document.getElementById('hubProjectCurrent');
-      if (curElem) curElem.textContent = 'v' + (proj.current || '0.1.2');
+      if (curElem) curElem.textContent = suiteVerText(proj.current);
       const latElem = document.getElementById('hubProjectLatest');
-      if (latElem) latElem.textContent = 'v' + (proj.latest || proj.current || '0.1.2');
+      if (latElem) latElem.textContent = suiteVerText(proj.latest || proj.current);
 
       const hubProjBadge = document.getElementById('hubProjectStatusBadge');
       if (hubProjBadge) {
@@ -3264,9 +3264,9 @@
       // 单一数据源：优先取本次传入 data.compatibility（避免全局 versionCheckData 滞后/串场），
       // 兜底数组仅在后端元数据缺失时生效，基准已同步至 0.2.2-rc.2。
       const compat = (data && data.compatibility) || (versionCheckData && versionCheckData.compatibility) || {};
-      const recDsh = compat.recommendedDsh || '0.2.2-rc.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.2-rc.2';
-      const adaptedList = compat.adaptedVersions || ['0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.2.2-rc.5';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.2-rc.5';
+      const adaptedList = compat.adaptedVersions || ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const hubCompatRecommended = document.getElementById('hubCompatRecommended');
       if (hubCompatRecommended) hubCompatRecommended.textContent = 'v' + recDsh;
@@ -3399,23 +3399,32 @@
       }
     });
 
+    /**
+     * 套件工程版本显示（Issue #19）。
+     * 未知时显示「v未知」，严禁用 '0.1.2' 之类的具体版本号冒充——更严禁回落到 DSH 版本号，
+     * 否则用户会把 DSH 版本当成套件版本，排查镜像问题时被彻底带偏。
+     */
+    function suiteVerText(v) {
+      return v ? 'v' + v : 'v未知';
+    }
+
     function renderProjectDropdown() {
       const proj = versionCheckData?.project || {};
-      const cur = proj.current || currentVersion || '0.1.2';
+      const cur = proj.current || '';
       const lat = proj.latest || cur;
       const hasUpdate = Boolean(proj.hasUpdate);
       const level = proj.level || 'success';
       // P5：兼容矩阵字段必须在本函数作用域内重新取值（原先引用了 renderVersionHubModal 内
       // 以 const 声明的 recDsh/rangeDsh/adaptedList，跨函数不可见 → ReferenceError）
       const compat = versionCheckData?.compatibility || {};
-      const recDsh = compat.recommendedDsh || '0.2.2-rc.2';
-      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.2-rc.2';
-      const adaptedList = compat.adaptedVersions || ['0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+      const recDsh = compat.recommendedDsh || '0.2.2-rc.5';
+      const rangeDsh = compat.supportedDshRange || '>=0.1.2-rc.1 <=0.2.2-rc.5';
+      const adaptedList = compat.adaptedVersions || ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
       const curElem = document.getElementById('popoverCurrentVer');
-      if (curElem) curElem.textContent = 'v' + cur;
+      if (curElem) curElem.textContent = suiteVerText(cur);
       const latElem = document.getElementById('popoverLatestVer');
-      if (latElem) latElem.textContent = 'v' + lat;
+      if (latElem) latElem.textContent = suiteVerText(lat);
 
       const badge = document.getElementById('popoverStatusBadge');
       if (badge) {
@@ -3610,10 +3619,11 @@ DSH 核心版本 : v${currentVersion || '0.2.2-rc.1'} (${data.running ? (data.re
         currentVersion = curVer;
 
         // Navbar Dual Badges
-        const curProjVer = data.project?.version || '0.1.2';
+        // Issue #19：project.version 可能为 null（版本未知），严禁用 '0.1.2' 冒充
+        const curProjVer = data.project?.version || '';
         const pText = document.getElementById('headerProjectText');
         if (pText && !pText.textContent.includes('•')) {
-          pText.textContent = `容器套件 v${curProjVer}`;
+          pText.textContent = '容器套件 ' + suiteVerText(curProjVer);
         }
         const dText = document.getElementById('headerDshText');
         if (dText && !dText.textContent.includes('•')) {
@@ -3845,7 +3855,7 @@ DSH 核心版本 : v${curVer} (${data.dsh?.ready ? '已就绪运行' : '启动�
         availableDistTags = tags;
         const versions = data.versions || [];
         availableCachedVersions = data.cachedVersions || [];
-        availableAdaptedVersions = data.adaptedVersions || ['0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+        availableAdaptedVersions = data.adaptedVersions || ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
         availableEvaluations = data.versionEvaluations || {};
         // 记录适配规则来源（后端 /api/dsh/versions 返回 isRemoteMeta；兼容 compatibility 内嵌字段）
         if (typeof data.isRemoteMeta === 'boolean') {

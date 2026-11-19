@@ -1,12 +1,12 @@
 # DeepSeek Harness Docker
 
-> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.2-rc.2` / `0.2.2-rc.1` / `0.2.2-alpha.3` / `0.2.2-alpha.2` / `0.2.1-rc.3` / `0.2.1-rc.2` / `0.2.1-alpha.5` / `0.2.1-alpha.4` / `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.14`  
+> 📌 **版本信息**：兼容支持官方 DeepSeek Harness 核心 `0.2.2-rc.5` / `0.2.2-rc.4` / `0.2.2-rc.3` / `0.2.2-rc.2` / `0.2.2-rc.1` / `0.2.2-alpha.3` / `0.2.2-alpha.2` / `0.2.1-rc.3` / `0.2.1-rc.2` / `0.2.1-alpha.5` / `0.2.1-alpha.4` / `0.2.1-alpha.3` / `0.2.1-alpha.2` / `0.2.1-alpha.1` / `0.2.0-rc.2` / `0.2.0-rc.1` / `0.1.7-rc.2` / `0.1.7-rc.1` / `0.1.7-alpha.2` / `0.1.7-alpha.1` / `0.1.6-alpha.2` / `0.1.6-alpha.1` / `0.1.5-rc.2` / `0.1.5-rc.1` / `0.1.2-rc.1` ｜ 本项目工程版本 `0.2.15`  
 > 🔗 **快速直达链接**：
 > - ⚡ **官方 DSH 仓库**：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) ｜ [官方 Releases 更新日志](https://github.com/deepseek-ai/deepseek-harness/releases) ｜ [npm 官方包页](https://www.npmjs.com/package/@deepseek-ai/dsh)
 > - 📦 **本项目 Docker 仓库**：[misaka-link/deepseek-harness-docker](https://github.com/misaka-link/deepseek-harness-docker) ｜ [本项目 Releases](https://github.com/misaka-link/deepseek-harness-docker/releases)
 > 🏷️ **镜像标签规范**：默认拉取镜像统一提供 **`:latest`**（完整纯净版）、**`:latest-market`**（预装市场版）与 **`:latest-mini`**（轻量无浏览器版），开箱即用；其中 **`mini` 镜像支持 `linux/amd64` 与 `linux/arm64` 双架构 Multi-Arch Manifest**（根据主机平台架构自动拉取适配），**明确 ARM 版只有 mini，暂不增加其他变体**（`full` / `market` 仅支持 `linux/amd64`）。每次构建镜像时，**均会额外多打两个版本标签**：  
-> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.2-rc.2`、`:0.2.2-rc.2-market`、`:0.2.2-rc.2-mini`），精确锁定底层 DSH 官方引擎；  
-> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.14`、`:0.2.14-market`、`:0.2.14-mini`），精确锁定本容器套件自身的版本。
+> 1. **额外标签一：内置官方 DeepSeek Harness 版本标签**（如 `:0.2.2-rc.5`、`:0.2.2-rc.5-market`、`:0.2.2-rc.5-mini`），精确锁定底层 DSH 官方引擎；  
+> 2. **额外标签二：本项目自身的工程版本标签**（如 `:0.2.15`、`:0.2.15-market`、`:0.2.15-mini`），精确锁定本容器套件自身的版本。
 
 专为官方 DeepSeek Harness 打造的**开箱即用容器化套件与可视化 Web Admin 控制台**。基于 **Debian 13 (Trixie) & Node 24 (glibc 2.41)** 现代化运行时底座，一键解决官方回环网络限制、解耦全局 `NODE_ENV` 恢复纯净开发环境、集成轻量访问认证与 noVNC 静态版本化桌面；并通过**全新的 Web Admin 三栏核心看板与安全迁移体系**，实现 DSH 核心版本在线热切换、全自动快照备份、社区插件市场管理与可视化运维；同时**内置「DSH 容器助手」插件**（移动端视口防黑屏适配、接管官方远程登录弹窗、登录态检测与手机号隐私打码）。
 
@@ -38,7 +38,7 @@
 | ![设置页面](doc/10-admin-tab-settings.png) | ![浏览器vnc](doc/11-vnc-desktop.png) |
 | 热修改访问认证码、自定义后台管理路径与桌面路径、反向代理与安全频率限制 | 静态资源版本化隔离，配合 `dsh-browser-desktop` 插件，AI 可自主操控网页与实时截屏 |
 
-| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.2-rc.2) |
+| 9. 极简访问认证页 (默认口令: `admin`) | 10. 官方 DSH Web 交互工作区 (最新 0.2.2-rc.5) |
 | :---: | :---: |
 | ![登录界面](doc/01-login-auth.png) | ![DSH Web](doc/02-dsh-web.png) |
 | 告别原生丑陋 Basic Auth 弹窗，采用 DSH 同源灰白科技质感，单输入框极速登录 | 彻底根治回环网络限制与模型配置报错，完美支持 DeepSeek-V41-Flash 等最新模型 |
@@ -58,9 +58,9 @@
 
 | 镜像分类 | 默认镜像标签 (推荐，开箱即用) | 额外标签一：内置 DSH 官方版本 (锁定底层引擎) | 额外标签二：本项目工程版本 (锁定容器套件) | 支持架构 | 特性与适用场景 |
 |---|---|---|---|---|---|
-| **轻量精简版 (Mini)** *(Issue #11)* | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`** | `...:0.2.2-rc.2-mini`<br>(`...:dsh-0.2.2-rc.2-mini`) | `...:0.2.14-mini`<br>(`...:v0.2.14-mini`) | **`linux/amd64`**<br>**`linux/arm64`**<br>*(ARM 仅 mini)* | **极致精简（实测 1.79GB（amd64）/ 1.82GB（arm64），原 5.3GB、缩减约 66%）**：去 Chromium/noVNC 桌面栈、去 AI 浏览器控制工具、去 Golang/gh CLI、剥离 Office wasm 与本地语音识别库；管理后台自动收敛隐藏桌面控制。**适合纯文本代码开发、低配 VPS、Apple Silicon/ARM64 机器与资源敏感型部署**；不适用需要 AI 操控浏览器进行网页抓取/截屏的场景 |
-| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.2-rc.2`<br>(`...:dsh-0.2.2-rc.2`) | `...:0.2.14`<br>(`...:v0.2.14`) | `linux/amd64`<br>*(仅 amd64)* | **完整纯净开发环境 (~5.3GB)**：仅包含官方 DSH 核心、统一网关、访问认证、Chromium 桌面环境、Golang 与 gh CLI 工具链，轻量精简，插件可后续在后台按需安装 |
-| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.2-rc.2-market`<br>(`...:dsh-0.2.2-rc.2-market`) | `...:0.2.14-market`<br>(`...:v0.2.14-market`) | `linux/amd64`<br>*(仅 amd64)* | **开箱即用 (~5.3GB)**：在基础版上**预装社区应用市场 (`dshmarket`)** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
+| **轻量精简版 (Mini)** *(Issue #11)* | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-mini`** | `...:0.2.2-rc.5-mini`<br>(`...:dsh-0.2.2-rc.5-mini`) | `...:0.2.15-mini`<br>(`...:v0.2.15-mini`) | **`linux/amd64`**<br>**`linux/arm64`**<br>*(ARM 仅 mini)* | **极致精简（实测 1.79GB（amd64）/ 1.82GB（arm64），原 5.3GB、缩减约 66%）**：去 Chromium/noVNC 桌面栈、去 AI 浏览器控制工具、去 Golang/gh CLI、剥离 Office wasm 与本地语音识别库；管理后台自动收敛隐藏桌面控制。**适合纯文本代码开发、低配 VPS、Apple Silicon/ARM64 机器与资源敏感型部署**；不适用需要 AI 操控浏览器进行网页抓取/截屏的场景 |
+| **基础纯净版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest`** | `...:0.2.2-rc.5`<br>(`...:dsh-0.2.2-rc.5`) | `...:0.2.15`<br>(`...:v0.2.15`) | `linux/amd64`<br>*(仅 amd64)* | **完整纯净开发环境 (~5.3GB)**：仅包含官方 DSH 核心、统一网关、访问认证、Chromium 桌面环境、Golang 与 gh CLI 工具链，轻量精简，插件可后续在后台按需安装 |
+| **预装插件商店版** | **`ghcr.io/misaka-link/deepseek-harness-docker:latest-market`** | `...:0.2.2-rc.5-market`<br>(`...:dsh-0.2.2-rc.5-market`) | `...:0.2.15-market`<br>(`...:v0.2.15-market`) | `linux/amd64`<br>*(仅 amd64)* | **开箱即用 (~5.3GB)**：在基础版上**预装社区应用市场 (`dshmarket`)** 与思考强度调节等常用插件，免去手动安装；预装插件跟随 `@latest`，每次构建镜像时自动拉取最新版 |
 
 ---
 
@@ -79,6 +79,8 @@ docker run -d \
   -v $PWD/data/dsh:/root/.dsh \
   -v $PWD/workspace:/workspace \
   -v $PWD/data/snapshots:/root/.dsh-snapshots \
+  -v $PWD/data/npm:/root/.npm \
+  -v $PWD/data/pnpm-cache:/root/.cache/pnpm \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-mini
 ```
 
@@ -184,10 +186,12 @@ docker run -d \
   -v $(pwd)/data/dsh:/root/.dsh \
   -v $(pwd)/workspace:/workspace \
   -v $(pwd)/data/snapshots:/root/.dsh-snapshots \
+  -v $(pwd)/data/npm:/root/.npm \
+  -v $(pwd)/data/pnpm-cache:/root/.cache/pnpm \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-rc.2` 或项目版本 `:0.2.14`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-rc.5` 或项目版本 `:0.2.15`)*
 
 #### 选项 B：启动预装插件商店版 (默认 `:latest-market`，开箱即带 dshmarket 插件市场)
 ```bash
@@ -199,10 +203,12 @@ docker run -d \
   -v $(pwd)/data/dsh:/root/.dsh \
   -v $(pwd)/workspace:/workspace \
   -v $(pwd)/data/snapshots:/root/.dsh-snapshots \
+  -v $(pwd)/data/npm:/root/.npm \
+  -v $(pwd)/data/pnpm-cache:/root/.cache/pnpm \
   -v $(pwd)/data/browser:/root/.config/chromium \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
-*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-rc.2-market` 或项目版本 `:0.2.14-market`)*
+*(若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-rc.5-market` 或项目版本 `:0.2.15-market`)*
 
 #### 选项 C：启动轻量精简版 (默认 `:latest-mini`，无浏览器，实测 1.82GB，支持 amd64/arm64)
 ```bash
@@ -214,9 +220,11 @@ docker run -d \
   -v $PWD/data/dsh:/root/.dsh \
   -v $PWD/workspace:/workspace \
   -v $PWD/data/snapshots:/root/.dsh-snapshots \
+  -v $PWD/data/npm:/root/.npm \
+  -v $PWD/data/pnpm-cache:/root/.cache/pnpm \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-mini
 ```
-*(注：Mini 镜像无需挂载 `./data/browser` 目录；ARM64 主机直接支持自动选架构；若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-rc.2-mini` 或项目版本 `:0.2.14-mini`；完整说明详见上方 [Mini 镜像快速启动](#-mini-镜像快速启动))*
+*(注：Mini 镜像无需挂载 `./data/browser` 目录；ARM64 主机直接支持自动选架构；若需精准锁定，亦可将标签指定为内置 DSH 版本 `:0.2.2-rc.5-mini` 或项目版本 `:0.2.15-mini`；完整说明详见上方 [Mini 镜像快速启动](#-mini-镜像快速启动))*
 
 启动完成后直接访问：
 - **Web Admin 管理面板**：`http://<服务器IP>:3080/admin/` ⭐
@@ -363,30 +371,23 @@ docker compose -f docker-compose.mini.yml up -d
 
 ## 📝 版本更新历史 (Changelog · 仅最近 3 个版本)
 
+### v0.2.15
+- 🔼 **内置 DSH 升级至 `@deepseek-ai/dsh@0.2.2-rc.5`**（npm `next` 线），兼容区间上界同步为 `<=0.2.2-rc.5`，推荐核心与适配矩阵置顶同步指向 `0.2.2-rc.5`（保留 `0.2.2-rc.3` 于适配清单）；工程版本递增至 `0.2.15`。
+- 🛠️ **MCP 服务永久 disconnected（Issue #18）**：`npx` 与 `pnpm dlx` 都是「先解包、最后写清单」，被超时打断后缓存永久半成品且不会自愈（`ENOENT: Could not read package.json` / `ERR_PNPM_CLI_DLX_READ_MANIFEST`）。新增启动期 + 运行期自愈，并持久化 `./data/npm`、`./data/pnpm-cache`。
+- 🛠️ **管理面板永久误报「发现新版」（Issue #19）**：v0.2.14 漏改 `gateway/package.json` 导致镜像内版本自相矛盾。现统一为单一读取入口 + 构建期注入 `DSH_SUITE_VERSION` + 40 项一致性门禁。
+- 🔒 **中断安全加固**：客户端补丁改原子写、标记后置并带备份与截断自愈；核心目录自愈改为三要素完整性判定；快照还原校验 `pnpm install` 退出码；远程同步清单改目录遍历（原手写清单漂移会产出缺模块的镜像）。
+- 🧪 **验证**：版本矩阵 59/0、区间 95/0、DSH 版本校验 34/0、npx 缓存自愈 38/38、pnpm dlx 19/19、补丁中断安全 21/21、原子写 12/12；真机构建镜像并在容器内复现故障、验证自愈。
+
 ### v0.2.14
 - 🔼 **内置 DSH 升级至 `@deepseek-ai/dsh@0.2.2-rc.2`**（npm `next` 线），兼容区间上界同步为 `<=0.2.2-rc.2`，推荐核心与适配矩阵置顶同步指向 `0.2.2-rc.2`；工程版本递增至 `0.2.14`。
-- 🛠️ **容器 Chromium 中文显示与 DSH 语言跟随（Issue #17）**：安装 `chromium-l10n` 并精简为 DSH 8 语言对应的 10 个语言包；新增 `gateway/locale-sync.js` 读取 DSH 语言偏好并映射到 Chromium；语言切换自动重启桌面；通过企业策略隐藏 `--no-sandbox` 提示条。
-- 🧩 **rc.2 兼容适配**：账号服务包改名与压缩客户端补丁锚点适配；4 个必需补丁全部命中；单元测试 `locale-sync` 30/30、`version-matrix-sync` 56/0、`version-range-fix` 90/0。
+- 🛠️ **容器 Chromium 中文显示与 DSH 语言跟随（Issue #17）**：安装 `chromium-l10n` 并精简为 DSH 8 语言对应的 10 个语言包；新增 `gateway/locale-sync.js` 读取 DSH 语言偏好并映射到 Chromium；语言切换自动重启桌面。
+- 🧩 **rc.2 兼容适配**：账号服务包改名与压缩客户端补丁锚点适配；4 个必需补丁全部命中。
 - 🆕 **官方 0.2.2-rc.2 关键新能力**：Git Worktree 分支/提交/文件审阅、SubAgent 具名与多层协作、桌面端更新渠道切换；修复插件加载失败导致 Web 无法启动、PTC 子代理消息重复唤醒等问题。
-
 ### v0.2.13
 - 🛠️ **修复容器浏览器 / 容器助手语言不跟随 DSH 中文切换（Issue #16）**：两个自定义插件改为读取 `ctx.locale` 当前 active locale，并订阅 locale 变化实时刷新；设置导航、Container Browser 设置页、DSH Container Helper 入口卡在切换中文后立即更新。
 - 🔧 **插件版本**：`@dsh-custom/dsh-browser-desktop` 升级至 `1.0.2`，`@dsh-custom/dsh-container-helper` 升级至 `1.0.4`；工程版本递增至 `0.2.13`。
 
-### v0.2.12
-- 🔼 **内置 DSH 升级至 `@deepseek-ai/dsh@0.2.2-rc.1`**（npm `next` 线），兼容区间上界同步为 `<=0.2.2-rc.1`，推荐核心与适配矩阵置顶同步指向 `0.2.2-rc.1`；工程版本递增至 `0.2.12`。
-- 🆕 **官方 0.2.2-rc.1 关键新能力**：
-  - **移动端与窄屏适配**：优化软键盘交互、导航与窄屏布局，菜单和操作入口保持可用；
-  - **聊天文本引用与历史复制**：支持将聊天文本作为引用插入输入框，完整历史会话可复制为 Markdown；
-  - **插件与实验特性**：新增实验性「变更请求与工作树」、个性化推荐、`subagent_oar`、开发者工具-统计等插件，插件管理支持富文本详情与第三方插件更新回滚。
-- ⚠️ **上游行为变更**：
-  - 最低 Node.js 提升至 24.9；同步 Cordis Core 4.1.0、Loader 1.1.0、Include 1.1.0；
-  - PTC Node 控制通道改用 birpc（SSH 协议 2→3），旧 `tools.mode` / `DSH_TOOLS_MODE` 需迁移；
-  - `apply_patch` 默认关闭；文件先读与外部修改防护默认关闭。
-- 🛠️ **适配验证**：纯净 npm 安装树下 `auth-bypass`、`bundle-selfheal`、`combo-fallback`、`client-loopback` 四项必需补丁全部命中；DSH 容器助手登录弹窗居中、入口卡紧凑样式与关闭记忆保持正常。
-
-
-> 📖 **仅展示最近 3 个版本**（v0.2.14 / v0.2.13 / v0.2.12）。完整历史（含 v0.2.10 及更早）请见 [CHANGELOG.md](CHANGELOG.md)。
+> 📖 **仅展示最近 3 个版本**（v0.2.15 / v0.2.14 / v0.2.13）。完整历史（含 v0.2.12 及更早）请见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 

@@ -25,14 +25,34 @@ const CAPABILITIES = require('./capabilities');
 const desktopManager = CAPABILITIES.desktop.supported ? require('./desktop-manager') : require('./desktop-stub');
 const dshManager = require('./dsh-manager');
 const { DshCoreWatchdog } = require('./dsh-watchdog');
+// Issue #18: npx 缓存自愈调度器（「有 node_modules、缺 package.json 签名」的半成品缓存）。
+// 用「可选依赖」方式加载：模块缺失时应当降级为「不自愈」，而不是让整个网关 MODULE_NOT_FOUND 起不来
+// —— 这正是我们刚修过的「远程同步漏文件 → 镜像网关起不来」事故的形态，不能在新代码里重演。
+let ToolCacheHealer = null;
+try {
+  ({ ToolCacheHealer } = require('./tool-cache-healer'));
+} catch (err) {
+  console.warn('[gateway] 工具缓存自愈模块不可用，已降级为不自愈:', err && err.message);
+}
 const backupService = require('./backup-service');
 const pluginManager = require('./plugin-manager');
 const versionService = require('./version-service');
 const { getInternalToken, verifyInternalToken } = require('./internal-token');
+// 原子写工具同样按可选依赖加载；缺失时退化为普通写（配置会失去原子性，但网关仍能启动）
+let writeFileAtomicSync;
+try {
+  ({ writeFileAtomicSync } = require('./atomic-write'));
+} catch (err) {
+  console.warn('[gateway] 原子写模块不可用，已降级为普通写:', err && err.message);
+  writeFileAtomicSync = (file, data, opts = {}) => require('fs').writeFileSync(file, data, { encoding: 'utf8', mode: opts.mode || 0o644 });
+}
 const wsOrigin = require('./ws-origin');
 
 // DSH 核心运行时健康看门狗实例（bootstrap 时创建，shutdown 时停止）
 let dshWatchdog = null;
+
+// Issue #18: npx 缓存自愈实例（bootstrap 时创建，shutdown 时停止）
+let toolCacheHealer = null;
 
 // /healthz 安全读取看门狗状态：getStatus 异常不得拖垮健康检查端点
 function getWatchdogStatusSafe() {
@@ -61,10 +81,10 @@ function loadPersistedConfig() {
 
 function savePersistedConfig(cfg) {
   try {
-    fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
-    // 该文件包含 authToken 等敏感字段：写入即收紧为 0600（仅属主可读写）
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
-    try { fs.chmodSync(CONFIG_FILE, 0o600); } catch {}
+    // 该文件包含 authToken 等敏感字段：写入即收紧为 0600（仅属主可读写）。
+    // 必须原子写：就地截断写若被 SIGKILL 打断，会留下半截 JSON，
+    // 读取端 catch 后静默回落 {} —— 表现为「配置与口令莫名丢失」（甚至认证被关掉）。
+    writeFileAtomicSync(CONFIG_FILE, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
     return true;
   } catch (err) {
     console.error('[gateway] 保存持久化配置失败:', err.message);
@@ -793,7 +813,12 @@ async function handleAdminApi(req, res, pathname, query) {
     if (subPath === '/api/status' && req.method === 'GET') {
       return sendJson(res, 200, {
         project: {
-          version: versionService.getLocalProjectVersion()
+          version: versionService.getLocalProjectVersion(),
+          // Issue #19：版本来源诊断——便于事后判断「这个镜像是哪次构建产出的」，
+          // 以及 package.json / version.json / 构建期注入三者是否已经漂移。
+          versionSources: typeof versionService.describeProjectVersion === 'function'
+            ? versionService.describeProjectVersion().sources
+            : undefined
         },
         dsh: dshManager.getStatus(),
         desktop: desktopManager.getStatus(),
@@ -812,6 +837,23 @@ async function handleAdminApi(req, res, pathname, query) {
         pruneBundlesExtra,
         autoIsolatedEvents: dshManager.getAutoIsolatedEvents()
       });
+    }
+
+    // 1.05 npx 缓存自愈：状态查询与手动修复（Issue #18）
+    //   背景：npx 先解包、最后写 package.json 签名；被超时打断后目录永久半成品，
+    //   之后每次 npx 都报 ENOENT: Could not read package.json，MCP 永久 disconnected。
+    if (subPath === '/api/maintenance/npx-cache' && req.method === 'GET') {
+      return sendJson(res, 200, {
+        ok: true,
+        status: toolCacheHealer ? toolCacheHealer.getStatus() : { enabled: false, running: false }
+      });
+    }
+    if (subPath === '/api/maintenance/npx-cache/heal' && req.method === 'POST') {
+      if (!toolCacheHealer) return sendJson(res, 503, { ok: false, error: '自愈调度器未初始化' });
+      // 手动触发也要保留完整静默期：pnpm dlx 没有锁协议，只有 mtime 静默期这一道保护，
+      // 5s 的窗口足以在慢网下把「已建 node_modules、正在解包」的安装判成半成品删掉。
+      const result = toolCacheHealer.runOnce({ quietMs: 120000 });
+      return sendJson(res, 200, { ok: true, result });
     }
 
     // 1.1 版本与多级安全预警检测 (支持多通道 CDN / GitHub / 本地兜底)
@@ -1927,6 +1969,20 @@ async function bootstrap() {
     console.error('[gateway] 启动 DSH 看门狗失败（已忽略，不影响网关运行）:', err && err.message);
   }
 
+  // Issue #18: npx 缓存自愈。npx 是「先解包、最后写 package.json 签名」，被超时打断后会永久卡在
+  // 「有 node_modules、无签名」，之后每次 npx 都报 ENOENT: Could not read package.json，
+  // 表现为 MCP 服务永久 disconnected（DSH 每 32s 重试也永远撞同一堵墙）。
+  // 这里做运行期自愈：静默 120s 的半成品目录会被补写签名，下一次重试即命中缓存。
+  try {
+    if (!ToolCacheHealer) throw new Error('自愈模块未加载');
+    toolCacheHealer = new ToolCacheHealer();
+    toolCacheHealer.start();
+    // 注意：横幅在 server.listen 时就打印了，那时调度器还没创建 —— 状态必须在创建之后打，否则恒显示"未启用"
+    console.log('[gateway] 工具缓存自愈已启用（npx + pnpm dlx，每 60s 检查一次，静默 120s 才动手）');
+  } catch (err) {
+    console.error('[gateway] 启动 npx 缓存自愈失败（已忽略，不影响网关运行）:', err && err.message);
+  }
+
   // 默认首次启动自动创建初始配置快照 (自动防重复创建)
   dshManager.ensureDefaultSnapshot();
 }
@@ -1935,6 +1991,7 @@ async function shutdown(exitCode = 0) {
   const code = typeof exitCode === 'number' ? exitCode : 0;
   console.log('\n[gateway] 正在退出，关闭桌面与 DSH 进程...');
   if (dshWatchdog) { try { dshWatchdog.stop(); } catch {} }
+  if (toolCacheHealer) { try { toolCacheHealer.stop(); } catch {} }
   // 兜底：无论如何 8 秒内必须退出，避免关机流程自身卡死
   const hardTimer = setTimeout(() => { console.error('[gateway] 退出超时，强制结束'); process.exit(code); }, 8000);
   if (hardTimer.unref) hardTimer.unref();
