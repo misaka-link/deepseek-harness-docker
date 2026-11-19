@@ -2,7 +2,7 @@
 # 【Issue #19】推送前版本号自洽门禁（可入库的自动门禁，不依赖本地私有脚本）
 #
 # 背景：v0.2.14 漏改 gateway/package.json，导致镜像内「本地 0.2.13 vs version.json 0.2.14」
-# 自相矛盾，管理面板永久误报「发现新版」。规则写在 PROJECT_RULES.md 第四条第 4 款，
+# 自相矛盾，管理面板永久误报「发现新版」。规则写在 发版规范，
 # 但「靠人工记忆执行」的规则等于没写，故用 git hook 变成不可跳过的门禁。
 #
 # 启用（每台机器一次性）：
@@ -28,7 +28,7 @@ echo "[pre-push] 套件版本号一致性门禁 ..."
 if ! node scripts/suite-version-sync-test.mjs; then
   echo ""
   echo "[pre-push] ❌ 版本号不一致，推送已阻断。"
-  echo "           请按 PROJECT_RULES.md 第四条第 1 款同步递增 5 处版本号后重试。"
+  echo "           请按 发版规范同步递增 5 处版本号后重试。"
   exit 1
 fi
 
@@ -37,6 +37,24 @@ if [ -f scripts/local-prepush-guard.mjs ]; then
   echo "[pre-push] 本地敏感材料守卫 ..."
   if ! node scripts/local-prepush-guard.mjs; then
     echo "[pre-push] ❌ 本地守卫未通过，推送已阻断。"
+    exit 1
+  fi
+fi
+
+# 发版视觉审核门禁：只在推送 tag 时执行。
+# 审核截图属内部验证产物（内部材料不上传），只存本地、不入库，因此该门禁不能放 CI，
+# 只能在本地推送 tag 的这一刻拦一道。
+TAG_PUSH=0
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in refs/tags/*) TAG_PUSH=1 ;; esac
+done
+
+if [ "$TAG_PUSH" = "1" ]; then
+  echo "[pre-push] 发版视觉审核门禁 ..."
+  if ! node scripts/release-visual-review-check.mjs; then
+    echo ""
+    echo "[pre-push] ❌ 视觉审核证据缺失或不完整，tag 推送已阻断。"
+    echo "           截图应放在 doc/release/v<版本>/（本地目录，禁止提交），见 发版视觉审核流程。"
     exit 1
   fi
 fi

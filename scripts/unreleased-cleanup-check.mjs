@@ -1,5 +1,5 @@
 /**
- * unreleased-cleanup-check.mjs —— 未发布日志「发布后必须清理」门禁（PROJECT_RULES 第六条第 3 款）。
+ * unreleased-cleanup-check.mjs —— 未发布日志「发布后必须清理」门禁（未发布日志清理规则）。
  *
  * 背景：规则早就写了「发版后清理/归档 doc/UNRELEASED.md 中已发布条目」，但**没有任何机器校验**，
  * 实际结果是文件里长期堆着已发布内容：v0.2.14 发布后，Issue #17 条目、rc.2 适配条目、
@@ -108,7 +108,7 @@ if (jsonOut) {
   process.exit(failures.length === 0 ? 0 : 1);
 }
 
-console.log('\n=== 未发布日志清理门禁（PROJECT_RULES 第六条第 3 款） ===');
+console.log('\n=== 未发布日志清理门禁（未发布日志清理规则） ===');
 console.log(`   段数: ${sections.length}  已发布版本: ${[...releasedVersions].slice(0, 6).join(', ')}${releasedVersions.size > 6 ? ' …' : ''}`);
 
 for (const w of warnings) {
@@ -128,5 +128,5 @@ console.log('\n❌ 存在已发布却未清理的条目，禁止推送/发版');
 console.log('   处理方式（二选一）：');
 console.log('     a) 确认 CHANGELOG.md 已完整收录后，直接删除该段；');
 console.log('     b) 移入 doc/archive/unreleased-released-<日期>.md 归档。');
-console.log('   见 PROJECT_RULES.md 第六条第 3 款。');
+console.log('   见 未发布日志清理规则。');
 process.exit(1);

@@ -7,7 +7,9 @@
  * 因此把「构建镜像 → 真浏览器访问 → 截图存档 → 逐张审核」定为发版前强制流程，本脚本是它的机器门禁：
  * 没有截图证据 = 没做过视觉审核 = 不允许打 tag 发版。
  *
- * 证据目录：doc/release/v<版本>/（doc/ 仅允许图片入库，故 PNG 可随仓库提交并被 CI 审计）
+ * 证据目录：doc/release/v<版本>/ —— **只存本地**。
+ * 审核截图属内部验证产物（内部材料不上传）：禁止 git add、禁止上传、禁止写进 Release Notes。
+ * 因此本脚本只在本地执行（由 .githooks/pre-push 在推送 tag 时调用），不在 CI 运行。
  *
  * 用法:
  *   node scripts/release-visual-review-check.mjs                # 校验当前 PROJ_VER 的证据
@@ -107,7 +109,7 @@ function printHowTo() {
   console.log('  2) 采集截图（仓库已有截图器，用真实 Chromium 访问，不是拼图）：');
   console.log('       AUTH_TOKEN=<口令> PROXY_PORT=3080 node scripts/remote-shot-admin.mjs tab-dsh      doc/release/v' + version + '/01-admin-overview.png');
   console.log('       AUTH_TOKEN=<口令> PROXY_PORT=3080 node scripts/remote-shot-admin.mjs tab-version   doc/release/v' + version + '/02-admin-version-hub.png');
-  console.log('       AUTH_TOKEN=<口令> PROXY_PORT=3080 node scripts/remote-shot-dsh-ui.mjs <steps.json>  # 03/04/05 见 PROJECT_RULES 第三条第 4 款');
+  console.log('       AUTH_TOKEN=<口令> PROXY_PORT=3080 node scripts/remote-shot-dsh-ui.mjs <steps.json>  # 03/04/05 见 发版视觉审核流程');
   console.log('  3) 逐张打开审核（必须真的看），把结论写进 CHANGELOG 该版本的「🧪 验证」段；');
   console.log('  4) 重跑本脚本确认通过后，才允许打 tag 发版。');
 }

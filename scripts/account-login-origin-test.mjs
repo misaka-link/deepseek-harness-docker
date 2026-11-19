@@ -105,13 +105,13 @@ const run = (v) => { try { return fn(v); } catch (e) { return 'ERR:' + e.code; }
 if (fn) {
   ok(run('http://localhost:3079') === 'http://localhost:3079', 'loopback 原样保留: http://localhost:3079');
   ok(run('http://127.0.0.1:3080/') === 'http://127.0.0.1:3080', 'loopback 原样保留: http://127.0.0.1:3080');
-  ok(run('http://10.10.10.99:3080') === 'http://localhost:3080', '远端 http 归一: http://10.10.10.99:3080 -> http://localhost:3080');
+  ok(run('http://192.0.2.10:3080') === 'http://localhost:3080', '远端 http 归一: http://192.0.2.10:3080 -> http://localhost:3080');
   ok(run('http://example.com:8080') === 'http://localhost:8080', '远端 http 归一: http://example.com:8080 -> http://localhost:8080');
   ok(run('https://dsh.example.com') === 'http://localhost:443', '远端 https 归一: https://dsh.example.com -> http://localhost:443');
   ok(String(run('not-a-url')).startsWith('ERR'), '非法 URL 仍拒绝');
   ok(String(run('http://localhost:0')).startsWith('ERR'), '端口 0 仍拒绝');
   ok(String(run('ftp://localhost:3080')).startsWith('ERR'), '非 http(s) 协议仍拒绝');
-  ok(String(run('http://user:pw@10.10.10.99:3080')).startsWith('ERR'), '带凭据的 origin 仍拒绝（不静默剥离）');
+  ok(String(run('http://user:pw@192.0.2.10:3080')).startsWith('ERR'), '带凭据的 origin 仍拒绝（不静默剥离）');
 }
 
 console.log('\n=== C. 幂等 ===');

@@ -99,11 +99,8 @@ jobs:
           node scripts/dsh-version-validation-test.mjs
           node scripts/unreleased-cleanup-check.mjs
 
-      # 【发版前强制】浏览器视觉审核证据门禁（仅 tag 触发时强制，普通 push 不受影响）。
-      # 没有 doc/release/v<版本>/*.png 证据 = 没做过视觉审核 = 不允许发版（Issue #19 的教训）。
-      - name: Release visual review gate
-        if: startsWith(github.ref, 'refs/tags/')
-        run: node scripts/release-visual-review-check.mjs
+      # 注：浏览器视觉审核门禁**不在 CI 执行**——审核截图属内部验证产物，禁止上传仓库
+      # （内部材料不上传）。该门禁改在本地 pre-push 钩子里拦 tag 推送，见 .githooks/pre-push。
 
   build-and-push:
     name: Build and Push (${{ matrix.variant }})

@@ -73,6 +73,14 @@ doc/**
 !doc/**/*.jpeg
 !doc/**/*.gif
 !doc/**/*.webp
+
+# ── 验证产物禁止上传（内部材料不上传）──────────────────────────
+# 发版视觉审核截图、E2E 证据、Issue 复现截图都属于**内部材料**：只在本地留存，
+# 由 scripts/release-visual-review-check.mjs 在本地校验，绝不允许进仓库/发 Release。
+# 产品文档图（README 里引用的 doc/*.png）不受影响。
+doc/release/
+doc/e2e/
+doc/issue-*/
 !doc/**/*.svg
 !doc/**/*.bmp
 !doc/**/*.ico
