@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Project version tag (e.g. 0.2.15)'
+        description: 'Project version tag (e.g. 0.2.16)'
         required: false
-        default: '0.2.15'
+        default: '0.2.16'
   push:
     branches:
       - main
@@ -41,7 +41,7 @@ jobs:
           # 1. 手动 workflow_dispatch 触发
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             PROJ_VER="${{ github.event.inputs.version }}"
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.15"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.16"
             echo "✔ 手动触发 (workflow_dispatch)，指定版本: ${PROJ_VER}"
 
           # 2. Git Tag 触发 (如 v0.0.9)
@@ -52,7 +52,7 @@ jobs:
           # 3. main 分支 push 触发：严格比对版本号是否变动
           else
             PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
-            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.15"
+            [ -z "$PROJ_VER" ] && PROJ_VER="0.2.16"
 
             PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
             echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
@@ -112,7 +112,7 @@ jobs:
       matrix:
         include:
           - variant: base
-            node_image: "node:24-trixie"
+            node_image: "node:24.22.3-trixie"
             build_variant: full
             install_desktop: "1"
             install_go: "1"
@@ -122,7 +122,7 @@ jobs:
             latest_tag: "latest"
             platforms: "linux/amd64"
           - variant: market
-            node_image: "node:24-trixie"
+            node_image: "node:24.22.3-trixie"
             build_variant: full
             install_desktop: "1"
             install_go: "1"
@@ -134,7 +134,7 @@ jobs:
           # 【Issue #11】新增 mini 镜像 (C 档瘦身 + 双架构 linux/amd64,linux/arm64)
           # 注：CI 中的 QEMU arm64 仅作为多架构 manifest 兜底；arm64 真实运行与原生性能验收以 ARM64 原生环境为准。
           - variant: mini
-            node_image: "node:24-trixie-slim"
+            node_image: "node:24.22.3-trixie-slim"
             build_variant: mini
             install_desktop: "0"
             install_go: "0"

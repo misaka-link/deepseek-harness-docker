@@ -2,12 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { resolveProjectVersion, describeProjectVersion } = require('./project-version');
 
-function parseSemver(v = '') {
-  const clean = String(v).replace(/^v/, '').trim();
-  const [main, pre] = clean.split('-');
-  const [major = 0, minor = 0, patch = 0] = (main || '').split('.').map(n => Number(n) || 0);
-  return { major, minor, patch, pre: pre || '' };
-}
+// 单一实现：见 gateway/semver.js（三处共用，避免"修了一份漏两份"）
+const { parseSemver, compareSemver } = require('./semver');
 
 /**
  * 严格 semver 校验（只接受 1.2.3 / v1.2.3 / 1.2.3-rc.1）。
@@ -16,17 +12,6 @@ function parseSemver(v = '') {
  */
 function isSemver(v) {
   return /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(String(v ?? '').trim());
-}
-
-function compareSemver(v1, v2) {
-  const p1 = parseSemver(v1);
-  const p2 = parseSemver(v2);
-  if (p1.major !== p2.major) return p1.major - p2.major;
-  if (p1.minor !== p2.minor) return p1.minor - p2.minor;
-  if (p1.patch !== p2.patch) return p1.patch - p2.patch;
-  if (!p1.pre && p2.pre) return 1;
-  if (p1.pre && !p2.pre) return -1;
-  return p1.pre.localeCompare(p2.pre);
 }
 
 /**
@@ -157,9 +142,9 @@ class VersionService {
         }
       },
       compatibility: {
-        recommendedDsh: '0.2.2-rc.5',
-        supportedDshRange: '>=0.1.2-rc.1 <=0.2.2-rc.5',
-        adaptedVersions: ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
+        recommendedDsh: '0.2.3-alpha.2',
+        supportedDshRange: '>=0.1.2-rc.1 <=0.2.3-alpha.2',
+        adaptedVersions: ['0.2.3-alpha.2', '0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'],
         rules: [
           {
             pattern: '<0.1.5-rc.1',
@@ -261,7 +246,7 @@ class VersionService {
   evaluateTargetVersion(targetVersion, meta = null) {
     const m = meta || this.getLiveMeta();
     const rules = m.compatibility?.rules || [];
-    const adapted = m.compatibility?.adaptedVersions || ['0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
+    const adapted = m.compatibility?.adaptedVersions || ['0.2.3-alpha.2', '0.2.2-rc.5', '0.2.2-rc.4', '0.2.2-rc.3', '0.2.2-rc.2', '0.2.2-rc.1', '0.2.2-alpha.3', '0.2.2-alpha.2', '0.2.1-rc.3', '0.2.1-rc.2', '0.2.1-alpha.5', '0.2.1-alpha.4', '0.2.1-alpha.3', '0.2.1-alpha.2', '0.2.1-alpha.1', '0.2.0-rc.2', '0.2.0-rc.1', '0.1.7-rc.2', '0.1.7-rc.1', '0.1.7-alpha.2', '0.1.7-alpha.1', '0.1.6-alpha.2', '0.1.6-alpha.1', '0.1.5-rc.2', '0.1.5-rc.1', '0.1.2-rc.1'];
 
     const isAdapted = adapted.includes(targetVersion);
 

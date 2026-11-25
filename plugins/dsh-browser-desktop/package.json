@@ -18,8 +18,7 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-modules",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-settings-plugins"
+        "@deepseek-ai/dsh-client-ui-settings"
       ]
     }
   },

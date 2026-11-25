@@ -11,36 +11,60 @@
   },
   "supply": {
     "pnpmVersion": "12.5.1",
-    "dshVersion": "0.2.2-rc.5",
-    "dshIntegrity": "sha512-cNbp12tLYLUTXaVli7zwwMjzmmEVCD1PRldg4oKtXM4+lFYckcaliMS2PU/FoThB4iAN/fKOSID0nrtRZU4Gjw==",
+    "dshVersion": "0.2.3-alpha.2",
+    "dshIntegrity": "sha512-mi5hq96nk5x6HPU6gkcHSUZEKs0/xoyd8MV7GCTDpULYlcJVIUkfn5JiNv+UAMaV22VO4VQwbLWnjkFBV5b/ig==",
     "marketPlugins": {
       "dshmarket": "latest",
       "@hytime/dsh-thinking-effort": "latest"
     },
-    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.2-rc.5 来源 npm dist-tag next。"
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion 0.2.3-alpha.2 来源 npm dist-tag alpha。"
   },
   "latest": {
-    "version": "0.2.15",
-    "releaseDate": "2026-11-18",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.15",
-    "changelog": "内置 DSH 升级至 0.2.2-rc.4；修复 MCP 服务因 npx/pnpm dlx 缓存缺清单而永久断开（Issue #18）；修复管理面板版本号误报（Issue #19）；加固客户端补丁与核心目录的中断自愈；工程版本递增至 0.2.15",
+    "version": "0.2.16",
+    "releaseDate": "2026-11-24",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.16",
+    "changelog": "内置 DSH 升级至 0.2.3-alpha.2；适配上游包拆分后的 auth-bypass 补丁载体迁移与内置插件失效依赖；固定 Node 24.22.3 底座；工程版本递增至 0.2.16",
     "changelogList": [
-      "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-rc.5（npm next），兼容区间上界同步为 <=0.2.2-rc.5，适配矩阵置顶新增 rc.5 并保留 rc.4",
-      "修复 MCP 服务永久断开（Issue #18）：npx / pnpm dlx 缓存「装完才写清单」被中断后永不自愈，现增加启动期+运行期自愈与 ./data/npm、./data/pnpm-cache 持久化",
-      "修复管理面板永久误报「发现新版」（Issue #19）：版本号统一为唯一读取入口 + 构建期注入 + 40 项一致性门禁",
-      "修复客户端补丁中断后可能留下截断源文件导致 DSH 无法启动：补丁写入改原子替换、标记后置、带备份与自愈",
-      "修复核心目录自愈只判目录存在：改为 package.json + lib/bin.js + 非空 node_modules 三要素判定，回滚点按 mtime 选择并逐个校验",
-      "修复快照还原忽略 pnpm install 退出码、远程同步清单漂移导致镜像缺模块等问题",
-      "新增发版前浏览器视觉审核强制流程与未发布日志清理门禁"
+      "内置 DSH 升级至 @deepseek-ai/dsh@0.2.3-alpha.2（npm alpha），兼容区间上界同步为 <=0.2.3-alpha.2，适配矩阵置顶新增 alpha.2 并保留 0.2.2-rc.5",
+      "修复 auth-bypass 补丁在上游包拆分后失配导致容器无法启动：BrowserAuth 迁至 dsh-host-authentication-token，补丁改为按代扫描多载体",
+      "修复内置插件 dsh.client.inject 引用已删除包 dsh-client-ui-settings-plugins 导致的客户端装配告警",
+      "底座镜像由浮动标签 node:24-trixie 改为固定 node:24.22.3-trixie（DSH 新版 engines 要求 ^24.22.3）"
     ],
     "dshChangelogList": [
-      "0.2.2-rc.5 为 0.2.2 RC 线的补丁版本：依赖集合与 rc.4 完全一致（338 个包，无新增/移除），容器侧适配零改动",
-      "4 个必需补丁（auth-bypass / client-loopback / combo-fallback / bundle-selfheal）在 rc.5 上全部命中",
-      "Node.js 最低要求 >=24.9（镜像内置 24.22.3），无需调整基础镜像",
-      "已在 amd64 构建机完成镜像构建与容器内全链路验证（网关 /healthz、版本注入、工具缓存自愈）"
+      "插件市场支持添加 Git 仓库作为插件来源，私有仓库插件也可浏览安装",
+      "新增实验性时间线插件（任务树/阻塞项/进展报告）与代码审阅页面（GitHub PR 集中审阅）",
+      "新增会话状态区域与会话已读/未读状态，完成后提醒未读",
+      "Web 连接模式新增远程登录：独立登录链接或设备配对，并提供标准化连接鉴权 API 供插件注册",
+      "插件页统一管理连接器账号，MCP 支持 OAuth 授权与凭据自动刷新",
+      "新增 Linear / Notion / 腾讯文档 / 飞书 / 企业微信 / 腾讯会议 / 钉钉 连接器插件",
+      "会话持久化新增 SQLite 后端 dsh-session-persistence-sqlite（默认仍为 JSONL，需显式替换 provider）",
+      "Node.js 最低要求提升至 24.22.3（含 2026-11 内置 undici 安全修复），旧 24.x/26.x 不再支持",
+      "同步 Cordis 4.2.0-alpha.1 / Loader 1.2.0-alpha.1 / Include 1.2.0-alpha.1 / Cosmokit 1.10.0-alpha.1"
     ]
   },
   "history": {
+    "0.2.15": {
+      "version": "0.2.15",
+      "releaseDate": "2026-11-18",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.15",
+      "changelog": "内置 DSH 升级至 0.2.2-rc.5；修复 MCP 服务因 npx/pnpm dlx 缓存缺清单而永久断开（Issue #18）；修复管理面板版本号误报（Issue #19）；加固客户端补丁与核心目录的中断自愈；工程版本递增至 0.2.15",
+      "changelogList": [
+        "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-rc.5（npm next），兼容区间上界同步为 <=0.2.2-rc.5，适配矩阵置顶新增 rc.5 并保留 rc.4",
+        "修复 MCP 服务永久断开（Issue #18）：npx / pnpm dlx 缓存「装完才写清单」被中断后永不自愈，现增加启动期+运行期自愈与 ./data/npm、./data/pnpm-cache 持久化",
+        "修复管理面板永久误报「发现新版」（Issue #19）：版本号统一为唯一读取入口 + 构建期注入 + 40 项一致性门禁",
+        "修复客户端补丁中断后可能留下截断源文件导致 DSH 无法启动：补丁写入改原子替换、标记后置、带备份与自愈",
+        "修复核心目录自愈只判目录存在：改为 package.json + lib/bin.js + 非空 node_modules 三要素判定，回滚点按 mtime 选择并逐个校验",
+        "修复快照还原忽略 pnpm install 退出码、远程同步清单漂移导致镜像缺模块等问题",
+        "新增发版前浏览器视觉审核强制流程与未发布日志清理门禁"
+      ],
+      "dshChangelogList": [
+        "DeepSeek 模型使用 DeepSeek 服务端搜索，搜索不按次收费；其他模型默认使用 DeepSeek Search API",
+        "优化模型请求收到异常消息响应时的表现；修复 LiveShare 在桌面端无法创建分享",
+        "新增实验性「DeepSeek 会话导入」插件，可将 DeepSeek App / 网页版历史会话导入工作区继续对话",
+        "修复 Windows 桌面版应用内更新可能失败、无法自动重新打开的问题",
+        "Node.js 最低要求 >=24.9；Cordis 4.1.0 / Loader 1.1.0 / Include 1.1.0"
+      ]
+    },
     "0.2.14": {
       "version": "0.2.14",
       "releaseDate": "2026-11-12",
@@ -512,9 +536,10 @@
     }
   },
   "compatibility": {
-    "recommendedDsh": "0.2.2-rc.5",
-    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.2-rc.5",
+    "recommendedDsh": "0.2.3-alpha.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.3-alpha.2",
     "adaptedVersions": [
+      "0.2.3-alpha.2",
       "0.2.2-rc.5",
       "0.2.2-rc.4",
       "0.2.2-rc.3",

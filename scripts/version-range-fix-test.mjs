@@ -12,6 +12,7 @@
  * 用法: node scripts/version-range-fix-test.mjs
  */
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +26,8 @@ const ok = (cond, msg) => {
 };
 const eq = (actual, expected, msg) => ok(actual === expected, `${msg} (期望 ${expected}，实际 ${actual})`);
 
-const RANGE = '>=0.1.2-rc.1 <=0.2.2-rc.5';
+// 区间不写死：直接取自 version.json 的单一事实源，否则每次抬升上界都要改这份测试
+const RANGE = (JSON.parse(fs.readFileSync(path.join(here, '../version.json'), 'utf8')).compatibility || {}).supportedDshRange;
 
 // ── 单例默认导出（向后兼容路径） ──────────────────────────────────────────
 const versionService = require('../gateway/version-service');
@@ -65,7 +67,7 @@ eq(satisfiesRange('0.2.0-rc.2', RANGE), true,  '0.2.0-rc.2 IN（上一版推荐�
 eq(satisfiesRange('0.1.7-rc.2', RANGE), true,  '0.1.7-rc.2 IN');
 eq(satisfiesRange('0.2.0',      RANGE), true,  '0.2.0 IN（<=0.2.1-rc.2，上界抬升后纳入）');
 eq(satisfiesRange('0.2.1',      RANGE), true, '0.2.1 IN（正式版低于 0.2.2-rc.1 上界）');
-eq(satisfiesRange('0.2.2',      RANGE), false, '0.2.2 OUT（正式版高于 0.2.2-rc.1）');
+eq(satisfiesRange('0.2.2',      RANGE), true, '0.2.2 IN（上界抬到 0.2.3-alpha.2 后，0.2.2 正式版低于它）');
 eq(satisfiesRange('0.2.2-alpha.2', RANGE), true, '0.2.2-alpha.2 IN（低于 0.2.2-rc.1 上界）');
 eq(satisfiesRange('0.2.2-rc.1', RANGE), true, '0.2.2-rc.1 IN（仍在区间内）');
 eq(satisfiesRange('0.2.2-rc.2', RANGE), true, '0.2.2-rc.2 IN（仍在区间内）');
@@ -73,6 +75,10 @@ eq(satisfiesRange('0.2.2-rc.3', RANGE), true, '0.2.2-rc.3 IN（低于新上界�
 eq(satisfiesRange('0.2.2-rc.4', RANGE), true, '0.2.2-rc.4 IN（低于新上界）');
 eq(satisfiesRange('0.2.2-rc.5', RANGE), true, '0.2.2-rc.5 IN（闭区间上界）');
 eq(satisfiesRange('0.2.2-alpha.4', RANGE), true, '0.2.2-alpha.4 IN（低于 0.2.2-rc.1 上界）');
+eq(satisfiesRange('0.2.3-alpha.1', RANGE), true, '0.2.3-alpha.1 IN（低于当前上界）');
+eq(satisfiesRange('0.2.3-alpha.2', RANGE), true, '0.2.3-alpha.2 IN（闭区间上界）');
+eq(satisfiesRange('0.2.3-alpha.3', RANGE), false, '0.2.3-alpha.3 OUT（高于上界）');
+eq(satisfiesRange('0.2.3', RANGE), false, '0.2.3 OUT（正式版高于预发布上界）');
 eq(satisfiesRange('0.3.0',      RANGE), false, '0.3.0 OUT');
 // 边界补充
 eq(satisfiesRange('0.1.2-rc.1', RANGE), true,  '0.1.2-rc.1 IN（闭区间下界）');
@@ -89,7 +95,7 @@ eq(satisfiesRange('', RANGE), false, '空版本 → false');
 console.log('\n=== D. matchSemverPattern 复合 AND 修复 ===');
 eq(matchSemverPattern('0.2.0', RANGE), true, 'matchSemverPattern(0.2.0, 复合区间) = true（上界抬升后纳入）');
 eq(matchSemverPattern('0.2.1', RANGE), true, 'matchSemverPattern(0.2.1, 复合区间) = true（低于新上界）');
-eq(matchSemverPattern('0.2.2', RANGE), false, 'matchSemverPattern(0.2.2, 复合区间) 修复为 false');
+eq(matchSemverPattern('0.2.2', RANGE), true, 'matchSemverPattern(0.2.2, 复合区间) = true（低于当前上界）');
 eq(matchSemverPattern('0.2.2-alpha.2', RANGE), true, 'matchSemverPattern(0.2.2-alpha.2, 复合区间) = true（低于新上界）');
 eq(matchSemverPattern('0.2.2-rc.1', RANGE), true, 'matchSemverPattern(0.2.2-rc.1, 复合区间) = true（闭区间上界）');
 eq(matchSemverPattern('0.2.2-alpha.4', RANGE), true, 'matchSemverPattern(0.2.2-alpha.4, 复合区间) = true（低于上界）');

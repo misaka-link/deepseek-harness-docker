@@ -13,7 +13,7 @@ set -e
 # 允许用环境变量覆盖：测试构建若靠 sed 改这一行，同步仓库时会被覆盖回默认值，
 # 结果把测试镜像打成了生产名字（实际踩过）。IMAGE_NAME=dsh-i18test ./build.sh 更安全。
 IMAGE_NAME="${IMAGE_NAME:-deepseek-harness-docker}"
-PROJ_VER="0.2.15"
+PROJ_VER="0.2.16"
 NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 # 预装层缓存刷新键：默认用当前时间戳，保证每次构建都重新执行预装层，
 # 让 plugins.market.list 里的 @latest 插件（dshmarket）拉到最新版。
@@ -29,7 +29,7 @@ read_supply() {
 PINNED_DSH="$(read_supply dshVersion)"
 PINNED_PNPM="$(read_supply pnpmVersion)"
 PINNED_INTEG="$(read_supply dshIntegrity)"
-DSH_VERSION="${DSH_VERSION:-${PINNED_DSH:-0.2.2-rc.5}}"
+DSH_VERSION="${DSH_VERSION:-${PINNED_DSH:-0.2.3-alpha.2}}"
 PNPM_VERSION="${PNPM_VERSION:-${PINNED_PNPM:-12.5.1}}"
 DSH_INTEGRITY="${DSH_INTEGRITY:-${PINNED_INTEG}}"
 echo " 供应链固定版本: DSH=${DSH_VERSION}  pnpm=${PNPM_VERSION}"
@@ -97,9 +97,9 @@ fi
 
 # 构建底座确定 (mini 采用 slim 底座)
 if [ "$VARIANT" = "mini" ]; then
-  DEFAULT_NODE_IMAGE="node:24-trixie-slim"
+  DEFAULT_NODE_IMAGE="node:24.22.3-trixie-slim"
 else
-  DEFAULT_NODE_IMAGE="node:24-trixie"
+  DEFAULT_NODE_IMAGE="node:24.22.3-trixie"
 fi
 NODE_IMAGE="${NODE_IMAGE:-$DEFAULT_NODE_IMAGE}"
 

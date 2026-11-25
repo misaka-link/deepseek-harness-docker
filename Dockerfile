@@ -4,7 +4,7 @@
 # Multi-stage build supporting full, market, and mini (Issue #11 C-tier)
 # ========================================================
 
-ARG NODE_IMAGE=node:24-trixie
+ARG NODE_IMAGE=node:24.22.3-trixie
 
 # ========================================================
 # Stage 1: builder —— 负责安装 DSH 核心、pnpm、编译原生模块与预装插件
@@ -32,9 +32,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 全局安装 DeepSeek Harness 官方 CLI 与 pnpm (固定版本 + 校验完整性 + 安装期不执行包脚本)
-ARG DSH_VERSION="0.2.2-rc.5"
+ARG DSH_VERSION="0.2.3-alpha.2"
 ARG PNPM_VERSION="12.5.1"
-ARG DSH_INTEGRITY="sha512-cNbp12tLYLUTXaVli7zwwMjzmmEVCD1PRldg4oKtXM4+lFYckcaliMS2PU/FoThB4iAN/fKOSID0nrtRZU4Gjw=="
+ARG DSH_INTEGRITY="sha512-mi5hq96nk5x6HPU6gkcHSUZEKs0/xoyd8MV7GCTDpULYlcJVIUkfn5JiNv+UAMaV22VO4VQwbLWnjkFBV5b/ig=="
 RUN set -eux; \
     TARGET_PKG="@deepseek-ai/dsh@${DSH_VERSION}"; \
     echo "===> [builder] 正在安装 DeepSeek Harness 官方核心: ${TARGET_PKG} (pnpm@${PNPM_VERSION})..."; \
@@ -407,6 +407,10 @@ RUN set -eux; \
     find /usr/local/lib/node_modules -name "spawn-helper" -exec chmod 0755 {} + 2>/dev/null || true; \
     find /usr/local/lib/node_modules -name "ensure-spawn-helper.mjs" -exec node {} + 2>/dev/null || true; \
     dsh --version || node -e "console.log(require('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json').version)"; \
+    # 【0.2.3-alpha.1 起】内置 DSH 的 engines.node 收紧为 ^24.22.3 || >=26.13.1（含 2026-11 内置 undici 安全修复）。\
+    # 关键：DSH **运行期不做** engines 校验，npm 安装期也只给一条 EBADENGINE 警告、不失败 —— 所以底座 tag \
+    # 写错或被重指时，构建依然"成功"，问题留到用户侧才暴露。这里补一道构建期硬断言。\
+    node -e "const p=require('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json');const want=p.engines&&p.engines.node;if(!want){console.log('===> 内置 DSH 未声明 engines.node，跳过断言');process.exit(0)}let s=null;for(const c of ['/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/semver','semver']){try{s=require(c);break}catch{}}console.log('===> engines.node=' + want + ' / 当前 ' + process.version);const cur=process.versions.node.split('.').map(Number);const ge=(a,b)=>a[0]!==b[0]?a[0]>b[0]:a[1]!==b[1]?a[1]>b[1]:a[2]>=b[2];let okv=null;if(s){okv=s.satisfies(process.version,want)}else{const mins=want.split('||').map(function(a){const m=a.match(/[0-9]+[.][0-9]+[.][0-9]+/);return m?m[0].split('.').map(Number):null}).filter(Boolean);if(mins.length)okv=mins.some(function(m){return ge(cur,m)})}console.log('===> engines.node=' + want + ' / 当前 ' + process.version + ' / 校验方式=' + (s?'semver':'内置数值比较'));if(okv===null){console.error('错误: 无法解析内置 DSH 的 engines.node，拒绝在未校验的情况下继续');process.exit(1)}if(!okv){console.error('错误: 当前 Node (' + process.version + ') 不满足内置 DSH 的 engines.node (' + want + ')，请固定符合要求的底座镜像');process.exit(1)}console.log('===> Node 版本断言通过')"; \
     # 【Issue #11 / DQ4】跨架构原生包自检：禁止把 x64 原生制品带进 arm64 镜像（否则启动期 Cannot find the native Koffi module）\
     ARCH_TAG="$(node -p 'process.arch')"; \
     test -d "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@koromix/koffi-linux-${ARCH_TAG}" \

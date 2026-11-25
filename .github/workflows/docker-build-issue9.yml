@@ -89,7 +89,7 @@ jobs:
           sbom: true
           # 每次构建唯一，强制 Dockerfile 预装层缓存失效（与正式发布流程保持一致）
           build-args: |
-            NODE_IMAGE=node:24-trixie
+            NODE_IMAGE=node:24.22.3-trixie
             NOVNC_ASSET_REVISION=1.6.0
             PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
             DSH_VERSION=${{ steps.meta.outputs.dsh_version }}

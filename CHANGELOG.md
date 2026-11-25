@@ -4,6 +4,21 @@
 
 ---
 
+## [v0.2.16] - 2026-11-24
+
+### 🔼 内置 DSH 更新
+- 内置官方 DSH 引擎升级至 `@deepseek-ai/dsh@0.2.3-alpha.2`，兼容区间上界同步为 `<=0.2.3-alpha.2`，推荐核心与适配矩阵置顶 `0.2.3-alpha.2` 并保留 `0.2.2-rc.5`；工程版本递增至 `0.2.16`。
+
+### 🛠️ 修复
+- 修复升级到 0.2.3 后容器无法启动：上游把 `BrowserAuth` 拆到新包 `dsh-host-authentication-token`，`auth-bypass` 补丁随之失配；现按包判定代际并支持入口改名，锚点失效一律 fail-closed。
+- 修复管理面板把新版本误报成旧版本：SemVer 预发布段按字典序比较（`alpha.10 < alpha.3`），已按规范重写并合并为 `gateway/semver.js` 单一实现。
+- 修复版本兜底元数据与面板静态文案不同步（推荐核心、兼容区间、适配矩阵、出厂版本）。
+- 修复内置插件 `dsh.client.inject` 引用 0.2.3 已删除的 `dsh-client-ui-settings-plugins` 导致的装配告警。
+- 底座镜像固定为 `node:24.22.3-trixie`（mini 为 `24.22.3-trixie-slim`），并在构建期断言 `engines.node`。
+
+> 浏览器视觉审核已完成，证据见 `doc/release/v0.2.16/`（本地留存，不入库）。
+
+
 ## [v0.2.15] - 2026-11-18
 
 ### 🔼 内置 DSH 更新

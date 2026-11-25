@@ -44,25 +44,12 @@ const CONFIG_MODEL_LABEL = Object.freeze({
 const PATCH_LAYER_EPOCH = '0.1.7-alpha.1';
 
 // ── SemVer（自包含，语义与 version-service.js 保持一致） ────────────────────
-function parseSemver(v = '') {
-  const clean = String(v).replace(/^v/, '').trim();
-  const [main, pre] = clean.split('-');
-  const [major = 0, minor = 0, patch = 0] = (main || '').split('.').map(n => Number(n) || 0);
-  return { major, minor, patch, pre: pre || '' };
-}
+// 单一实现：见 gateway/semver.js（三处共用，避免"修了一份漏两份"）
+const { parseSemver, compareSemver } = require('./semver');
 function isValidSemver(v) {
   return /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(String(v ?? '').trim());
 }
-function compareSemver(v1, v2) {
-  const p1 = parseSemver(v1);
-  const p2 = parseSemver(v2);
-  if (p1.major !== p2.major) return p1.major - p2.major;
-  if (p1.minor !== p2.minor) return p1.minor - p2.minor;
-  if (p1.patch !== p2.patch) return p1.patch - p2.patch;
-  if (!p1.pre && p2.pre) return 1;
-  if (p1.pre && !p2.pre) return -1;
-  return p1.pre.localeCompare(p2.pre);
-}
+
 function sameMajorMinor(a, b) {
   const p1 = parseSemver(a);
   const p2 = parseSemver(b);

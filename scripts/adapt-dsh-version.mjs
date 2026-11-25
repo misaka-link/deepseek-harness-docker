@@ -35,7 +35,13 @@ async function fetchIntegrity(v) {
       const data = await res.json();
       const pkg = data.versions && data.versions[v];
       if (pkg && pkg.dist && pkg.dist.integrity) {
-        return { integrity: pkg.dist.integrity, tarball: pkg.dist.tarball, registry: reg };
+        // 记录该版本当前挂在哪个 dist-tag 上（alpha / next / latest），供供应链说明引用。
+        // 早先写死「来源 npm dist-tag next」，升到 alpha 线版本时这句话就是假的。
+        const tags = Object.entries(data['dist-tags'] || {})
+          .filter(([, ver]) => ver === v)
+          .map(([tag]) => tag)
+          .sort();
+        return { integrity: pkg.dist.integrity, tarball: pkg.dist.tarball, registry: reg, distTags: tags };
       }
       errors.push(reg + ': 无版本 ' + v);
     } catch (e) {
@@ -48,12 +54,17 @@ async function fetchIntegrity(v) {
 function read(rel) { return fs.readFileSync(path.join(root, rel), 'utf8'); }
 function writeFile(rel, content) { fs.writeFileSync(path.join(root, rel), content); }
 
-function updateVersionJson(text, v, integrity) {
+/** 「来源 npm dist-tag X」中的 X：取实际挂载的标签，取不到时不编造。 */
+function describeDistTags(tags) {
+  return Array.isArray(tags) && tags.length > 0 ? 'npm dist-tag ' + tags.join(' / ') : 'npm registry 直取';
+}
+
+function updateVersionJson(text, v, integrity, distTags) {
   const data = JSON.parse(text);
   data.supply = data.supply || {};
   data.supply.dshVersion = v;
   data.supply.dshIntegrity = integrity;
-  data.supply.note = '供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion ' + v + ' 来源 npm dist-tag next。';
+  data.supply.note = '供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。dshVersion ' + v + ' 来源 ' + describeDistTags(distTags) + '。';
   return JSON.stringify(data, null, 2) + '\n';
 }
 function updateDockerfile(text, v, integrity) {
@@ -79,7 +90,7 @@ try {
 }
 
 const next = [
-  ['version.json', updateVersionJson(vj, version, info.integrity)],
+  ['version.json', updateVersionJson(vj, version, info.integrity, info.distTags)],
   ['Dockerfile', updateDockerfile(df, version, info.integrity)],
   ['build.sh', updateBuildSh(bs, version)],
 ];

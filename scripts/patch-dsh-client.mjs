@@ -92,6 +92,9 @@ function writeFileAtomic(target, content) {
 const REQUIRED_PATCHES = ['client-loopback', 'auth-bypass', 'combo-fallback', 'bundle-selfheal'];
 const appliedPatches = new Set();
 const missedPatches = new Set();
+// 本代载体（最新一代包）失败过 ⇒ 结尾不允许被其它副本的成功掩盖。
+// 否则「升级残留/旧副本命中旧锚点」会让活树上的漏打被静默吞掉（子代理复核 B2）。
+let authCurrentGenMiss = false;
 const markApplied = (name) => appliedPatches.add(name);
 const markMissed = (name) => missedPatches.add(name);
 let loopbackSeen = false;
@@ -152,16 +155,32 @@ function warnIfVersionOutOfRange() {
   }
 }
 
-// auth-bypass 锚点：方法签名随 DSH 版本漂移，按「新→旧」顺序尝试命中。
-//   - 0.2.1-alpha.2 起：`isAuthenticated(request, secure = false) {`（新增 secure 参数，浏览器认证加固）
-//   - 0.2.1-alpha.1 及更早：`isAuthenticated(request) {`
-// 该方法是 dsh-client-connection 中**唯一**的 isAuthenticated 定义（位于 BrowserAuth 类内，
-// alpha.2 见 lib/index.js:484）。HostConnectionService.requestRejection / authorizeIndex
-// 均经 this.browserAuth.isAuthenticated(...) 调用它，故在此单点注入 return true 即可覆盖
-// 全部 401 判定（403 的 Host/Origin fence 仍由 isTrustedApiRequest 独立把守，与本补丁无关）。
+// auth-bypass 锚点：方法签名与**所在包**随 DSH 版本漂移，按「新→旧」顺序尝试命中。
+//   - 0.2.3-alpha.1 起：BrowserAuth 从 dsh-client-connection 迁出到独立包
+//     dsh-host-authentication-token（见 lib/index.js 的 BrowserAuth 类，仍是该类内唯一
+//     isAuthenticated 定义），签名沿用 `isAuthenticated(request, secure = false) {`
+//     【注】已验证的两个端点是 0.2.2-rc.5（无此包）与 0.2.3-alpha.2（有此包）；
+//     中间版本没有安装树可查，"从 alpha.1 起"是依据上游 changelog 的推断。
+//   - 0.2.1-alpha.2 ~ 0.2.2：`isAuthenticated(request, secure = false) {`（dsh-client-connection）
+//   - 0.2.1-alpha.1 及更早：`isAuthenticated(request) {`（dsh-client-connection）
+// 上述两代实现里该方法都是**唯一**的 isAuthenticated 定义，且 Host 侧的
+// requestRejection / authorizeIndex 均经它判定，故单点注入 return true 即可覆盖全部 401
+// （403 的 Host/Origin fence 仍由 isTrustedApiRequest 独立把守，与本补丁无关）。
+// 注意：0.2.3 新增的 dsh-client-remote-connection 里也有一个同名方法，但那是 Remote 登录
+// 的独立签名校验，不参与本容器「网关统一收口认证」的 401 链路，不可误打。
 const AUTH_BYPASS_SIGNATURES = [
   'isAuthenticated(request, secure = false) {',
   'isAuthenticated(request) {'
+];
+
+// auth-bypass 的目标文件随包拆分而迁移（同一补丁的多代载体，命中任一即视为已应用）
+// 「真正生效」的标记行：只认 marker + return true 同时存在。历史上只判 marker，
+// 导致 marker 残留但 return true 被删掉时仍被当作已打补丁。
+const AUTH_MARK = '/* dsh-patch: auth-bypass-all */ return true;';
+
+const AUTH_BYPASS_TARGETS = [
+  'dsh-host-authentication-token/lib/index.js', // 0.2.3-alpha.1 起
+  'dsh-client-connection/lib/index.js'          // ≤0.2.2
 ];
 
 const REPLACEMENTS = [
@@ -213,32 +232,176 @@ function findClientFiles(baseDir) {
   return matched;
 }
 
+/**
+ * 判断 src 的 pos 位置处于哪种词法上下文（字符串/模板/注释内 or 代码区）。
+ *
+ * 为什么不能用「反引号计数奇偶」这种启发式：只要方法声明之前出现**奇数个**反引号字符，
+ * 所有候选都会被误判成"在模板字符串里"而跳过 → 报锚点失效 → [FATAL] → 容器起不来。
+ * 一个合法且与鉴权无关的写法就够触发，例如  const BANNER = \`a\`b\`;（转义反引号）。
+ * 这里做一次最小词法扫描：处理 \ 转义、// 行注释、/* *\/ 块注释、' " ` 四种字面量。
+ */
+function scanContext(src, pos) {
+  let inTpl = false, inBlock = false, inLine = false, inS = false, inD = false, inRe = false;
+  for (let i = 0; i < pos; i++) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (inLine) { if (c === '\n') inLine = false; continue; }
+    if (inBlock) { if (c === '*' && n === '/') { inBlock = false; i++; } continue; }
+    if (inTpl || inS || inD) {
+      if (c === '\\') { i++; continue; }
+      if (inTpl && c === '`') { inTpl = false; continue; }
+      if (inS && c === "'") { inS = false; continue; }
+      if (inD && c === '"') { inD = false; continue; }
+      continue;
+    }
+    if (c === '/' && n === '/') { inLine = true; i++; continue; }
+    if (c === '/' && n === '*') { inBlock = true; i++; continue; }
+    if (c === '`') { inTpl = true; continue; }
+    if (c === "'") { inS = true; continue; }
+    if (c === '"') { inD = true; continue; }
+  }
+  void inRe;
+  return { inTpl, inBlock, inLine, inS, inD };
+}
+
 function patchServerConnection(baseDir) {
   // 1. 服务端鉴权：统一由网关接管认证，彻底消除 /api 与 WebSocket 连接中 token 换取的 401 拦截
-  const connTarget = path.join(baseDir, 'dsh-client-connection/lib/index.js');
-  if (fs.existsSync(connTarget)) {
+  //    目标文件随上游包拆分漂移（见 AUTH_BYPASS_TARGETS）。
+  //
+  //    【代际判定：只看「文件是否存在」，不看「锚点是否命中」】
+  //    AUTH_BYPASS_TARGETS 按「新→旧」排序，第一个存在的载体就是本安装树这一代的实现，只认它。
+  //    该载体锚点失效 / 写入失败 ⇒ 立即记未命中并停止，**绝不回落到更老的载体**。
+  //    反例（子代理对抗验证的 P1，已复现）：0.2.3 起 dsh-client-connection 仍然存在（它是十几个
+  //    dsh-api-* / dsh-client-* 的直接依赖），只是不再定义 isAuthenticated。若按「锚点命中就
+  //    继续试下一个」实现，一旦上游再改一次签名而老包里恰好残留同名方法，就会把 return true
+  //    打进一个运行时根本不加载的文件，然后打印「全部必需补丁已生效」并退出 0 —— 401 拦截照旧，
+  //    但必需补丁闸门彻底失效。锚点失效必须 fail-closed，不能 fail-open。
+  //    【代际判定：按「包目录是否存在」，而不是按「入口文件是否存在」】
+  //    只看 lib/index.js 不够：上游把入口改成 .cjs/.mjs、拆成多文件、或安装被中断只建了包目录时，
+  //    代际会退回旧代，fail-open 就原样复活（触发条件从"锚点漂移"换成"入口改名"）。
+  //    因此：包目录存在 = 本代；入口文件找不到就到 lib/ 下按锚点搜；仍找不到 ⇒ fail-closed。
+  const findCarrier = () => {
+    for (const rel of AUTH_BYPASS_TARGETS) {
+      const pkgName = rel.split('/')[0];
+      const pkgDir = path.join(baseDir, pkgName);
+      if (!fs.existsSync(pkgDir)) continue;
+      const expected = path.join(baseDir, rel);
+      if (fs.existsSync(expected)) return { pkgDir, file: expected };
+      const libDir = path.join(pkgDir, 'lib');
+      let found = null;
+      try {
+        for (const f of fs.readdirSync(libDir).sort()) {
+          if (!/\.(?:js|cjs|mjs)$/.test(f)) continue;
+          const full = path.join(libDir, f);
+          let txt = '';
+          try { txt = fs.readFileSync(full, 'utf8'); } catch { continue; }
+          if (txt.includes(AUTH_MARK) || AUTH_BYPASS_SIGNATURES.some((sig) => txt.includes(sig))) { found = full; break; }
+        }
+      } catch { /* lib/ 不可读 */ }
+      return { pkgDir, file: found };
+    }
+    return null;
+  };
+
+  const carrierInfo = findCarrier();
+  const isCurrentGen = Boolean(carrierInfo) && carrierInfo.pkgDir === path.join(baseDir, AUTH_BYPASS_TARGETS[0].split('/')[0]);
+
+  if (carrierInfo && !carrierInfo.file) {
+    console.error('[patch-dsh-client] ⚠️ 必需补丁 auth-bypass：载体包存在但 lib/ 下找不到锚点文件（上游结构已变）: ' + carrierInfo.pkgDir);
+    markMissed('auth-bypass');
+          if (isCurrentGen) authCurrentGenMiss = true;
+  } else if (carrierInfo) {
+    const carrier = carrierInfo.file;
+    // 注意：判定「本目录是否已完成」必须用**目录内局部变量**，不能用全局 appliedPatches。
+    // SEARCH_DIRS 在真实镜像里通常同时存在「嵌套」与「提升」两棵树，用全局集合会让第二个
+    // 目录被整段跳过 —— 而运行时加载的很可能正是第二棵（升级残留 / 重复安装）。
+    let doneHere = false;
     try {
-      let cContent = fs.readFileSync(connTarget, 'utf8');
-      if (cContent.includes('/* dsh-patch: auth-bypass-all */')) {
-        markApplied('auth-bypass');
-      } else {
-        const signature = AUTH_BYPASS_SIGNATURES.find((sig) => cContent.includes(sig));
-        if (signature) {
-          cContent = cContent.replace(
-            signature,
-            signature + '\n\t\t/* dsh-patch: auth-bypass-all */ return true;'
-          );
-          writeFileAtomic(connTarget, cContent);
+      let cContent = fs.readFileSync(carrier, 'utf8');
+      if (cContent.includes(AUTH_MARK)) {
+        // 本补丁的 marker 在文件**中部**（方法体首行），不能套用「标记在末尾 ⇒ 正文完整」
+        // 那条不变量；文件被截断在 marker 之后时，marker 仍在但整包语法已坏。
+        // 故此处补一次语法自检，损坏则从 .dsh-orig 还原重打（与 client-loopback 同一套自愈规则）。
+        if (syntaxOk(carrier)) {
           markApplied('auth-bypass');
-          console.log(`[patch-dsh-client] 成功修补服务端免鉴权直连 (由网关统一收口认证): ${connTarget}`);
+          doneHere = true;
         } else {
+          const bak = carrier + '.dsh-orig';
+          if (fs.existsSync(bak) && syntaxOk(bak)) {
+            console.warn('[patch-dsh-client] ⚠️ auth-bypass 载体语法损坏，从备份还原后重打: ' + carrier);
+            fs.copyFileSync(bak, carrier);
+            cContent = fs.readFileSync(carrier, 'utf8');
+            // 备份本身可能已带补丁（若将来改了备份时机），还原后必须重新判定，
+            // 否则会二次注入两行 return true，破坏「重复执行不重复注入」这条不变量。
+            if (cContent.includes(AUTH_MARK)) {
+              markApplied('auth-bypass');
+              doneHere = true;
+            }
+          } else {
+            console.error('[patch-dsh-client] ⚠️ auth-bypass 载体语法损坏且无可用备份: ' + carrier);
+          }
+        }
+      } else if (cContent.includes('/* dsh-patch: auth-bypass-all */')) {
+        // 有 marker 但没有 return true（被手工删过 / 半还原）：按未打补丁处理，继续往下注入。
+        console.warn('[patch-dsh-client] ⚠️ auth-bypass 标记存在但 return true 已丢失，将重新注入: ' + carrier);
+      }
+
+      if (!doneHere) {
+        // 候选点必须同时满足：
+        //   a) 位于行首（行内只有缩进），且该行以 isAuthenticated( 开头；
+        //   b) 不在模板字符串里（反引号计数为偶数）、不在块注释里。
+        // 只判 a) 会被「行首的模板字符串」骗过：那样 return true 会落进字符串，语法仍合法、
+        // node --check 拦不住，方法没打上而脚本报成功（子代理对抗验证复现）。
+        // 另外要求**全文件恰好一个候选**：多个候选说明结构有歧义（或存在诱饵），一律 fail-closed。
+        const candidates = [];
+        for (const sig of AUTH_BYPASS_SIGNATURES) {
+          let from = 0;
+          for (;;) {
+            const at = cContent.indexOf(sig, from);
+            if (at < 0) break;
+            const lineStart = cContent.lastIndexOf('\n', at) + 1;
+            const head = cContent.slice(lineStart, at);
+            const lineHead = cContent.slice(lineStart);
+            const ctx = scanContext(cContent, at);
+            const inLiteral = ctx.inTpl || ctx.inBlock || ctx.inLine || ctx.inS || ctx.inD;
+            if (/^[ \t]*$/.test(head) && /^[ \t]*isAuthenticated\(/.test(lineHead) && !inLiteral) {
+              candidates.push({ sig, at });
+            }
+            from = at + sig.length;
+          }
+        }
+        candidates.sort((a, b) => a.at - b.at);
+
+        if (candidates.length === 0) {
+          console.error('[patch-dsh-client] ⚠️ 必需补丁 auth-bypass 锚点失效（载体存在，说明是本代实现，但签名已变）: ' + carrier);
           markMissed('auth-bypass');
-          console.warn(`[patch-dsh-client] ⚠️ 必需补丁 auth-bypass 未命中（锚点失效）: ${connTarget}`);
+          if (isCurrentGen) authCurrentGenMiss = true;
+        } else if (candidates.length > 1) {
+          console.error('[patch-dsh-client] ⚠️ 必需补丁 auth-bypass 锚点有歧义（同文件出现 ' + candidates.length
+            + ' 处行首候选，无法确定该改哪一处）: ' + carrier);
+          markMissed('auth-bypass');
+          if (isCurrentGen) authCurrentGenMiss = true;
+        } else {
+          const hit = candidates[0];
+          const patched = cContent.slice(0, hit.at + hit.sig.length)
+            + '\n\t\t/* dsh-patch: auth-bypass-all */ return true;'
+            + cContent.slice(hit.at + hit.sig.length);
+          writeFileAtomic(carrier, patched);
+          markApplied('auth-bypass');
+          console.log(`[patch-dsh-client] 成功修补服务端免鉴权直连 (由网关统一收口认证): ${carrier}`);
         }
       }
     } catch (err) {
-      console.warn(`[patch-dsh-client] 修补服务端放行失败: ${err.message}`);
+      // 写失败（只读安装树 / ENOSPC / 写后语法自检不通过）属于「本代本该生效却没能生效」，
+      // 必须记未命中；不能靠更老的载体兜底成"成功"。
+      console.error(`[patch-dsh-client] ⚠️ 必需补丁 auth-bypass 写入失败（${carrier}）: ${err.message}`);
+      markMissed('auth-bypass');
+          if (isCurrentGen) authCurrentGenMiss = true;
     }
+  } else {
+    // 本目录没有该载体：只提示、不记未命中 —— 多份 DSH 副本时另一份可能命中，
+    // 最终判定由结尾的 appliedPatches / missedPatches 汇总负责。
+    console.log('[patch-dsh-client] 本目录无 auth-bypass 载体，跳过: ' + baseDir);
   }
 
   // 2. 目录选择器根路径微调 (若存在)
@@ -618,6 +781,15 @@ for (const req of REQUIRED_PATCHES) {
 }
 // 同一补丁在任一目录命中即视为满足（多份 DSH 副本时，只读副本失败不算致命）
 for (const name of appliedPatches) missedPatches.delete(name);
+// 本代载体失败不允许被掩盖：活树那份没打上，401 拦截就还在，不能报成功。
+if (authCurrentGenMiss) {
+  if (missedPatches.has('auth-bypass')) {
+    console.warn('[patch-dsh-client] ⚠️ 本代 auth-bypass 载体补齐失败，即使其它副本命中也不放行');
+  } else {
+    missedPatches.add('auth-bypass');
+    console.error('[patch-dsh-client] ⚠️ 本代 auth-bypass 载体在某个目录补齐失败，已忽略其它副本的成功（活树可能未打补丁）');
+  }
+}
 console.log(`[patch-dsh-client] 必需补丁状态: 已应用=[${[...appliedPatches].join(', ') || '无'}] 未命中=[${[...missedPatches].join(', ') || '无'}]`);
 
 if (checkedDirs === 0) {
