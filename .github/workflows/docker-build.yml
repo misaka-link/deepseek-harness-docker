@@ -1,5 +1,8 @@
-name: Build and Publish Docker Images
+name: Build and Publish Docker Images (Archived - Disabled on low)
 
+# 老版本归档分支（low）已关闭自动化镜像构建：
+#   1. 移除 push (branches / tags) 自动触发器，任何提交或标签推送均不再触发构建；
+#   2. build-and-push / smoke-test 设为 if: false 硬阻断，杜绝覆盖 GHCR :latest 标签。
 on:
   workflow_dispatch:
     inputs:
@@ -7,13 +10,6 @@ on:
         description: 'Project version tag (e.g. 0.2.16)'
         required: false
         default: '0.2.16'
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-      # GitHub 的 tag 过滤是 glob 而非正则：`+` 是字面量，旧写法 '[0-9]+.[0-9]+.[0-9]+*' 永不匹配
-      - '[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: read
@@ -105,7 +101,8 @@ jobs:
   build-and-push:
     name: Build and Push (${{ matrix.variant }})
     needs: check-version
-    if: needs.check-version.outputs.should_build == 'true'
+    # 老版本 low 归档分支永久关闭镜像自动构建与推送，防止污染 1.0 主线 :latest 标签
+    if: ${{ false }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
