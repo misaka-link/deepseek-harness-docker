@@ -1,0 +1,336 @@
+name: Build and Publish Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+      - '[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Project version tag (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  check-version:
+    name: Check Version Change & Run Gates
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.version_detector.outputs.should_build }}
+      project_version: ${{ steps.version_detector.outputs.project_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install gateway dependencies for tests
+        working-directory: gateway
+        run: npm install --omit=dev
+
+      - name: Detect Version Change
+        id: version_detector
+        run: |
+          SHOULD_BUILD="true"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PROJ_VER="${{ github.event.inputs.version }}"
+            [ -z "$PROJ_VER" ] && PROJ_VER="1.0.0"
+            echo "✔ 手动触发 (workflow_dispatch)，指定版本: ${PROJ_VER}"
+
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v?([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            PROJ_VER="${BASH_REMATCH[1]}"
+            echo "✔ Git Tag 触发发布，版本: ${PROJ_VER}"
+
+          else
+            PROJ_VER=$(grep -E '^PROJ_VER=' build.sh | cut -d'"' -f2 || true)
+            [ -z "$PROJ_VER" ] && PROJ_VER="1.0.0"
+
+            PREV_VER=$(git show HEAD~1:build.sh 2>/dev/null | grep -E '^PROJ_VER=' | cut -d'"' -f2 || true)
+            echo "当前版本: [${PROJ_VER}], 上一提交版本: [${PREV_VER}]"
+
+            if [ -n "$PREV_VER" ] && [ "$PROJ_VER" = "$PREV_VER" ]; then
+              echo "⚠ 项目版本号未发生变动 (${PROJ_VER} == ${PREV_VER})，跳过镜像自动构建与发布！"
+              SHOULD_BUILD="false"
+            else
+              echo "✔ 检测到项目版本号变更 (${PREV_VER:-init} -> ${PROJ_VER})，触发镜像构建！"
+            fi
+          fi
+
+          PROJ_VER="${PROJ_VER#v}"
+          echo "project_version=${PROJ_VER}" >> $GITHUB_OUTPUT
+          echo "should_build=${SHOULD_BUILD}" >> $GITHUB_OUTPUT
+
+      - name: Suite version consistency gate
+        run: |
+          set -euo pipefail
+          node tests/gates/suite-version-sync.mjs
+          RELEASE_VER="${{ steps.version_detector.outputs.project_version }}"
+          PKG_VER=$(node -p "require('./gateway/package.json').version")
+          echo "发布版本 = ${RELEASE_VER} | gateway/package.json = ${PKG_VER}"
+          if [ "${RELEASE_VER}" != "${PKG_VER}" ]; then
+            echo "::error::版本号不一致：本次发布 ${RELEASE_VER} != gateway/package.json ${PKG_VER}"
+            exit 1
+          fi
+
+      - name: Full test and gate suite
+        run: |
+          set -euo pipefail
+          node tests/run.mjs
+
+  build-and-push:
+    name: Build and Push (${{ matrix.variant }})
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: standard
+            node_image: "node:24.22.3-trixie-slim"
+            build_variant: standard
+            install_desktop: "1"
+            install_go: "0"
+            prune_level: full
+            preinstall_plugins: "0"
+            suffix: ""
+            latest_tag: "latest"
+            platforms: "linux/amd64"
+          - variant: market
+            node_image: "node:24.22.3-trixie-slim"
+            build_variant: market
+            install_desktop: "1"
+            install_go: "0"
+            prune_level: full
+            preinstall_plugins: "1"
+            suffix: "-market"
+            latest_tag: "latest-market"
+            platforms: "linux/amd64"
+          - variant: full
+            node_image: "node:24.22.3-trixie"
+            build_variant: full
+            install_desktop: "1"
+            install_go: "1"
+            prune_level: full
+            preinstall_plugins: "1"
+            suffix: "-full"
+            latest_tag: "latest-full"
+            platforms: "linux/amd64"
+          - variant: mini
+            node_image: "node:24.22.3-trixie-slim"
+            build_variant: mini
+            install_desktop: "0"
+            install_go: "0"
+            prune_level: mini
+            preinstall_plugins: "0"
+            suffix: "-mini"
+            latest_tag: "latest-mini"
+            platforms: "linux/amd64,linux/arm64"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up QEMU
+        if: contains(matrix.platforms, 'arm64')
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker Tags
+        id: docker_meta
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/deepseek-harness-docker"
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          SUFFIX="${{ matrix.suffix }}"
+          LATEST_TAG="${{ matrix.latest_tag }}"
+          PROJ_VER="${{ needs.check-version.outputs.project_version }}"
+
+          DSH_VERSION=$(node -e "process.stdout.write(require('./version.json').supply.dshVersion||'')")
+          if [ -z "$DSH_VERSION" ]; then
+            echo "错误: version.json#supply.dshVersion 未设置" >&2
+            exit 1
+          fi
+          DSH_INTEGRITY=$(node -e "process.stdout.write(require('./version.json').supply.dshIntegrity||'')")
+          echo "dsh_version=${DSH_VERSION}" >> $GITHUB_OUTPUT
+          echo "dsh_integrity=${DSH_INTEGRITY}" >> $GITHUB_OUTPUT
+          echo "Detected built-in DSH Version: ${DSH_VERSION}"
+          echo "Current Project Version: ${PROJ_VER}"
+
+          TAGS=""
+          TAGS="${TAGS}${IMAGE_NAME}:${LATEST_TAG},"
+          TAGS="${TAGS}${IMAGE_NAME}:${DSH_VERSION}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:dsh-${DSH_VERSION}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:${PROJ_VER}${SUFFIX},"
+          TAGS="${TAGS}${IMAGE_NAME}:v${PROJ_VER}${SUFFIX}"
+
+          if [ "${{ matrix.variant }}" = "standard" ]; then
+            TAGS="${TAGS},${IMAGE_NAME}:standard,${IMAGE_NAME}:latest-standard"
+          elif [ "${{ matrix.variant }}" = "market" ]; then
+            TAGS="${TAGS},${IMAGE_NAME}:market"
+          elif [ "${{ matrix.variant }}" = "full" ]; then
+            TAGS="${TAGS},${IMAGE_NAME}:full"
+          elif [ "${{ matrix.variant }}" = "mini" ]; then
+            TAGS="${TAGS},${IMAGE_NAME}:mini"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "Generated tags: ${TAGS}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: ${{ matrix.platforms }}
+          provenance: false
+          sbom: false
+          build-args: |
+            NODE_IMAGE=${{ matrix.node_image }}
+            VARIANT=${{ matrix.build_variant }}
+            INSTALL_DESKTOP=${{ matrix.install_desktop }}
+            INSTALL_GO=${{ matrix.install_go }}
+            PRUNE_LEVEL=${{ matrix.prune_level }}
+            NOVNC_ASSET_REVISION=1.6.0
+            PREINSTALL_PLUGINS=${{ matrix.preinstall_plugins }}
+            DSH_VERSION=${{ steps.docker_meta.outputs.dsh_version }}
+            DSH_INTEGRITY=${{ steps.docker_meta.outputs.dsh_integrity }}
+            SUITE_VERSION=${{ needs.check-version.outputs.project_version }}
+            MARKET_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
+            USE_CHINA_MIRROR=0
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+
+  smoke-test:
+    name: Smoke Test (${{ matrix.variant }})
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: standard
+            tag: latest
+          - variant: market
+            tag: latest-market
+          - variant: full
+            tag: latest-full
+          - variant: mini
+            tag: latest-mini
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test container
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f dsh-smoke >/dev/null 2>&1 || true' EXIT
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/deepseek-harness-docker:${{ matrix.tag }}"
+          docker pull "$IMAGE"
+          docker run -d --name dsh-smoke -p 18080:3080 \
+            -e AUTH_TOKEN=smoke-test-token-0123456789 \
+            -e PROXY_PORT=3080 "$IMAGE"
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18080/healthz >/tmp/healthz.json 2>/dev/null; then ok=1; break; fi
+            sleep 5
+          done
+          echo "--- /healthz ---"; cat /tmp/healthz.json || true; echo
+          docker logs dsh-smoke | tail -40 || true
+          [ "$ok" = "1" ] || { echo "冒烟测试失败: /healthz 未就绪"; exit 1; }
+          grep -q '"ok":true' /tmp/healthz.json
+
+          case "${{ matrix.variant }}" in
+            standard)
+              echo "===> 执行 standard 镜像二进制与能力断言..."
+              docker exec dsh-smoke sh -c 'command -v chromium && command -v gh && command -v pigz && ! command -v go' || {
+                echo "错误: standard 容器二进制不符合预期（应含 chromium/gh/pigz 且不含 go）" >&2; exit 1;
+              }
+              grep -q '"variant":"standard"' /tmp/healthz.json || { echo "错误: /healthz variant 应为 standard" >&2; exit 1; }
+              grep -q '"golang":false' /tmp/healthz.json || { echo "错误: standard /healthz capabilities.golang 应为 false" >&2; exit 1; }
+              echo "✔ standard 镜像断言通过"
+              ;;
+            market)
+              echo "===> 执行 market 镜像二进制与能力断言..."
+              docker exec dsh-smoke sh -c 'command -v chromium && command -v gh && command -v pigz && ! command -v go' || {
+                echo "错误: market 容器二进制不符合预期（应含 chromium/gh/pigz 且不含 go）" >&2; exit 1;
+              }
+              docker exec dsh-smoke sh -c 'test -d /usr/local/lib/node_modules/dshmarket' || {
+                echo "错误: market 镜像缺少预装插件 dshmarket" >&2; exit 1;
+              }
+              grep -q '"variant":"market"' /tmp/healthz.json || { echo "错误: /healthz variant 应为 market" >&2; exit 1; }
+              grep -q '"golang":false' /tmp/healthz.json || { echo "错误: market /healthz capabilities.golang 应为 false" >&2; exit 1; }
+              echo "✔ market 镜像断言通过"
+              ;;
+            full)
+              echo "===> 执行 full 镜像二进制与能力断言..."
+              docker exec dsh-smoke sh -c 'command -v chromium && command -v go && command -v gcc && command -v gh && command -v pigz' || {
+                echo "错误: full 容器二进制不符合预期（应含 chromium/go/gcc/gh/pigz）" >&2; exit 1;
+              }
+              docker exec dsh-smoke sh -c 'test -d /usr/local/lib/node_modules/dshmarket' || {
+                echo "错误: full 镜像缺少预装插件 dshmarket" >&2; exit 1;
+              }
+              grep -q '"variant":"full"' /tmp/healthz.json || { echo "错误: /healthz variant 应为 full" >&2; exit 1; }
+              grep -q '"golang":true' /tmp/healthz.json || { echo "错误: full /healthz capabilities.golang 应为 true" >&2; exit 1; }
+              echo "✔ full 镜像断言通过"
+              ;;
+            mini)
+              echo "===> 执行 mini 镜像专属反向断言..."
+              docker exec dsh-smoke sh -c '! command -v chromium && ! command -v go && ! command -v Xvfb' || {
+                echo "错误: mini 容器中探测到不应存在的二进制 (chromium/go/Xvfb)" >&2; exit 1;
+              }
+              docker exec dsh-smoke sh -c 'test ! -d /app/plugins/dsh-browser-desktop && test -d /app/plugins/dsh-container-helper' || {
+                echo "错误: mini 插件目录不符合预期" >&2; exit 1;
+              }
+              curl -s -c /tmp/smoke_ck -H "Content-Type: application/json" \
+                -d '{"token":"smoke-test-token-0123456789"}' \
+                http://127.0.0.1:18080/__auth/verify >/tmp/smoke_login.json || true
+              grep -q '"ok":true' /tmp/smoke_login.json || { echo "错误: 冒烟登录失败" >&2; cat /tmp/smoke_login.json >&2; exit 1; }
+              VNC_CODE=$(curl -s -b /tmp/smoke_ck -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/vnc || true)
+              if [ "$VNC_CODE" != "404" ]; then
+                echo "错误: mini 镜像 /vnc 期望 404，实际返回 ${VNC_CODE}" >&2; exit 1;
+              fi
+              DS_CODE=$(curl -s -b /tmp/smoke_ck -o /tmp/smoke_ds.json -w "%{http_code}" -X POST http://127.0.0.1:18080/admin/api/desktop/start || true)
+              if [ "$DS_CODE" != "403" ] || ! grep -q CAPABILITY_UNAVAILABLE /tmp/smoke_ds.json; then
+                echo "错误: mini 桌面 API 期望 403 CAPABILITY_UNAVAILABLE，实际 ${DS_CODE}" >&2; cat /tmp/smoke_ds.json >&2; exit 1;
+              fi
+              STATUS_JSON=$(curl -s -b /tmp/smoke_ck http://127.0.0.1:18080/admin/api/status || true)
+              echo "--- /admin/api/status ---"; echo "$STATUS_JSON"
+              echo "$STATUS_JSON" | grep -q '"variant"[[:space:]]*:[[:space:]]*"mini"' || {
+                echo "错误: /admin/api/status 未包含 'variant':'mini'" >&2; exit 1;
+              }
+              echo "✔ mini 镜像专属反向断言全部通过"
+              ;;
+          esac
+
+          echo "冒烟测试通过"

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="{{LANG_TAG}}" data-variant="{{VARIANT}}" data-ds-theme-source="{{THEME_SOURCE}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>DeepSeek Harness</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  {{BOOT_STYLE}}
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/design-platform.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/base.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/scrollbar.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/focus.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/brand-font.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/app-tokens.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/layout.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/components.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/pages.css" />
+  <script>window.__DSHD_BOOT__ = {{BOOT_JSON}};</script>
+</head>
+<body>
+  {{BOOT_BODY_SCRIPT}}
+  <div id="app" data-admin-path="{{ADMIN_PATH}}" class="app-boot-root">
+    <div class="boot-skeleton-frame" aria-hidden="true">
+      <aside class="boot-skeleton-sidebar">
+        <div class="skeleton-block" style="height:22px;width:66%;margin-bottom:10px;"></div>
+        <div class="skeleton-block" style="height:38px;width:100%;margin-bottom:14px;"></div>
+        <div class="skeleton-block" style="height:14px;width:40%;"></div>
+        <div class="skeleton-block" style="height:30px;width:100%;"></div>
+        <div class="skeleton-block" style="height:30px;width:100%;"></div>
+        <div class="skeleton-block" style="height:30px;width:100%;"></div>
+        <div class="skeleton-block" style="height:30px;width:100%;"></div>
+      </aside>
+      <main class="boot-skeleton-main">
+        <div class="skeleton-block" style="height:26px;width:260px;"></div>
+        <div class="skeleton-block" style="height:16px;width:70%;"></div>
+        <div class="skeleton-block" style="height:112px;width:100%;margin-top:12px;"></div>
+        <div class="skeleton-block" style="height:220px;width:100%;"></div>
+      </main>
+    </div>
+  </div>
+  <script type="module" src="/__ui/{{UI_REV}}/js/pages/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+/* DeepSeek Harness Docker Admin — base tokens & resets.
+ * Every colour is an official @deepseek-ai/dsh-client-ui-theme alias (vendor/dsh-theme/design-platform.css);
+ * elevation / corner-shape / focus values are ported from ui-theme
+ * styles/gradient-shadow-text.css, corner-shape.css and focus.css (0.2.3-alpha.2). */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  height: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Smooth corner curvature (ui-theme corner-shape.css). Round fallbacks below
+ * are slightly tighter so engines without corner-shape keep the same optical size. */
+:root {
+  --r-xs: 4px;
+  --r-sm: 7px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 16px;
+  --r-panel: 20px;
+  --sidebar-w: 260px;
+  --topbar-h: 48px;
+  --page-max: 860px;
+  --setting-control-w: 300px;
+  --setting-control-wide-w: 360px;
+  --dsw-focus-ring-width: 2px;
+}
+
+@supports (corner-shape: superellipse(1.5)) {
+  :root {
+    --dsw-corner-shape: superellipse(1.5);
+    --r-sm: var(--dsw-radius-sm);
+    --r-md: var(--dsw-radius-md);
+    --r-lg: var(--dsw-radius-lg);
+    --r-xl: var(--dsw-radius-xl);
+    --r-panel: var(--dsw-radius-panel);
+  }
+
+  *,
+  *::before,
+  *::after {
+    corner-shape: var(--dsw-corner-shape);
+  }
+}
+
+body {
+  /* Shadows (ui-theme gradient-shadow-text.css) */
+  --dsw-shadow-lv1: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  --dsw-shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04);
+  --dsw-shadow-lv3: 0 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l4);
+  --dsw-mask-blur: none;
+  --dsw-menu-backdrop-filter: blur(40px) saturate(150%);
+  --dsw-alias-onboarding-accent: rgb(57, 100, 254);
+
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--dsw-font-family);
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Derived elevation declared per element so a surface can rebind its stroke colour. */
+body,
+body * {
+  --dsw-elevation-stroke: 0 0 0 0.5px var(--dsw-elevation-stroke-color);
+  --dsw-elevation-panel: var(--dsw-elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.03), 0 0 16px 0 rgba(0, 0, 0, 0.02);
+  --dsw-elevation-prominent: var(--dsw-elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.04), 0 0 20px 0 rgba(0, 0, 0, 0.05);
+  --dsw-elevation-soft: var(--dsw-elevation-stroke), 0 4px 16px 0 rgba(0, 0, 0, 0.03), 0 0 24px 0 rgba(0, 0, 0, 0.03);
+}
+
+body[data-ds-dark-theme] {
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--dsw-alias-link);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+code,
+kbd,
+pre,
+.mono {
+  font-family: var(--ds-font-family-code);
+}
+
+code {
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  background: var(--dsw-alias-markdown-inline-code);
+  color: var(--dsw-alias-label-primary);
+  word-break: break-word;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent);
+}
+
+:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+/* Capability hiding: the mini image has no container desktop / VNC stack. */
+html[data-variant='mini'] [data-desktop-only] {
+  display: none !important;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Text utilities */
+.text-danger { color: var(--dsw-alias-state-error-primary); }
+.text-success { color: var(--dsw-alias-state-success-primary); }
+.text-warn { color: var(--dsw-alias-state-warn-label); }
+.text-strong { color: var(--dsw-alias-label-primary); font-weight: 500; }
+.text-secondary { color: var(--dsw-alias-label-secondary); }
+.text-tertiary { color: var(--dsw-alias-label-tertiary); }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Skeleton (boot placeholder) */
+.skeleton-block {
+  border-radius: var(--r-sm);
+  background: var(--dsw-alias-bg-skeleton, var(--dsw-alias-bg-module-platform));
+  animation: dshdSkeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes dshdSkeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; }
+}

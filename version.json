@@ -1,0 +1,190 @@
+{
+  "project": "deepseek-harness-docker",
+  "name": "DeepSeek Harness Docker 套件",
+  "description": "专为官方 DeepSeek Harness 打造的开箱即用容器化套件与可视化 Web Admin 控制台",
+  "repo": {
+    "projectUrl": "https://github.com/misaka-link/deepseek-harness-docker",
+    "projectReleases": "https://github.com/misaka-link/deepseek-harness-docker/releases",
+    "upstreamRepo": "https://github.com/deepseek-ai/deepseek-harness",
+    "upstreamReleases": "https://github.com/deepseek-ai/deepseek-harness/releases",
+    "upstreamNpm": "https://www.npmjs.com/package/@deepseek-ai/dsh"
+  },
+  "supply": {
+    "pnpmVersion": "12.5.1",
+    "dshVersion": "0.2.3-alpha.2",
+    "dshIntegrity": "sha512-mi5hq96nk5x6HPU6gkcHSUZEKs0/xoyd8MV7GCTDpULYlcJVIUkfn5JiNv+UAMaV22VO4VQwbLWnjkFBV5b/ig==",
+    "marketPlugins": {
+      "dshmarket": "latest",
+      "@hytime/dsh-thinking-effort": "latest"
+    },
+    "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
+  },
+  "latest": {
+    "version": "1.0.0",
+    "releaseDate": "2026-11-27",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v1.0.0",
+    "changelog": "DeepSeek Harness Docker 1.0.0 正式版：全新 DSH 同源 8 语言控制台、四档镜像体系（standard/market 瘦身约 1.5GB + 新增全量 full 版）、预装插件在线更新支持、有界 pigz 多线程备份与非 root 安全加固",
+    "changelogList": [
+      "全新 DSH 同源 Web Admin 控制台：支持 8 种语言（zh/en/ja/es/fr/de/ru/pt）、浅色/深色/跟随 DSH 主题切换与首屏无闪烁渲染",
+      "四档镜像变体体系（standard / market / full / mini）：standard 与 market 切换 trixie-slim 底座直降约 1.5GB，新增含 C/C++ 编译链与官方 Golang 的 full 完全体版",
+      "预装社区插件双通道在线更新：market 与 full 预装插件采用标准 ^semver 注册，支持通过 dshmarket 与 DSH 原生插件管理一键升级且重启保留",
+      "模块化网关、在线换源与长耗时备份加固：恢复浏览器原生 br/gzip 流式压缩，支持在线切换 npm/pnpm 镜像源、有界 pigz 多线程压缩与反代断连自动恢复",
+      "非 root 与容器安全加固：支持 PUID/PGID 降权启动、配置不可读 fail-closed 503 锁止页、出站代理自动追加回环 NO_PROXY 与 HEALTHCHECK 跟随 PROXY_PORT",
+      "完整保留 0.1.x/0.2.x 存量数据卷无缝升级与历史快照还原兼容，修复自定义 DSH_HOME 打包、还原保留内部令牌与防止已卸载插件复活"
+    ],
+    "changelogI18n": {
+      "en": [
+        "DSH-aligned Web Admin Console with 8 languages (zh/en/ja/es/fr/de/ru/pt), light/dark/follow-DSH theme modes, and flicker-free initial paint",
+        "4-tier Docker image lineup (standard / market / full / mini): ~1.5GB smaller trixie-slim desktop images for standard & market, plus a full trixie + C/C++ + Golang variant",
+        "Seamless online updates for preinstalled community plugins via both dshmarket and DSH's native plugin manager, persisting across container restarts",
+        "Modularized gateway & resilient backups: native br/gzip streaming pass-through, live npm/pnpm registry switching, bounded pigz multithreading, and reverse-proxy disconnect recovery",
+        "Non-root & runtime hardening: PUID/PGID privilege drop, fail-closed 503 lock page on unreadable config, automatic loopback NO_PROXY guard, and PROXY_PORT-aware HEALTHCHECK",
+        "Full backward compatibility for existing 0.1.x/0.2.x data volumes and legacy snapshots, with fixes for custom DSH_HOME archives and plugin state reconciliation"
+      ]
+    },
+    "dshChangelogList": [
+      "插件市场支持添加 Git 仓库作为插件来源，私有仓库插件也可浏览安装",
+      "新增实验性时间线插件（任务树/阻塞项/进展报告）与代码审阅页面（GitHub PR 集中审阅）",
+      "新增会话状态区域与会话已读/未读状态，完成后提醒未读",
+      "Web 连接模式新增远程登录：独立登录链接或设备配对，并提供标准化连接鉴权 API 供插件注册",
+      "插件页统一管理连接器账号，MCP 支持 OAuth 授权与凭据自动刷新",
+      "新增 Linear / Notion / 腾讯文档 / 飞书 / 企业微信 / 腾讯会议 / 钉钉 连接器插件",
+      "会话持久化新增 SQLite 后端 dsh-session-persistence-sqlite（默认仍为 JSONL，需显式替换 provider）",
+      "Node.js 最低要求提升至 24.22.3（含 2026-11 内置 undici 安全修复），旧 24.x/26.x 不再支持",
+      "同步 Cordis 4.2.0-alpha.1 / Loader 1.2.0-alpha.1 / Include 1.2.0-alpha.1 / Cosmokit 1.10.0-alpha.1"
+    ]
+  },
+  "history": {
+    "0.2.16": {
+      "version": "0.2.16",
+      "releaseDate": "2026-11-24",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.16",
+      "changelog": "内置 DSH 升级至 0.2.3-alpha.2；适配上游包拆分后的 auth-bypass 补丁载体迁移与内置插件失效依赖；固定 Node 24.22.3 底座；工程版本递增至 0.2.16",
+      "changelogList": [
+        "内置 DSH 升级至 @deepseek-ai/dsh@0.2.3-alpha.2（npm alpha），兼容区间上界同步为 <=0.2.3-alpha.2",
+        "修复 auth-bypass 补丁在上游包拆分后失配问题：BrowserAuth 迁至 dsh-host-authentication-token",
+        "修复内置插件 dsh.client.inject 引用已删除包 dsh-client-ui-settings-plugins 导致的客户端装配告警",
+        "底座镜像固定为 node:24.22.3-trixie（满足 DSH 新版 engines 要求 ^24.22.3）"
+      ],
+      "dshChangelogList": [
+        "插件市场支持添加 Git 仓库作为插件来源，私有仓库插件也可浏览安装",
+        "新增实验性时间线插件与代码审阅页面",
+        "Web 连接模式新增远程登录与标准化连接鉴权 API",
+        "Node.js 最低要求提升至 24.22.3"
+      ]
+    },
+    "0.2.15": {
+      "version": "0.2.15",
+      "releaseDate": "2026-11-18",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.15",
+      "changelog": "内置 DSH 升级至 0.2.2-rc.5；修复 MCP 服务因 npx/pnpm dlx 缓存缺清单而永久断开；修复管理面板版本号误报；加固客户端补丁与核心目录的中断自愈",
+      "changelogList": [
+        "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-rc.5",
+        "修复 MCP 服务永久断开（npx / pnpm dlx 缓存自愈与持久化）",
+        "修复管理面板版本号误报，统一版本号读取入口",
+        "加固客户端补丁原子写入与核心目录完整性自愈"
+      ]
+    },
+    "0.2.14": {
+      "version": "0.2.14",
+      "releaseDate": "2026-11-12",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.14",
+      "changelog": "内置 DSH 升级至 0.2.2-rc.2；容器 Chromium 补齐多语言包并支持 UI 语言跟随 DSH 设置；隐藏 --no-sandbox 提示条",
+      "changelogList": [
+        "内置 DSH 升级至 @deepseek-ai/dsh@0.2.2-rc.2",
+        "容器 Chromium 安装多语言包并同步 DSH 8 语言设置",
+        "通过企业策略隐藏 --no-sandbox 提示条"
+      ]
+    },
+    "0.2.8": {
+      "version": "0.2.8",
+      "releaseDate": "2026-10-24",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v0.2.8",
+      "changelog": "新增轻量精简 mini 镜像（:latest-mini）与 ARM64 双架构支持；新增运行时变体能力单一真源",
+      "changelogList": [
+        "新增 mini 变体镜像（:latest-mini），支持 linux/amd64 与 linux/arm64 双架构",
+        "新增运行时变体能力守卫，mini 下自动禁用桌面与 VNC 相关端点"
+      ]
+    }
+  },
+  "compatibility": {
+    "recommendedDsh": "0.2.3-alpha.2",
+    "supportedDshRange": ">=0.1.2-rc.1 <=0.2.3-alpha.2",
+    "adaptedVersions": [
+      "0.2.3-alpha.2",
+      "0.2.2-rc.5",
+      "0.2.2-rc.4",
+      "0.2.2-rc.3",
+      "0.2.2-rc.2",
+      "0.2.2-rc.1",
+      "0.2.2-alpha.3",
+      "0.2.2-alpha.2",
+      "0.2.1-rc.3",
+      "0.2.1-rc.2",
+      "0.2.1-alpha.5",
+      "0.2.1-alpha.4",
+      "0.2.1-alpha.3",
+      "0.2.1-alpha.2",
+      "0.2.1-alpha.1",
+      "0.2.0-rc.2",
+      "0.2.0-rc.1",
+      "0.1.7-rc.2",
+      "0.1.7-rc.1",
+      "0.1.7-alpha.2",
+      "0.1.7-alpha.1",
+      "0.1.6-alpha.2",
+      "0.1.6-alpha.1",
+      "0.1.5-rc.2",
+      "0.1.5-rc.1",
+      "0.1.2-rc.1"
+    ],
+    "rules": [
+      {
+        "pattern": "<0.1.5-rc.1",
+        "level": "warning",
+        "title": "向后降级格式风险",
+        "message": "官方自 0.1.5-rc.1 起采用了全新的会话存储结构，向下降级至 0.1.5 以下可能导致新格式会话无法向前兼容读取。"
+      },
+      {
+        "pattern": "<0.1.7-alpha.1",
+        "level": "warning",
+        "title": "会话格式 V4 降级风险",
+        "message": "官方 0.1.7 起会话日志升级为 V4，且为单向迁移。降级到 0.1.6 及以下将无法读取已在 0.1.7 中新建或迁移的会话；如需回滚请连同数据卷快照一并恢复。"
+      },
+      {
+        "pattern": ">=0.3.0",
+        "level": "danger",
+        "title": "底层协议重大重构 · 不再兼容在线切换",
+        "message": "目标版本已跨入官方下一轮破坏性重构（0.3.0 及以上）。该版本线可能调整底层 RPC 与连接鉴权体系，当前容器底层镜像无法保证在线热切换成功。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！",
+        "action": "force-docker-pull"
+      }
+    ]
+  },
+  "compatibilityV1": {
+    "schema": 1,
+    "minDsh": "0.2.3-alpha.2",
+    "recommendedDsh": "0.2.3-alpha.2",
+    "supportedDshRange": ">=0.2.3-alpha.2 <=0.2.3-alpha.2",
+    "adaptedVersions": [
+      "0.2.3-alpha.2"
+    ],
+    "rules": [
+      {
+        "pattern": "<0.2.3-alpha.2",
+        "level": "danger",
+        "kind": "engine-unsupported",
+        "action": "blocked-legacy",
+        "title": "不再支持的旧版 DSH 引擎",
+        "message": "v1.0.0 套件最低支持 @deepseek-ai/dsh@0.2.3-alpha.2，低于该版本的旧引擎已停止支持并禁止在线切换。如需运行旧版引擎请使用 0.2.x 系列镜像。"
+      },
+      {
+        "pattern": ">=0.3.0",
+        "level": "danger",
+        "kind": "breaking-major",
+        "action": "force-docker-pull",
+        "title": "底层协议重大重构 · 不再兼容在线切换",
+        "message": "目标版本已跨入官方下一轮破坏性重构（0.3.0 及以上）。该版本线可能调整底层 RPC 与连接鉴权体系，当前容器底层镜像无法保证在线热切换成功。切勿在线强制切换，请重新拉取最新 Docker 镜像重新部署！"
+      }
+    ]
+  }
+}

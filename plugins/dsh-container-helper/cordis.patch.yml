@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-container-helper
+      name: '@dsh-custom/dsh-container-helper'

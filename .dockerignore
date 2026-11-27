@@ -1,0 +1,71 @@
+# ========================================================
+# .dockerignore —— 严格控制镜像构建上下文 (v1.0.0)
+# 严禁将测试套件、文档截图、本地 MCP 桥接工具、远程调试脚本与密钥打入生产镜像
+# ========================================================
+
+# 版本控制与 CI
+.git
+.githooks
+.github
+.gitignore
+
+# 敏感配置与密钥（绝不进镜像）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+mcp_info.json
+*baota*
+
+# 运行时数据卷、临时目录与本地审阅产物
+data/
+workspace/
+tmp/
+review/
+.dsh/
+.dsh-snapshots/
+.cache/
+.pnpm-store/
+
+# 自动化测试套件与开发期工具（不进生产镜像）
+tests/
+tools/
+**/*.test.mjs
+scripts/*-test.mjs
+scripts/*-check.mjs
+scripts/phase*
+
+# 本地 MCP 与远程调试脚本（绝不进镜像）
+scripts/*mcp*
+scripts/baota-*
+scripts/remote-*
+scripts/local-*
+scripts/test-runner-*
+scripts/capture-*
+scripts/download-*
+scripts/run-*
+scripts/sync-*
+
+# 依赖目录（镜像内由 Dockerfile 显式安装与链接）
+**/node_modules
+**/node_modules/**
+
+# 文档、私有规范与截图
+doc/
+*.md
+!README.md
+
+# Compose 编排文件
+docker-compose*.yml
+
+# 日志与系统噪音
+*.log
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

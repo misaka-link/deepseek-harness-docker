@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="{{LANG_TAG}}" data-variant="{{VARIANT}}" data-ds-theme-source="{{THEME_SOURCE}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>DeepSeek Harness</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  {{BOOT_STYLE}}
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/design-platform.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/base.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/scrollbar.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/focus.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/vendor/dsh-theme/brand-font.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/app-tokens.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/layout.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/components.css" />
+  <link rel="stylesheet" href="/__ui/{{UI_REV}}/css/pages.css" />
+  <script>window.__DSHD_BOOT__ = {{BOOT_JSON}};</script>
+</head>
+<body>
+  {{BOOT_BODY_SCRIPT}}
+  <div id="app" data-admin-path="{{ADMIN_PATH}}" class="standalone-boot-root">
+    <noscript>
+      <div style="max-width:560px;margin:48px auto;padding:24px;font-family:sans-serif;">
+        <h1>Gateway Locked (503)</h1>
+        <p>Configuration files exist but are unreadable by the current container user. Fix volume permissions (e.g. chown -R 1001:1001 ./data ./workspace) and restart the container.</p>
+      </div>
+    </noscript>
+  </div>
+  <script type="module" src="/__ui/{{UI_REV}}/js/pages/locked.js"></script>
+</body>
+</html>

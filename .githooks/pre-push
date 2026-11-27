@@ -1,0 +1,46 @@
+#!/bin/sh
+# 推送前版本号一致性与质量门禁
+#
+# 启用（每台机器一次性）：
+#     git config core.hooksPath .githooks
+#
+# 临时跳过（仅在明确知道后果时）：
+#     git push --no-verify
+
+set -e
+
+command -v node >/dev/null 2>&1 || {
+  echo "[pre-push] 未找到 node，无法执行门禁；请先安装 Node.js"
+  exit 1
+}
+
+echo "[pre-push] 套件版本号一致性门禁 ..."
+if ! node tests/gates/suite-version-sync.mjs; then
+  echo ""
+  echo "[pre-push] ❌ 版本号不一致，推送已阻断。"
+  exit 1
+fi
+
+if [ -f scripts/local-prepush-guard.mjs ]; then
+  echo "[pre-push] 本地敏感材料守卫 ..."
+  if ! node scripts/local-prepush-guard.mjs; then
+    echo "[pre-push] ❌ 本地守卫未通过，推送已阻断。"
+    exit 1
+  fi
+fi
+
+TAG_PUSH=0
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in refs/tags/*) TAG_PUSH=1 ;; esac
+done
+
+if [ "$TAG_PUSH" = "1" ]; then
+  echo "[pre-push] 发版视觉审核门禁 ..."
+  if ! node tests/gates/release-visual-review-check.mjs; then
+    echo ""
+    echo "[pre-push] ❌ 视觉审核证据缺失或不完整，tag 推送已阻断。"
+    exit 1
+  fi
+fi
+
+echo "[pre-push] ✅ 门禁全部通过"

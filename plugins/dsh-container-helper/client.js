@@ -1,0 +1,881 @@
+window.__ModuleLoader__.load({
+  id: '@dsh-custom/dsh-container-helper',
+  factory: (require) => {
+    const module = { exports: {} };
+    const React = require('react');
+    const ReactDOM = require('react-dom');
+
+    let pluginCtx = null;
+    let zh = typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
+    function getLocaleService() {
+      if (!pluginCtx) return null;
+      try { return typeof pluginCtx.get === 'function' ? pluginCtx.get('locale') : pluginCtx.locale; } catch (e) { return pluginCtx.locale || null; }
+    }
+    function detectZh() {
+      const loc = getLocaleService();
+      const snap = loc && typeof loc.getSnapshot === 'function' ? loc.getSnapshot() : null;
+      if (snap && snap.active) return String(snap.active).toLowerCase().startsWith('zh');
+      return typeof window !== 'undefined' && window.navigator && String(window.navigator.language || '').toLowerCase().startsWith('zh');
+    }
+    function syncLocale() {
+      const next = detectZh();
+      if (next !== zh) { zh = next; L = makeL(zh); }
+    }
+    function useLocaleSync() {
+      const [, force] = React.useState(0);
+      React.useEffect(() => {
+        syncLocale();
+        const loc = getLocaleService();
+        if (!loc || typeof loc.subscribe !== 'function') return;
+        return loc.subscribe(() => { syncLocale(); force(v => v + 1); });
+      }, []);
+    }
+    function makeL(isZh) {
+      return {
+      section: isZh ? 'DSH 容器助手' : 'DSH Container Helper',
+      title: isZh ? 'DeepSeek 账号登录' : 'DeepSeek account sign-in',
+      badge: isZh ? '内置容器套件组件' : 'Builtin Suite Component',
+      desc: isZh
+        ? '远程/反向代理访问时，DeepSeek 平台只接受 localhost 回调。可复制或手动打开登录链接；登录完成后把浏览器地址栏里的回调链接粘贴到下方即可完成登录。'
+        : 'When accessed remotely or behind a reverse proxy, DeepSeek only accepts a localhost callback. Copy or manually open the sign-in link; after signing in, paste the callback link from the browser address bar below.',
+      descCompact: isZh
+        ? '远程/反代环境下登录 DeepSeek 账号：复制登录链接完成授权，再把回调链接粘贴回来。'
+        : 'Sign in to DeepSeek remotely: copy the sign-in link, authorize, then paste the callback URL back here.',
+      status: isZh ? '登录状态' : 'Status',
+      idle: isZh ? '未登录' : 'Signed out',
+      starting: isZh ? '正在获取登录链接…' : 'Requesting sign-in link…',
+      waiting: isZh ? '等待登录' : 'Waiting for sign in',
+      getLink: isZh ? '获取登录链接' : 'Get sign-in link',
+      open: isZh ? '打开登录链接' : 'Open sign-in link',
+      copy: isZh ? '复制登录链接' : 'Copy sign-in link',
+      copied: isZh ? '已复制 ✓' : 'Copied ✓',
+      linkLabel: isZh ? '登录链接' : 'Sign-in link',
+      cbLabel: isZh ? '回调链接' : 'Callback link',
+      cbPlaceholder: isZh ? '把地址栏里的 http://localhost:.../oauth/callback?code=...&state=... 整段粘贴到这里' : 'Paste the whole http://localhost:.../oauth/callback?code=...&state=... link here',
+      submit: isZh ? '完成登录' : 'Finish sign-in',
+      submitting: isZh ? '提交中…' : 'Submitting…',
+      close: isZh ? '关闭' : 'Close',
+      cancel: isZh ? '取消' : 'Cancel',
+      retry: isZh ? '重新获取' : 'Retry',
+      emptyLink: isZh ? '请先粘贴回调链接' : 'Please paste the callback link first',
+      okMsg: isZh ? '回调已送达 DSH，正在确认登录状态…' : 'Callback delivered to DSH; confirming the sign-in state…',
+      noAuto: isZh ? '已关闭自动跳转：请点击「打开登录链接」或复制后手动打开。' : 'Auto-open is disabled: click "Open sign-in link" or copy it and open manually.',
+      signedInLabel: isZh ? '已登录' : 'Signed in',
+      accountLine: isZh ? '账号' : 'Account',
+      nicknameLine: isZh ? '昵称' : 'Nickname',
+      signedInHint: isZh ? '当前环境已登录 DeepSeek 账号，无需再次登录。' : 'This environment is already signed in to DeepSeek; no further sign-in is needed.',
+      recheck: isZh ? '重新检测' : 'Re-check',
+      checking: isZh ? '检测中…' : 'Checking…',
+      // 偏好设置
+      prefsTitle: isZh ? '显示与隐私' : 'Display & privacy',
+      mobileScrollLock: isZh ? '移动端防下拉黑屏与滚动锁定' : 'Mobile viewport scroll lock (prevent pull-down void)',
+      mobileScrollLockHint: isZh
+        ? '锁定移动端外层页面视口，防止触屏下拉或收起软键盘时整个界面上卷留出大片黑屏；聊天记录与侧边栏内部正常滚动（默认开启）。'
+        : 'Lock the outer viewport on mobile to prevent touch gestures and keyboard dismissal from scrolling the whole page into a blank dark void, while keeping internal chat and panels scrolling smoothly (enabled by default).',
+      blurDefault: isZh ? '默认模糊敏感信息（手机号 / 邮箱）' : 'Blur sensitive info by default (phone / email)',
+      blurDefaultHint: isZh ? '开启后页面中的手机号、邮箱会自动打码；双击任意手机号可随时模糊 / 还原。' : 'When on, phone numbers and emails on the page are masked automatically; double-click any phone number to blur or restore it.',
+      nickLabel: isZh ? '自定义显示昵称' : 'Custom display name',
+      nickPlaceholder: isZh ? '留空则显示真实账号（如 186******50）' : 'Leave empty to show the real account (e.g. 186******50)',
+      nickHint: isZh ? '设置后，页面中所有显示该手机号的位置（含左下角账号栏）都会改为显示昵称。' : 'Once set, every place that shows this phone number (including the bottom-left account bar) displays the nickname instead.',
+      save: isZh ? '保存' : 'Save',
+      saved: isZh ? '已保存 ✓' : 'Saved ✓',
+      reset: isZh ? '恢复默认' : 'Reset',
+      blurHint: isZh ? '提示：双击页面中任意位置的手机号即可模糊 / 还原（便于截图留档）。' : 'Tip: double-click any phone number on the page to blur or restore it (useful before taking screenshots).',
+      };
+    }
+    let L = makeL(zh);
+
+    const STYLE_ID = 'dsh-container-helper-css';
+    function ensureStyles() {
+      if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+      const el = document.createElement('style');
+      el.id = STYLE_ID;
+      el.textContent = [
+        '.dshdlq-card{background:var(--dsw-alias-bg-layer-2,#fff);border:1px solid var(--dsw-alias-border-l3,#e2e8f0);border-radius:12px;padding:20px 24px;color:var(--dsw-alias-label-primary,#0f172a);font-size:13px;line-height:1.7}',
+        '.dshdlq-card--compact{padding:14px 14px 13px;border-radius:14px;background:linear-gradient(180deg,var(--dsw-alias-bg-layer-2,#fff) 0%,var(--dsw-alias-bg-layer-1,#f8fafc) 100%);border-color:var(--dsw-alias-border-l2,#e2e8f0);box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 28px -22px rgba(15,23,42,.45)}',
+        '.dshdlq-card--compact .dshdlq-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:7px;position:relative;padding-right:22px}',
+        '.dshdlq-card--compact .dshdlq-card-close{position:absolute;top:-3px;right:-2px;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:0 0;color:var(--dsw-alias-label-tertiary,#94a3b8);font-size:18px;line-height:20px;cursor:pointer}',
+        '.dshdlq-card--compact .dshdlq-card-close:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(15,23,42,.06));color:var(--dsw-alias-label-primary,#0f172a)}',
+        '.dshdlq-card--compact .dshdlq-title{width:100%;min-width:0;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+        '.dshdlq-card--compact .dshdlq-badge{font-size:10px;line-height:1.2;padding:1px 6px;border-radius:6px;white-space:nowrap}',
+        '.dshdlq-card--compact .dshdlq-desc{font-size:11.5px;line-height:1.55;margin:0 0 9px;color:var(--dsw-alias-label-secondary,#64748b);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}',
+        '.dshdlq-card--compact .dshdlq-row{gap:7px;margin-top:8px}',
+        '.dshdlq-card--compact .dshdlq-status{justify-content:space-between;font-size:11px;padding:5px 8px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover,rgba(15,23,42,.045))}',
+        '.dshdlq-card--compact .dshdlq-btn{width:100%;height:36px;border-radius:9px;font-weight:600}',
+        '.dshdlq-card--compact .dshdlq-primary{background:var(--dsw-alias-button-primary-fill,#111827);border-color:transparent;color:var(--dsw-alias-label-primary-inverted,var(--dsw-alias-label-primary-foreground,#fff));box-shadow:0 1px 2px rgba(15,23,42,.12)}',
+        '.dshdlq-card--compact .dshdlq-primary:hover{background:var(--dsw-alias-button-primary-hover,#374151)}',
+        '.dshdlq-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}',
+        '.dshdlq-title{font-size:15px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px}',
+        '.dshdlq-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--dsw-alias-state-business-tertiary,#e0f2fe);color:var(--dsw-alias-state-business-primary,#0284c7)}',
+        '.dshdlq-desc{margin:0 0 12px;color:var(--dsw-alias-label-secondary,#64748b);font-size:12px}',
+        '.dshdlq-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}',
+        '.dshdlq-btn{box-sizing:border-box;height:34px;padding:0 16px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l3,#e2e8f0);background:0 0;color:var(--dsw-alias-label-primary,#0f172a);font-size:13px;cursor:pointer}',
+        '.dshdlq-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(15,23,42,.05))}',
+        '.dshdlq-btn:disabled{opacity:.5;cursor:not-allowed}',
+        '.dshdlq-primary{background:var(--dsw-alias-button-primary-fill,#111827);border-color:transparent;color:var(--dsw-alias-label-primary-foreground,#fff);font-weight:500}',
+        '.dshdlq-primary:hover{background:var(--dsw-alias-button-primary-hover,#374151)}',
+        '.dshdlq-input{box-sizing:border-box;width:100%;height:34px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l3,#e2e8f0);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#0f172a);font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace}',
+        '.dshdlq-overlay{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}',
+        '.dshdlq-dialog{box-sizing:border-box;width:100%;max-width:560px;background:var(--dsw-alias-bg-layer-2,#fff);border:1px solid var(--dsw-alias-border-l3,#e2e8f0);border-radius:14px;padding:22px 24px;box-shadow:0 18px 50px rgba(15,23,42,.28);color:var(--dsw-alias-label-primary,#0f172a)}',
+        '.dshdlq-msg{margin-top:12px;font-size:12px;color:var(--dsw-alias-label-secondary,#64748b);word-break:break-all}',
+        '.dshdlq-ok{color:var(--dsw-alias-state-success-primary,#15803d)}',
+        '.dshdlq-err{color:var(--dsw-alias-state-error-primary,#dc2626)}',
+        '.dshdlq-label{display:block;margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary,#64748b)}',
+        '.dshdlq-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--dsw-alias-bg-layer-1,#f1f5f9)}',
+        '.dshdlq-sep{margin:18px 0 0;border-top:1px solid var(--dsw-alias-border-l3,#e2e8f0)}',
+        '.dshdlq-check{display:flex;align-items:flex-start;gap:8px;margin-top:8px;font-size:12px;color:var(--dsw-alias-label-primary,#0f172a);cursor:pointer;line-height:1.6}',
+        '.dshdlq-check input{margin:3px 0 0;cursor:pointer}',
+        '.dshdlq-blur{filter:blur(5px);transition:filter .12s ease;cursor:pointer;-webkit-user-select:none;user-select:none}',
+        '.dshdlq-hint{margin-top:6px;font-size:11px;color:var(--dsw-alias-label-tertiary,#94a3b8)}',
+      ].join('\n');
+      document.head.appendChild(el);
+    }
+
+    // ── 状态 ─────────────────────────────────────────────────────
+    let accountState = null;   // 来自 watch 流（可能一直不可用）
+    let signedIn = false;      // 登录状态判定结果
+    let profile = null;        // { id, avatarUrl, name, contact }
+    let checked = false;
+    let ui = { open: false, link: '', input: '', msg: '', msgKind: '', busy: false, copied: false, saved: false };
+    const subs = new Set();
+    const notify = () => { for (const f of [...subs]) { try { f(); } catch (e) {} } };
+    const setUi = (patch) => { ui = Object.assign({}, ui, patch); notify(); };
+
+    // ── 偏好设置（localStorage，按浏览器保存）────────────────────
+    const PREFS_KEY = 'dsh-container-helper:prefs';
+    const LEGACY_PREFS_KEY = 'dsh-deepseek-remote-login:prefs';
+    const ONBOARDING_DISMISSED_KEY = 'dsh-container-helper:onboarding-dismissed';
+    function isOnboardingDismissed() {
+      try { return typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_DISMISSED_KEY) === '1'; } catch (e) { return false; }
+    }
+    function dismissOnboarding() {
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem(ONBOARDING_DISMISSED_KEY, '1'); } catch (e) {}
+    }
+    function clearOnboardingDismissed() {
+      try { if (typeof localStorage !== 'undefined') localStorage.removeItem(ONBOARDING_DISMISSED_KEY); } catch (e) {}
+    }
+    let prefs = { blurByDefault: false, nickname: '', mobileScrollLock: true };
+    function loadPrefs() {
+      try {
+        let raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null;
+        let migratedFromLegacy = false;
+        if (!raw && typeof localStorage !== 'undefined') {
+          raw = localStorage.getItem(LEGACY_PREFS_KEY);
+          migratedFromLegacy = Boolean(raw);
+        }
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          prefs = Object.assign({}, prefs, parsed);
+          if (parsed && parsed.mobileScrollLock === undefined) {
+            prefs.mobileScrollLock = true;
+          }
+          if (migratedFromLegacy && typeof localStorage !== 'undefined') {
+            try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      applyMobileScrollLock();
+      return prefs;
+    }
+    function setPref(key, value) {
+      prefs = Object.assign({}, prefs, { [key]: value });
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+      if (key === 'blurByDefault') { if (value) scanAll(); else clearAutoBlur(); }
+      if (key === 'mobileScrollLock') { applyMobileScrollLock(); }
+      watchDomForAutoBlur();   // 开启任一功能后补挂观察器
+      refreshSensitive();      // 昵称改动：重写页面中的手机号显示；同时重新评估自动模糊
+      notify();
+    }
+
+    // ── 移动端防下拉黑屏与视口锁定 ────────────────────────────────
+    const MOBILE_STYLE_ID = 'dsh-mobile-scroll-lock-css';
+    let viewportResetAttached = false;
+    function setupViewportReset() {
+      if (viewportResetAttached || typeof window === 'undefined') return;
+      viewportResetAttached = true;
+      const resetScroll = () => {
+        if (prefs.mobileScrollLock && typeof window !== 'undefined' && window.scrollY !== 0) {
+          window.scrollTo(0, 0);
+        }
+      };
+      window.addEventListener('scroll', resetScroll, { passive: true });
+      window.addEventListener('focusout', () => {
+        if (prefs.mobileScrollLock) {
+          setTimeout(resetScroll, 60);
+          setTimeout(resetScroll, 300);
+        }
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+          if (prefs.mobileScrollLock) {
+            setTimeout(resetScroll, 60);
+          }
+        });
+        window.visualViewport.addEventListener('scroll', () => {
+          if (prefs.mobileScrollLock) {
+            resetScroll();
+          }
+        });
+      }
+      window.addEventListener('orientationchange', () => {
+        if (prefs.mobileScrollLock) {
+          setTimeout(resetScroll, 100);
+        }
+      });
+    }
+
+    function applyMobileScrollLock() {
+      if (typeof document === 'undefined') return;
+      let el = document.getElementById(MOBILE_STYLE_ID);
+      if (prefs.mobileScrollLock) {
+        if (!el) {
+          el = document.createElement('style');
+          el.id = MOBILE_STYLE_ID;
+          document.head.appendChild(el);
+        }
+        el.textContent = [
+          '/* 移动端视口防下拉黑屏与滚动穿透补丁 (@dsh-custom/dsh-container-helper) */',
+          'html, body {',
+          '  height: 100% !important;',
+          '  height: 100dvh !important;',
+          '  max-height: 100dvh !important;',
+          '  overflow: hidden !important;',
+          '  overscroll-behavior: none !important;',
+          '  overscroll-behavior-y: none !important;',
+          '}',
+          '#root {',
+          '  height: 100% !important;',
+          '  max-height: 100% !important;',
+          '  overflow: hidden !important;',
+          '}',
+          '@media (max-width: 768px) {',
+          '  [data-conversation-content], .wSkVaW_body {',
+          '    --dsh-chat-content-width: 100% !important;',
+          '    --dsh-composer-card-max-width: 100% !important;',
+          '    --dsh-composer-side-clearance: 8px !important;',
+          '  }',
+          '  [data-conversation-scroll], .wSkVaW_scrollBody {',
+          '    margin-right: 0px !important;',
+          '    overscroll-behavior: contain !important;',
+          '  }',
+          '}'
+        ].join('\n');
+        setupViewportReset();
+      } else {
+        if (el) el.remove();
+      }
+    }
+
+    function accountApi(ctx) {
+      if (!ctx) return null;
+      try { if (ctx.remote && ctx.remote.account) return ctx.remote.account; } catch (e) {}
+      try { const a = typeof ctx.get === 'function' ? ctx.get('remote.account') : null; if (a) return a; } catch (e) {}
+      return null;
+    }
+    function isActiveAttempt(state) {
+      const a = state && state.attempt;
+      if (!a) return false;
+      return ['initializing', 'waiting-browser', 'exchanging', 'committing'].includes(String(a.phase));
+    }
+
+    let cachedVersion = '';
+    async function resolveClientVersion() {
+      if (cachedVersion) return cachedVersion;
+      try {
+        const r = await fetch('/__api/account/client-version', { signal: AbortSignal.timeout(4000) });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.version) { cachedVersion = String(j.version); return cachedVersion; }
+        }
+      } catch (e) {}
+      cachedVersion = '0.2.3-alpha.2';
+      return cachedVersion;
+    }
+    function activeLocale(ctx) {
+      try {
+        const snap = ctx && ctx.locale && typeof ctx.locale.getSnapshot === 'function' ? ctx.locale.getSnapshot() : null;
+        if (snap && snap.active) return snap.active;
+      } catch (e) {}
+      return zh ? 'zh-CN' : 'en-US';
+    }
+    async function clientMeta() {
+      return { version: await resolveClientVersion(), locale: activeLocale(pluginCtx), timezoneOffsetSeconds: -(new Date()).getTimezoneOffset() * 60 };
+    }
+
+    async function fetchProfile() {
+      const api = accountApi(pluginCtx);
+      if (!api || typeof api.getProfile !== 'function') return null;
+      try {
+        const res = await api.getProfile(await clientMeta());
+        const v = res && res.ok ? res.value : null;
+        if (v && v.status === 'ready' && v.value) return v.value;
+      } catch (e) {}
+      return null;
+    }
+    // 账号展示文本：设置了自定义昵称则只显示昵称（不泄露真实账号）
+    function displayAccount() {
+      if (prefs.nickname) return prefs.nickname;
+      return profile ? [profile.name, profile.contact].filter(Boolean).join(' · ') : '';
+    }
+    const showingNickname = () => !!prefs.nickname;
+
+    async function fetchAccountStatus() {
+      try {
+        const r = await fetch('/__api/account/status', { signal: AbortSignal.timeout(5000) });
+        if (r.ok) {
+          const j = await r.json();
+          if (typeof j.signedIn === 'boolean') return j.signedIn;
+        }
+      } catch (e) {}
+      return null;
+    }
+    // 登录状态检测：网关本地凭据 > watch 流 > 账号资料可读
+    async function detectAccount() {
+      if (!accountApi(pluginCtx)) return;
+      const local = await fetchAccountStatus();
+      let p = null;
+      try { p = await fetchProfile(); } catch (e) {}
+      if (p) profile = p;
+      if (local !== null) signedIn = local;
+      else if (accountState) signedIn = accountState.status === 'credential-stored';
+      else signedIn = !!p;
+      checked = true;
+      if (signedIn) clearOnboardingDismissed();
+      notify();
+      refreshSensitive();
+    }
+    function recheck() {
+      checked = false; signedIn = false;
+      setUi({ busy: false, msg: '', msgKind: '' });
+      detectAccount();
+    }
+    const isSignedIn = () => signedIn === true;
+
+    let streamStarted = false;
+    function startAccountStream(ctx) {
+      if (streamStarted || !ctx || !ctx.remote || typeof ctx.remote.$stream !== 'function') return;
+      const api = accountApi(ctx);
+      if (!api || typeof api.watch !== 'function') return;
+      streamStarted = true;
+      try {
+        const stream = ctx.remote.$stream({
+          name: 'account',
+          open: (signal) => api.watch(signal),
+          ended: () => new Error('account stream ended')
+        });
+        (async () => {
+          try {
+            for await (const state of stream) {
+              accountState = state;
+              const a = state && state.attempt;
+              if (state && state.status === 'credential-stored') {
+                signedIn = true; checked = true;
+                clearOnboardingDismissed();
+                if (!profile) { fetchProfile().then((p) => { if (p) profile = p; notify(); }); }
+                setUi({ busy: false, link: '', input: '', msg: '', msgKind: '', copied: false });
+              } else if (isActiveAttempt(state)) {
+                signedIn = false; checked = true;
+                setUi({ open: true, link: a && a.authorizeUrl ? String(a.authorizeUrl) : ui.link, busy: false });
+              }
+            }
+          } catch (e) {}
+        })();
+      } catch (e) { streamStarted = false; }
+    }
+    function ensureAccount() {
+      startAccountStream(pluginCtx);
+      if (!checked) detectAccount();
+      refreshSensitive();
+    }
+
+    function useUi() {
+      const [, force] = React.useState(0);
+      React.useEffect(() => {
+        const f = () => force((n) => n + 1);
+        subs.add(f);
+        return () => { subs.delete(f); };
+      }, []);
+      return ui;
+    }
+    const useMount = (fn) => React.useEffect(() => { fn(); }, []);
+
+    async function submitCallbackLink(link) {
+      const r = await fetch('/account/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link })
+      });
+      let j = {};
+      try { j = await r.json(); } catch (e) {}
+      return { status: r.status, body: j };
+    }
+
+    async function beginSignIn() {
+      if (isSignedIn()) { setUi({ open: true, busy: false, msg: '', msgKind: '' }); return; }
+      setUi({ busy: true, msg: '', msgKind: '', copied: false, open: true });
+      const api = accountApi(pluginCtx);
+      if (!api || typeof api.startSignIn !== 'function') {
+        setUi({ busy: false, msgKind: 'err', msg: zh
+          ? '当前 DSH 未暴露账号服务接口：请在「设置 → 模型 → DeepSeek 账号」触发登录，再回到此处粘贴回调链接完成登录。'
+          : 'This DSH build does not expose the account service: trigger sign-in under Settings → Models → DeepSeek account, then paste the callback link here.' });
+        return;
+      }
+      try {
+        const meta = await clientMeta();
+        const callStart = () => api.startSignIn(meta, window.location.origin, 'web');
+        const pick = (r) => {
+          const s = r && r.ok ? r.value : null;
+          const a = s && s.attempt ? s.attempt : null;
+          return { url: a && a.authorizeUrl ? String(a.authorizeUrl) : '', phase: a && a.phase ? String(a.phase) : '', status: s && s.status ? String(s.status) : '' };
+        };
+        let picked = pick(await callStart());
+        for (let i = 0; !picked.url && i < 12; i++) {
+          if (picked.status === 'credential-stored') break;
+          if (picked.phase === 'failed' || picked.phase === 'expired') break;
+          await new Promise((r) => setTimeout(r, 900));
+          picked = pick(await callStart());
+        }
+        if (picked.status === 'credential-stored') { signedIn = true; checked = true; clearOnboardingDismissed(); setUi({ busy: false, open: true }); notify(); return; }
+        if (picked.url) setUi({ busy: false, link: picked.url, msg: L.noAuto, msgKind: '' });
+        else setUi({ busy: false, msgKind: 'err', msg: zh ? '未取到登录链接，请点击「重新获取」。' : 'No sign-in link was returned; click Retry.' });
+      } catch (e) {
+        setUi({ busy: false, msgKind: 'err', msg: (zh ? '获取登录链接失败：' : 'Failed to request sign-in link: ') + String(e && e.message || e) });
+      }
+    }
+
+    // ── 敏感信息模糊（手机号 / 邮箱）────────────────────────────────
+    // 手机号（完整号 / 打码号 186******50）。必须带边界：否则 13 位毫秒时间戳
+    // （如 1729000000000）会因内部含 11 位子串而被误判为手机号。
+    // 边界用「非字母数字」而不是简单 \b：中文/标点相邻仍算边界，但数字串内部不算。
+    const PHONE_BODY = '(?:1[3-9]\\d{9}|1\\d{2}\\*{2,}\\d{2})';
+    const PHONE_RE = new RegExp('(?:^|[^0-9A-Za-z])' + PHONE_BODY + '(?![0-9A-Za-z])');
+    // 敏感信息总集（默认模糊）：手机号 + 邮箱（同样带边界）
+    const SENSITIVE_RE = new RegExp('(?:^|[^0-9A-Za-z])' + PHONE_BODY + '(?![0-9A-Za-z])|(?:^|[^\\w.+-])[\\w.+-]+@[\\w-]+\\.[\\w.-]{2,}');
+    let blurBound = false;
+    let autoObserver = null;
+    // 输入框 / 可编辑区域内一律不接管（避免影响用户的正常输入与选择）
+    function inEditable(node) {
+      let el = node;
+      while (el && el.nodeType === 1) {
+        const tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable) return true;
+        el = el.parentElement;
+      }
+      return false;
+    }
+    // 受保护区域：输入框 / 可编辑区（DSH 对话输入框底层是 Meta Lexical 的 contenteditable）/ 代码块。
+    // 这些地方的 DOM 由编辑器状态机托管，外部改写 nodeValue 会导致光标错乱甚至编辑器崩溃，
+    // 因此「双击模糊」与「昵称覆盖」「默认模糊」三条路径都必须先过这道闸。
+    function isProtected(el) {
+      if (inEditable(el)) return true;
+      try {
+        if (el.closest && el.closest('[contenteditable="true"],[data-lexical-editor],pre,code,input,textarea')) return true;
+      } catch (e) {}
+      return false;
+    }
+    function findSensitive(el) {
+      let node = el;
+      while (node && node !== document.body && node.nodeType === 1) {
+        const t = (node.textContent || '').trim();
+        if (t && t.length <= 64 && node.children.length <= 2 && PHONE_RE.test(t)) return node;
+        node = node.parentElement;
+      }
+      return null;
+    }
+    // 双击任意位置的敏感文本即可模糊 / 还原
+    function bindSensitiveBlur() {
+      if (blurBound || typeof document === 'undefined') return;
+      blurBound = true;
+      try {
+        document.addEventListener('dblclick', (ev) => {
+          const t = ev.target;
+          if (!t || t.nodeType !== 1) return;
+          if (inEditable(t)) return;              // 输入框/可编辑区域内不接管
+          try {
+            const sel = window.getSelection && window.getSelection();
+            if (sel && String(sel.toString() || '').trim()) return;   // 用户正在划选文本时不接管
+          } catch (e) {}
+          const target = findSensitive(t);
+          if (!target) return;
+          target.classList.toggle('dshdlq-blur');
+          ev.preventDefault();                    // 阻止双击选中文本
+          ev.stopPropagation();                   // 仅命中手机号时才拦截 DSH 自身的双击交互
+        }, true);
+      } catch (e) { blurBound = false; }
+    }
+    // 昵称覆盖只用手机号判定（邮箱不替换）
+    function leafTextNode(el) {
+      const kids = el.childNodes || [];
+      for (let i = 0; i < kids.length; i++) {
+        if (kids[i].nodeType === 3 && String(kids[i].nodeValue || '').trim()) return kids[i];
+      }
+      return null;
+    }
+    const LEAF_SELECTOR = 'span,div,button,td,li,p,a,strong,em,small';
+
+    /**
+     * 对「单个」叶子元素应用：自定义昵称覆盖 + 默认模糊。
+     *
+     * 抽成单元素版本是为了让 MutationObserver 能做**增量**处理：只碰本次真正变化的节点，
+     * 而不是每次 DOM 抖动都全文档扫描一遍。
+     *
+     * 昵称覆盖只改写文本节点的 value（不动 DOM 结构），因此对 React 渲染是安全的；
+     * React 若重新渲染回手机号，会触发 characterData 变更 → 再次覆盖。
+     */
+    function applySensitiveEl(el) {
+      if (!el || el.nodeType !== 1) return;
+      if (el.children && el.children.length > 0) return;   // 只处理叶子节点
+      if (isProtected(el)) return;                         // 编辑器 / 输入框 / 代码块内不碰
+      const node = leafTextNode(el);
+      if (!node) return;
+      const t = String(node.nodeValue || '').trim();
+      if (!t || t.length > 64) return;
+      const nick = String(prefs.nickname || '').trim();
+      if (nick) {
+        if (el.getAttribute('data-dshdlq-nick') === '1') {
+          if (t !== nick) node.nodeValue = nick;           // 昵称改名 / React 回写都会重新覆盖
+          return;
+        }
+        if (PHONE_RE.test(t)) {
+          el.setAttribute('data-dshdlq-orig', t);
+          el.setAttribute('data-dshdlq-nick', '1');
+          node.nodeValue = nick;
+          return;
+        }
+      }
+      if (!prefs.blurByDefault) return;
+      if (el.classList.contains('dshdlq-blur')) return;
+      if (SENSITIVE_RE.test(t)) {
+        el.classList.add('dshdlq-blur');
+        el.setAttribute('data-dshdlq-auto', '1');
+      }
+    }
+    /** 扫描 root（含自身）子树的叶子节点；不传 root 则扫全文档 */
+    function scanAll(root) {
+      if (typeof document === 'undefined') return;
+      try {
+        const scope = root && root.nodeType === 1 ? root : document;
+        if (scope.nodeType === 1) applySensitiveEl(scope);
+        for (const el of scope.querySelectorAll(LEAF_SELECTOR)) applySensitiveEl(el);
+      } catch (e) {}
+    }
+    /** 昵称清空后，把被覆盖的手机号写回原位 */
+    function restoreNicknames() {
+      if (typeof document === 'undefined') return;
+      try {
+        for (const el of document.querySelectorAll('[data-dshdlq-nick="1"]')) {
+          const node = leafTextNode(el);
+          if (node) node.nodeValue = el.getAttribute('data-dshdlq-orig') || node.nodeValue;
+          el.removeAttribute('data-dshdlq-nick');
+          el.removeAttribute('data-dshdlq-orig');
+        }
+      } catch (e) {}
+    }
+    /** 撤销「已不再像敏感信息」的自动模糊（例如昵称覆盖了手机号后，同节点残留的类要清掉） */
+    function pruneAutoBlur() {
+      if (typeof document === 'undefined') return;
+      try {
+        for (const el of document.querySelectorAll('[data-dshdlq-auto="1"]')) {
+          const t = (el.textContent || '').trim();
+          if (!t || t.length > 64 || !SENSITIVE_RE.test(t)) {
+            el.classList.remove('dshdlq-blur');
+            el.removeAttribute('data-dshdlq-auto');
+          }
+        }
+      } catch (e) {}
+    }
+    // 敏感信息全量刷新：还原昵称（若已清空）+ 修剪失效打码 + 全量扫描
+    function refreshSensitive() {
+      if (typeof document === 'undefined') return;
+      try {
+        if (!String(prefs.nickname || '').trim()) restoreNicknames();
+        if (prefs.blurByDefault) pruneAutoBlur();
+        scanAll();
+      } catch (e) {}
+    }
+
+    function clearAutoBlur() {
+      try {
+        for (const el of document.querySelectorAll('[data-dshdlq-auto="1"]')) {
+          el.classList.remove('dshdlq-blur');
+          el.removeAttribute('data-dshdlq-auto');
+        }
+      } catch (e) {}
+    }
+    function watchDomForAutoBlur() {
+      // 两项功能都关闭时不挂观察器；用户开启任一功能后再挂（见 setPref）
+      if (!prefs.blurByDefault && !prefs.nickname) return;
+      if (autoObserver || typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
+      try {
+        autoObserver = new MutationObserver((mutations) => {
+          // 两项功能都关闭时不做任何扫描：避免流式输出等高频 DOM 变化带来的无谓开销
+          if (!prefs.blurByDefault && !prefs.nickname) return;
+          // 同步「增量」处理，不再走 setTimeout 防抖：
+          // MutationObserver 回调是在 DOM 变更后、**下一次绘制之前**以微任务执行的，
+          // 因此在这里同步打码可以做到「渲染即打码」，不会出现先明文、约 300ms 后才模糊的闪烁。
+          // 而且只处理本次真正变化的节点，比原先「防抖 + 全文档扫描」更快也更省。
+          try {
+            for (const m of mutations) {
+              if (m.type === 'characterData') {
+                if (m.target && m.target.parentElement) applySensitiveEl(m.target.parentElement);
+                continue;
+              }
+              if (m.target && m.target.nodeType === 1) applySensitiveEl(m.target);
+              const added = m.addedNodes;
+              if (!added) continue;
+              for (const n of added) {
+                if (n.nodeType === 1) scanAll(n);
+                else if (n.nodeType === 3 && n.parentElement) applySensitiveEl(n.parentElement);
+              }
+            }
+          } catch (e) {}
+        });
+        autoObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+      } catch (e) { autoObserver = null; }
+    }
+
+    // ── 共用视图 ─────────────────────────────────────────────────
+    function StatusRow(props) {
+      const color = props.signedIn
+        ? 'var(--dsw-alias-state-success-primary,#15803d)'
+        : props.error ? 'var(--dsw-alias-state-error-primary,#dc2626)' : 'var(--dsw-alias-label-primary,#0f172a)';
+      return React.createElement('div', { className: 'dshdlq-row dshdlq-status', style: { marginTop: props.tight ? '0' : '10px' } },
+        React.createElement('span', { style: { color: 'var(--dsw-alias-label-secondary,#64748b)' } }, L.status + ': '),
+        React.createElement('strong', { style: { color } }, props.text)
+      );
+    }
+    function AccountRow() {
+      if (!isSignedIn()) return null;
+      const line = displayAccount();
+      if (!line && !profile) return null;
+      const nick = showingNickname();
+      return React.createElement('div', { className: 'dshdlq-row', style: { marginTop: '4px' } },
+        !nick && profile && profile.avatarUrl ? React.createElement('img', { className: 'dshdlq-avatar', src: profile.avatarUrl, alt: '' }) : null,
+        React.createElement('span', { style: { color: 'var(--dsw-alias-label-secondary,#64748b)' } }, (nick ? L.nicknameLine : L.accountLine) + ': '),
+        React.createElement('span', null, line || '—')
+      );
+    }
+    function SignedInBody() {
+      return React.createElement(React.Fragment, null,
+        React.createElement('p', { className: 'dshdlq-desc' }, L.signedInHint),
+        React.createElement(StatusRow, { signedIn: true, tight: true, text: L.signedInLabel }),
+        React.createElement(AccountRow, null),
+        React.createElement('div', { className: 'dshdlq-row' },
+          React.createElement('button', { type: 'button', className: 'dshdlq-btn', onClick: recheck }, checked ? L.recheck : L.checking)
+        )
+      );
+    }
+
+    // 偏好设置区块
+    function SettingsBlock() {
+      const s = useUi();
+      const [draft, setDraft] = React.useState(prefs.nickname || '');
+      React.useEffect(() => { setDraft(prefs.nickname || ''); }, [prefs.nickname]);
+      const commit = () => {
+        setPref('nickname', String(draft || '').trim());
+        setUi({ saved: true });
+        setTimeout(() => setUi({ saved: false }), 1800);
+      };
+      return React.createElement(React.Fragment, null,
+        React.createElement('div', { className: 'dshdlq-sep' }),
+        React.createElement('div', { className: 'dshdlq-label' }, L.prefsTitle),
+        React.createElement('label', { className: 'dshdlq-check' },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: !!prefs.mobileScrollLock,
+            onChange: (e) => setPref('mobileScrollLock', e.target.checked)
+          }),
+          React.createElement('span', null, L.mobileScrollLock)
+        ),
+        React.createElement('div', { className: 'dshdlq-hint', style: { marginLeft: '24px' } }, L.mobileScrollLockHint),
+        React.createElement('label', { className: 'dshdlq-check' },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: !!prefs.blurByDefault,
+            onChange: (e) => setPref('blurByDefault', e.target.checked)
+          }),
+          React.createElement('span', null, L.blurDefault)
+        ),
+        React.createElement('div', { className: 'dshdlq-hint', style: { marginLeft: '24px' } }, L.blurDefaultHint),
+        React.createElement('label', { className: 'dshdlq-label' }, L.nickLabel),
+        React.createElement('div', { className: 'dshdlq-row', style: { marginTop: 0 } },
+          React.createElement('input', {
+            className: 'dshdlq-input',
+            style: { maxWidth: '260px' },
+            value: draft,
+            placeholder: L.nickPlaceholder,
+            onChange: (e) => setDraft(e.target.value),
+            onKeyDown: (e) => { if (e.key === 'Enter') commit(); }
+          }),
+          React.createElement('button', { type: 'button', className: 'dshdlq-btn dshdlq-primary', onClick: commit }, s.saved ? L.saved : L.save)
+        ),
+        React.createElement('div', { className: 'dshdlq-hint' }, L.nickHint),
+        React.createElement('div', { className: 'dshdlq-hint' }, L.blurHint)
+      );
+    }
+
+    // ── 弹窗（唯一实例，渲染在 shell.overlay）──────────────────────
+    function SignInDialog() {
+      ensureStyles();
+      const s = useUi();
+      const onCopy = async () => {
+        try { await navigator.clipboard.writeText(s.link); setUi({ copied: true }); setTimeout(() => setUi({ copied: false }), 2000); }
+        catch (e) { setUi({ msgKind: 'err', msg: (zh ? '复制失败，请手动选择链接复制：' : 'Copy failed, please copy manually: ') + s.link }); }
+      };
+      const onOpen = () => { try { if (s.link) window.open(s.link, '_blank', 'noopener'); } catch (e) {} };
+      const onSubmit = async () => {
+        const v = String(s.input || '').trim();
+        if (!v) { setUi({ msgKind: 'err', msg: L.emptyLink }); return; }
+        setUi({ busy: true, msg: '', msgKind: '' });
+        try {
+          const r = await submitCallbackLink(v);
+          if (r.body && r.body.ok) { setUi({ busy: false, msgKind: 'ok', msg: L.okMsg }); detectAccount(); }
+          else setUi({ busy: false, msgKind: 'err', msg: (r.body && (r.body.message || r.body.error)) || ('HTTP ' + r.status) });
+        } catch (e) { setUi({ busy: false, msgKind: 'err', msg: String(e && e.message || e) }); }
+      };
+      const head = React.createElement('div', { className: 'dshdlq-head' },
+        React.createElement('h3', { className: 'dshdlq-title' }, isSignedIn() ? '✅ ' : '🔑 ', isSignedIn() ? L.signedInLabel : L.title),
+        React.createElement('button', { type: 'button', className: 'dshdlq-btn', onClick: () => setUi({ open: false }) }, L.close)
+      );
+      return ReactDOM.createPortal(React.createElement('div', { className: 'dshdlq-overlay', onClick: (e) => { if (e.target === e.currentTarget) setUi({ open: false }); } },
+        React.createElement('div', { className: 'dshdlq-dialog' },
+          head,
+          isSignedIn()
+            ? React.createElement(SignedInBody, null)
+            : React.createElement(React.Fragment, null,
+                React.createElement('p', { className: 'dshdlq-desc' }, L.desc),
+                React.createElement('label', { className: 'dshdlq-label' }, L.linkLabel),
+                React.createElement('input', { className: 'dshdlq-input', readOnly: true, value: s.link || '', placeholder: L.starting }),
+                React.createElement('div', { className: 'dshdlq-row' },
+                  React.createElement('button', { type: 'button', className: 'dshdlq-btn', disabled: !s.link, onClick: onCopy }, s.copied ? L.copied : L.copy),
+                  React.createElement('button', { type: 'button', className: 'dshdlq-btn', disabled: !s.link, onClick: onOpen }, L.open),
+                  React.createElement('button', { type: 'button', className: 'dshdlq-btn', disabled: s.busy, onClick: beginSignIn }, L.retry)
+                ),
+                React.createElement('label', { className: 'dshdlq-label' }, L.cbLabel),
+                React.createElement('input', { className: 'dshdlq-input', value: s.input, placeholder: L.cbPlaceholder, onChange: (e) => setUi({ input: e.target.value }) }),
+                React.createElement('div', { className: 'dshdlq-row' },
+                  React.createElement('button', { type: 'button', className: 'dshdlq-btn dshdlq-primary', disabled: s.busy, onClick: onSubmit }, s.busy ? L.submitting : L.submit),
+                  React.createElement('button', { type: 'button', className: 'dshdlq-btn', disabled: s.busy, onClick: () => setUi({ open: false }) }, L.cancel)
+                ),
+                s.msg ? React.createElement('div', { className: 'dshdlq-msg ' + (s.msgKind === 'ok' ? 'dshdlq-ok' : s.msgKind === 'err' ? 'dshdlq-err' : '') }, s.msg) : null
+              )
+        )
+      ), document.body);
+    }
+
+    function RemoteLoginOverlay() {
+      useLocaleSync();
+      const s = useUi();
+      useMount(ensureAccount);
+      return s.open ? React.createElement(SignInDialog) : null;
+    }
+
+    // 官方 settings.models.sign-in 插槽的接替者：未配置 API Key 时，模型设置页原本靠官方
+    // 登录引导；补丁把官方弹窗置空后必须由这里顶上，否则该区域会变成空白死区。
+    function ModelsSignInEntry(props) {
+      useLocaleSync();
+      ensureStyles();
+      const s = useUi();
+      const [dismissed, setDismissed] = React.useState(() => isOnboardingDismissed());
+      useMount(ensureAccount);
+      if (dismissed) return null;
+      const dismiss = () => {
+        dismissOnboarding();
+        setDismissed(true);
+        try { if (props && typeof props.complete === 'function') props.complete(); } catch (e) {}
+      };
+      const active = isActiveAttempt(accountState);
+      return React.createElement('div', { className: 'dshdlq-card dshdlq-card--compact' },
+        React.createElement('div', { className: 'dshdlq-head' },
+          React.createElement('h3', { className: 'dshdlq-title' }, isSignedIn() ? '✅ ' : '🔑 ', L.section),
+          React.createElement('span', { className: 'dshdlq-badge' }, L.badge),
+          React.createElement('button', { type: 'button', className: 'dshdlq-card-close', 'aria-label': L.close, title: L.close, onClick: dismiss }, '×')
+        ),
+        isSignedIn()
+          ? React.createElement(SignedInBody, null)
+          : React.createElement(React.Fragment, null,
+              React.createElement('p', { className: 'dshdlq-desc' }, L.descCompact),
+              React.createElement(StatusRow, {
+                tight: true,
+                error: s.msgKind === 'err',
+                text: s.busy ? L.starting : (active || s.link) ? L.waiting : (checked ? L.idle : L.checking)
+              }),
+              React.createElement('div', { className: 'dshdlq-row' },
+                React.createElement('button', { type: 'button', className: 'dshdlq-btn dshdlq-primary', disabled: s.busy, onClick: beginSignIn }, s.busy ? L.starting : L.getLink)
+              )
+            )
+      );
+    }
+
+    function RemoteLoginSection() {
+      useLocaleSync();
+      ensureStyles();
+      const s = useUi();
+      useMount(ensureAccount);
+      const active = isActiveAttempt(accountState);
+      const signedInNow = isSignedIn();
+      return React.createElement('div', { className: 'dshdlq-card' },
+        React.createElement('div', { className: 'dshdlq-head' },
+          React.createElement('h2', { className: 'dshdlq-title' }, signedInNow ? '✅ ' : '🔑 ', L.section),
+          React.createElement('span', { className: 'dshdlq-badge' }, L.badge)
+        ),
+        signedInNow
+          ? React.createElement(SignedInBody, null)
+          : React.createElement(React.Fragment, null,
+              React.createElement('p', { className: 'dshdlq-desc' }, L.desc),
+              React.createElement(StatusRow, {
+                tight: true,
+                error: s.msgKind === 'err',
+                text: s.busy ? L.starting : (active || s.link) ? L.waiting : (checked ? L.idle : L.checking)
+              }),
+              React.createElement('div', { className: 'dshdlq-row' },
+                React.createElement('button', { type: 'button', className: 'dshdlq-btn dshdlq-primary', disabled: s.busy, onClick: beginSignIn }, s.busy ? L.starting : L.getLink)
+              )
+              // 弹窗只由全局 shell.overlay 挂载一份；此处再渲染会造成双层 Modal 叠放
+            ),
+        React.createElement(SettingsBlock, null)
+      );
+    }
+
+    function apply(ctx) {
+      pluginCtx = ctx;
+      syncLocale();
+      ensureStyles();   // 必须先于任何打码 class 生效注入样式，否则会出现「已打码但不模糊」的窗口
+      loadPrefs();
+      startAccountStream(ctx);
+      bindSensitiveBlur();
+      watchDomForAutoBlur();
+      if (typeof window !== 'undefined') {
+        try {
+          const handleOpen = () => {
+            if (isSignedIn()) { setUi({ open: true, msg: '', msgKind: '' }); return; }
+            setUi({ open: true, msg: '', msgKind: '' });
+            beginSignIn();
+          };
+          window.addEventListener('dsh-container-helper:open', handleOpen);
+        } catch (e) {}
+      }
+      if (ctx && ctx.slots && typeof ctx.slots.inject === 'function') {
+        ctx.slots.inject('settings.section', () => {
+          return ctx.slots.register({
+            name: 'settings.section',
+            id: 'dsh-container-helper',
+            order: 46,
+            label: () => (detectZh() ? 'DSH 容器助手' : 'DSH Container Helper')
+          }, RemoteLoginSection);
+        });
+        ctx.slots.inject('shell.overlay', () => {
+          return ctx.slots.register({ name: 'shell.overlay', id: 'dsh-container-helper-dialog', order: 90 }, RemoteLoginOverlay);
+        });
+        // 官方 settings.models.sign-in 被置空后由本插件接管（priority -1 覆盖 priority 0）
+        ctx.slots.inject('settings.models.sign-in', () => {
+          return ctx.slots.register({ name: 'settings.models.sign-in', id: 'dsh-container-helper-models', priority: -1 }, ModelsSignInEntry);
+        });
+      }
+    }
+
+    module.exports.apply = apply;
+    module.exports.inject = ['slots', 'remote', 'remote.account'];
+    return module.exports;
+  }
+});

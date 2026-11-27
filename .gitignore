@@ -1,0 +1,79 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files & credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Runtime data & Docker volume directories
+data/
+workspace/
+tmp/
+review/
+*.log
+.dsh/
+.dsh-snapshots/
+.cache/
+.pnpm-store/
+gateway/pnpm-lock.yaml
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+__pycache__/
+*.py[cod]
+
+# Private local documentation (strictly local development only, NEVER upload)
+PROJECT_PLAN.md
+REMOTE_DEBUG.md
+*DEBUG.md
+*PLAN.md
+PROJECT_RULES.md
+RULES.md
+*RULES.md
+
+# Local MCP bridges, remote debug & test scripts (strictly local only, NEVER upload)
+scripts/*mcp*
+scripts/baota-*
+scripts/remote-*
+scripts/local-*
+scripts/test-runner-*
+scripts/capture-*
+scripts/download-*
+scripts/run-*
+scripts/sync-*
+tests/remote/
+tools/remote/
+mcp_info.json
+*baota*
+
+# Local audit / E2E / visual review verification artifacts (NEVER upload)
+doc/**
+!doc/**/
+!doc/*.png
+!doc/*.jpg
+!doc/*.jpeg
+!doc/*.gif
+!doc/*.webp
+!doc/*.svg
+doc/release/
+doc/e2e/
+doc/compat/
+doc/archive/
+doc/design/
+doc/issue-*/
+doc/remote-*.png
+doc/remote-test-*.png
+!doc/remote-test-version-hub.png
+!doc/remote-test-confirm-modal.png
+doc/preview-remote-*.png
+/remote-test-*.png
+screenshot*.png
