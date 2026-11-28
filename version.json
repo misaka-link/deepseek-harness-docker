@@ -20,26 +20,22 @@
     "note": "供应链版本：build.sh 读取本块作为默认构建参数；可用环境变量 PNPM_VERSION / DSH_VERSION 覆盖。市场预装插件配置为 latest，每次构建拉取最新社区版本。"
   },
   "latest": {
-    "version": "1.0.0",
-    "releaseDate": "2026-11-27",
-    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v1.0.0",
-    "changelog": "DeepSeek Harness Docker 1.0.0 正式版：全新 DSH 同源 8 语言控制台、四档镜像体系（standard/market 瘦身约 1.5GB + 新增全量 full 版）、预装插件在线更新支持、有界 pigz 多线程备份与非 root 安全加固",
+    "version": "1.0.1",
+    "releaseDate": "2026-11-28",
+    "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v1.0.1",
+    "changelog": "修复克隆旧容器配置重建时遗留陈旧 DSH_SUITE_VERSION 导致管理面板误报「发现新版」（#24）；补齐容器浏览器桌面侧栏向导与顺序管理图标；修复经典 docker build（非 BuildKit）构建兼容问题",
     "changelogList": [
-      "全新 DSH 同源 Web Admin 控制台：支持 8 种语言（zh/en/ja/es/fr/de/ru/pt）、浅色/深色/跟随 DSH 主题切换与首屏无闪烁渲染",
-      "四档镜像变体体系（standard / market / full / mini）：standard 与 market 切换 trixie-slim 底座直降约 1.5GB，新增含 C/C++ 编译链与官方 Golang 的 full 完全体版",
-      "预装社区插件双通道在线更新：market 与 full 预装插件采用标准 ^semver 注册，支持通过 dshmarket 与 DSH 原生插件管理一键升级且重启保留",
-      "模块化网关、在线换源与长耗时备份加固：恢复浏览器原生 br/gzip 流式压缩，支持在线切换 npm/pnpm 镜像源、有界 pigz 多线程压缩与反代断连自动恢复",
-      "非 root 与容器安全加固：支持 PUID/PGID 降权启动、配置不可读 fail-closed 503 锁止页、出站代理自动追加回环 NO_PROXY 与 HEALTHCHECK 跟随 PROXY_PORT",
-      "完整保留 0.1.x/0.2.x 存量数据卷无缝升级与历史快照还原兼容，修复自定义 DSH_HOME 打包、还原保留内部令牌与防止已卸载插件复活"
+      "修复克隆旧容器环境变量重建时遗留陈旧 DSH_SUITE_VERSION 导致误报「发现新版」（#24）：采信前与镜像内 gateway/package.json 交叉校验，冲突时采用镜像真实版本并在面板提示重建指引",
+      "版本诊断与接口扩展：/admin/api/status 与 /admin/api/version/check 新增 project.versionMismatch / envConflict 字段，versionSources 新增 conflict 标记，8 语言同步展示冲突告警",
+      "补齐「容器浏览器桌面」侧栏向导与顺序调整图标：为 dsh-browser-desktop 注册稳定 guide.id 与 36×36 双色桌面浏览器矢量图标组件",
+      "修复未安装 docker-buildx（经典 docker build）环境下的 Dockerfile 脚本构建兼容性"
     ],
     "changelogI18n": {
       "en": [
-        "DSH-aligned Web Admin Console with 8 languages (zh/en/ja/es/fr/de/ru/pt), light/dark/follow-DSH theme modes, and flicker-free initial paint",
-        "4-tier Docker image lineup (standard / market / full / mini): ~1.5GB smaller trixie-slim desktop images for standard & market, plus a full trixie + C/C++ + Golang variant",
-        "Seamless online updates for preinstalled community plugins via both dshmarket and DSH's native plugin manager, persisting across container restarts",
-        "Modularized gateway & resilient backups: native br/gzip streaming pass-through, live npm/pnpm registry switching, bounded pigz multithreading, and reverse-proxy disconnect recovery",
-        "Non-root & runtime hardening: PUID/PGID privilege drop, fail-closed 503 lock page on unreadable config, automatic loopback NO_PROXY guard, and PROXY_PORT-aware HEALTHCHECK",
-        "Full backward compatibility for existing 0.1.x/0.2.x data volumes and legacy snapshots, with fixes for custom DSH_HOME archives and plugin state reconciliation"
+        "Fix false 'Update Available' alert when recreating containers with cloned legacy DSH_SUITE_VERSION ENV (#24): cross-validate against image-baked gateway/package.json and adopt the real image version",
+        "Expose project.versionMismatch, envConflict, and per-source conflict flags in /admin/api/status & /admin/api/version/check with 8-language mismatch warnings in Admin Console",
+        "Add 36×36 two-tone desktop-browser SVG artwork icon and stable guide id for Container Browser Desktop in DSH's right sidebar guide and reorder settings",
+        "Fix Dockerfile helper script generation compatibility on hosts using classic docker build without BuildKit"
       ]
     },
     "dshChangelogList": [
@@ -55,6 +51,30 @@
     ]
   },
   "history": {
+    "1.0.0": {
+      "version": "1.0.0",
+      "releaseDate": "2026-11-27",
+      "releaseUrl": "https://github.com/misaka-link/deepseek-harness-docker/releases/tag/v1.0.0",
+      "changelog": "DeepSeek Harness Docker 1.0.0 正式版：全新 DSH 同源 8 语言控制台、四档镜像体系（standard/market 瘦身约 1.5GB + 新增全量 full 版）、预装插件在线更新支持、有界 pigz 多线程备份与非 root 安全加固",
+      "changelogList": [
+        "全新 DSH 同源 Web Admin 控制台：支持 8 种语言（zh/en/ja/es/fr/de/ru/pt）、浅色/深色/跟随 DSH 主题切换与首屏无闪烁渲染",
+        "四档镜像变体体系（standard / market / full / mini）：standard 与 market 切换 trixie-slim 底座直降约 1.5GB，新增含 C/C++ 编译链与官方 Golang 的 full 完全体版",
+        "预装社区插件双通道在线更新：market 与 full 预装插件采用标准 ^semver 注册，支持通过 dshmarket 与 DSH 原生插件管理一键升级且重启保留",
+        "模块化网关、在线换源与长耗时备份加固：恢复浏览器原生 br/gzip 流式压缩，支持在线切换 npm/pnpm 镜像源、有界 pigz 多线程压缩与反代断连自动恢复",
+        "非 root 与容器安全加固：支持 PUID/PGID 降权启动、配置不可读 fail-closed 503 锁止页、出站代理自动追加回环 NO_PROXY 与 HEALTHCHECK 跟随 PROXY_PORT",
+        "完整保留 0.1.x/0.2.x 存量数据卷无缝升级与历史快照还原兼容，修复自定义 DSH_HOME 打包、还原保留内部令牌与防止已卸载插件复活"
+      ],
+      "changelogI18n": {
+        "en": [
+          "DSH-aligned Web Admin Console with 8 languages (zh/en/ja/es/fr/de/ru/pt), light/dark/follow-DSH theme modes, and flicker-free initial paint",
+          "4-tier Docker image lineup (standard / market / full / mini): ~1.5GB smaller trixie-slim desktop images for standard & market, plus a full trixie + C/C++ + Golang variant",
+          "Seamless online updates for preinstalled community plugins via both dshmarket and DSH's native plugin manager, persisting across container restarts",
+          "Modularized gateway & resilient backups: native br/gzip streaming pass-through, live npm/pnpm registry switching, bounded pigz multithreading, and reverse-proxy disconnect recovery",
+          "Non-root & runtime hardening: PUID/PGID privilege drop, fail-closed 503 lock page on unreadable config, automatic loopback NO_PROXY guard, and PROXY_PORT-aware HEALTHCHECK",
+          "Full backward compatibility for existing 0.1.x/0.2.x data volumes and legacy snapshots, with fixes for custom DSH_HOME archives and plugin state reconciliation"
+        ]
+      }
+    },
     "0.2.16": {
       "version": "0.2.16",
       "releaseDate": "2026-11-24",

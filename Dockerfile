@@ -17,44 +17,45 @@ RUN printf 'Acquire::Retries "3";\nAcquire::http::Timeout "12";\nAcquire::https:
     && if [ "$USE_CHINA_MIRROR" = "1" ] || [ "$USE_CHINA_MIRROR" = "true" ]; then \
       npm config set registry https://registry.npmmirror.com; \
     fi
-RUN cat > /usr/local/sbin/dsh-apt-install <<'APT_HELPER'
-#!/bin/sh
-set -eu
-if [ "${USE_CHINA_MIRROR:-1}" = "1" ] || [ "${USE_CHINA_MIRROR:-1}" = "true" ]; then
-  MIRRORS="mirrors.aliyun.com mirrors.tuna.tsinghua.edu.cn mirrors.tencent.com mirrors.huaweicloud.com mirrors.ustc.edu.cn deb.debian.org"
-else
-  MIRRORS="deb.debian.org mirrors.aliyun.com"
-fi
-for m in $MIRRORS; do
-  for f in /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; do
-    [ -f "$f" ] || continue
-    sed -i -E "s#https?://(deb\.debian\.org|mirrors\.[a-z0-9.-]+)#https://${m}#g" "$f"
-  done
-  TLS_BOOT=""
-  if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then
-    # slim 底座首次尚未具备根证书包，先借由 Debian 内置 PGP 公钥校验安全引导安装 ca-certificates
-    TLS_BOOT="-o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false"
-  fi
-  if apt-get update -o APT::Update::Error-Mode=any $TLS_BOOT; then
-    if [ -n "$TLS_BOOT" ]; then
-      apt-get install -y --no-install-recommends $TLS_BOOT ca-certificates || true
-    fi
-    TLS_RUN=""
-    [ -f /etc/ssl/certs/ca-certificates.crt ] || TLS_RUN="$TLS_BOOT"
-    if apt-get install -y --no-install-recommends $TLS_RUN "$@"; then
-      apt-get clean
-      rm -rf /var/lib/apt/lists/*
-      exit 0
-    fi
-  fi
-  echo "===> [apt] 镜像源 https://${m} 拉取失败，切换备用源重试..." >&2
-  rm -rf /var/lib/apt/lists/*
-  sleep 1
-done
-echo "错误: 所有候选 APT 镜像源 (${MIRRORS}) 均安装失败" >&2
-exit 1
-APT_HELPER
-RUN chmod 0755 /usr/local/sbin/dsh-apt-install
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      'set -eu' \
+      'if [ "${USE_CHINA_MIRROR:-1}" = "1" ] || [ "${USE_CHINA_MIRROR:-1}" = "true" ]; then' \
+      '  MIRRORS="mirrors.aliyun.com mirrors.tuna.tsinghua.edu.cn mirrors.tencent.com mirrors.huaweicloud.com mirrors.ustc.edu.cn deb.debian.org"' \
+      'else' \
+      '  MIRRORS="deb.debian.org mirrors.aliyun.com"' \
+      'fi' \
+      'for m in $MIRRORS; do' \
+      '  for f in /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; do' \
+      '    [ -f "$f" ] || continue' \
+      '    sed -i -E "s#https?://(deb\.debian\.org|mirrors\.[a-z0-9.-]+)#https://${m}#g" "$f"' \
+      '  done' \
+      '  TLS_BOOT=""' \
+      '  if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then' \
+      '    TLS_BOOT="-o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false"' \
+      '  fi' \
+      '  if apt-get update -o APT::Update::Error-Mode=any $TLS_BOOT; then' \
+      '    if [ -n "$TLS_BOOT" ]; then' \
+      '      apt-get install -y --no-install-recommends $TLS_BOOT ca-certificates || true' \
+      '    fi' \
+      '    TLS_RUN=""' \
+      '    [ -f /etc/ssl/certs/ca-certificates.crt ] || TLS_RUN="$TLS_BOOT"' \
+      '    if apt-get install -y --no-install-recommends $TLS_RUN "$@"; then' \
+      '      apt-get clean' \
+      '      rm -rf /var/lib/apt/lists/*' \
+      '      exit 0' \
+      '    fi' \
+      '  fi' \
+      '  echo "===> [apt] 镜像源 https://${m} 拉取失败，切换备用源重试..." >&2' \
+      '  rm -rf /var/lib/apt/lists/*' \
+      '  sleep 1' \
+      'done' \
+      'echo "错误: 所有候选 APT 镜像源 (${MIRRORS}) 均安装失败" >&2' \
+      'exit 1' \
+      > /usr/local/sbin/dsh-apt-install \
+    && chmod 0755 /usr/local/sbin/dsh-apt-install \
+    && test -s /usr/local/sbin/dsh-apt-install \
+    && sh -n /usr/local/sbin/dsh-apt-install
 
 # builder 编译所需最小工具链 (build-essential/python3 用于 node-pty 原生编译)
 RUN USE_CHINA_MIRROR="${USE_CHINA_MIRROR}" /usr/local/sbin/dsh-apt-install \
@@ -186,44 +187,45 @@ RUN printf 'Acquire::Retries "3";\nAcquire::http::Timeout "12";\nAcquire::https:
     && if [ "$USE_CHINA_MIRROR" = "1" ] || [ "$USE_CHINA_MIRROR" = "true" ]; then \
       npm config set registry https://registry.npmmirror.com; \
     fi
-RUN cat > /usr/local/sbin/dsh-apt-install <<'APT_HELPER'
-#!/bin/sh
-set -eu
-if [ "${USE_CHINA_MIRROR:-1}" = "1" ] || [ "${USE_CHINA_MIRROR:-1}" = "true" ]; then
-  MIRRORS="mirrors.aliyun.com mirrors.tuna.tsinghua.edu.cn mirrors.tencent.com mirrors.huaweicloud.com mirrors.ustc.edu.cn deb.debian.org"
-else
-  MIRRORS="deb.debian.org mirrors.aliyun.com"
-fi
-for m in $MIRRORS; do
-  for f in /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; do
-    [ -f "$f" ] || continue
-    sed -i -E "s#https?://(deb\.debian\.org|mirrors\.[a-z0-9.-]+)#https://${m}#g" "$f"
-  done
-  TLS_BOOT=""
-  if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then
-    # slim 底座首次尚未具备根证书包，先借由 Debian 内置 PGP 公钥校验安全引导安装 ca-certificates
-    TLS_BOOT="-o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false"
-  fi
-  if apt-get update -o APT::Update::Error-Mode=any $TLS_BOOT; then
-    if [ -n "$TLS_BOOT" ]; then
-      apt-get install -y --no-install-recommends $TLS_BOOT ca-certificates || true
-    fi
-    TLS_RUN=""
-    [ -f /etc/ssl/certs/ca-certificates.crt ] || TLS_RUN="$TLS_BOOT"
-    if apt-get install -y --no-install-recommends $TLS_RUN "$@"; then
-      apt-get clean
-      rm -rf /var/lib/apt/lists/*
-      exit 0
-    fi
-  fi
-  echo "===> [apt] 镜像源 https://${m} 拉取失败，切换备用源重试..." >&2
-  rm -rf /var/lib/apt/lists/*
-  sleep 1
-done
-echo "错误: 所有候选 APT 镜像源 (${MIRRORS}) 均安装失败" >&2
-exit 1
-APT_HELPER
-RUN chmod 0755 /usr/local/sbin/dsh-apt-install
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      'set -eu' \
+      'if [ "${USE_CHINA_MIRROR:-1}" = "1" ] || [ "${USE_CHINA_MIRROR:-1}" = "true" ]; then' \
+      '  MIRRORS="mirrors.aliyun.com mirrors.tuna.tsinghua.edu.cn mirrors.tencent.com mirrors.huaweicloud.com mirrors.ustc.edu.cn deb.debian.org"' \
+      'else' \
+      '  MIRRORS="deb.debian.org mirrors.aliyun.com"' \
+      'fi' \
+      'for m in $MIRRORS; do' \
+      '  for f in /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; do' \
+      '    [ -f "$f" ] || continue' \
+      '    sed -i -E "s#https?://(deb\.debian\.org|mirrors\.[a-z0-9.-]+)#https://${m}#g" "$f"' \
+      '  done' \
+      '  TLS_BOOT=""' \
+      '  if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then' \
+      '    TLS_BOOT="-o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false"' \
+      '  fi' \
+      '  if apt-get update -o APT::Update::Error-Mode=any $TLS_BOOT; then' \
+      '    if [ -n "$TLS_BOOT" ]; then' \
+      '      apt-get install -y --no-install-recommends $TLS_BOOT ca-certificates || true' \
+      '    fi' \
+      '    TLS_RUN=""' \
+      '    [ -f /etc/ssl/certs/ca-certificates.crt ] || TLS_RUN="$TLS_BOOT"' \
+      '    if apt-get install -y --no-install-recommends $TLS_RUN "$@"; then' \
+      '      apt-get clean' \
+      '      rm -rf /var/lib/apt/lists/*' \
+      '      exit 0' \
+      '    fi' \
+      '  fi' \
+      '  echo "===> [apt] 镜像源 https://${m} 拉取失败，切换备用源重试..." >&2' \
+      '  rm -rf /var/lib/apt/lists/*' \
+      '  sleep 1' \
+      'done' \
+      'echo "错误: 所有候选 APT 镜像源 (${MIRRORS}) 均安装失败" >&2' \
+      'exit 1' \
+      > /usr/local/sbin/dsh-apt-install \
+    && chmod 0755 /usr/local/sbin/dsh-apt-install \
+    && test -s /usr/local/sbin/dsh-apt-install \
+    && sh -n /usr/local/sbin/dsh-apt-install
 
 # 1. 安装基础依赖与实用 CLI 研发工具 (A 层：同底座共享缓存，不包含变体 ARG)
 RUN set -eux; \
@@ -322,19 +324,21 @@ RUN set -eux; \
     fi
 
 # 1.4 跨平台 WSL2 / Docker Desktop 路径调用兼容 Shim
-RUN cat > /usr/local/bin/wslpath <<'SHIM'
-#!/bin/sh
-out=""
-for arg in "$@"; do
-  case "$arg" in
-    -w|-u|-m|--*) ;;
-    *) out="$arg" ;;
-  esac
-done
-printf '%s\n' "${out:-/}"
-exit 0
-SHIM
-RUN chmod 0755 /usr/local/bin/wslpath
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      'out=""' \
+      'for arg in "$@"; do' \
+      '  case "$arg" in' \
+      '    -w|-u|-m|--*) ;;' \
+      '    *) out="$arg" ;;' \
+      '  esac' \
+      'done' \
+      'printf "%s\n" "${out:-/}"' \
+      'exit 0' \
+      > /usr/local/bin/wslpath \
+    && chmod 0755 /usr/local/bin/wslpath \
+    && test -s /usr/local/bin/wslpath \
+    && sh -n /usr/local/bin/wslpath
 
 # 2. 安装官方 Golang 开发环境 (仅 full 变体或显式 --build-arg INSTALL_GO=1 时安装)
 ARG GO_VERSION=""

@@ -454,6 +454,53 @@ window.__ModuleLoader__.load({
       if (styleEl.textContent !== CSS) styleEl.textContent = CSS;
     }
 
+    function GuideArtworkContainerDesktop(props) {
+      const size = (props && props.size) || 36;
+      const className = props && props.className ? props.className : undefined;
+      return React.createElement(
+        'svg',
+        {
+          width: size,
+          height: size,
+          className,
+          'aria-hidden': 'true',
+          focusable: 'false',
+          viewBox: '0 0 36 36',
+          fill: 'none',
+          xmlns: 'http://www.w3.org/2000/svg'
+        },
+        React.createElement('rect', {
+          x: '7.2',
+          y: '8.5',
+          width: '21.6',
+          height: '15',
+          rx: '2.6',
+          stroke: '#15AABF',
+          strokeWidth: '2'
+        }),
+        React.createElement('path', {
+          d: 'M7.8 13.2H28.2',
+          stroke: '#3BC9DB',
+          strokeWidth: '1.6',
+          strokeLinecap: 'round'
+        }),
+        React.createElement('circle', { cx: '10.5', cy: '10.9', r: '0.85', fill: '#15AABF' }),
+        React.createElement('circle', { cx: '13.1', cy: '10.9', r: '0.85', fill: '#3BC9DB' }),
+        React.createElement('path', {
+          d: 'M18 23.5V27.2',
+          stroke: '#15AABF',
+          strokeWidth: '2',
+          strokeLinecap: 'round'
+        }),
+        React.createElement('path', {
+          d: 'M13.2 27.2H22.8',
+          stroke: '#15AABF',
+          strokeWidth: '2',
+          strokeLinecap: 'round'
+        })
+      );
+    }
+
     function VncDesktopTabTitle() {
       useLocaleSync();
       const L = getLabels();
@@ -586,7 +633,7 @@ window.__ModuleLoader__.load({
                 alignItems: 'center',
                 gap: '8px'
               }
-            }, L.title),
+            }, React.createElement(GuideArtworkContainerDesktop, { size: 22 }), L.title),
             React.createElement('span', {
               style: {
                 fontSize: '12px',
@@ -645,9 +692,11 @@ window.__ModuleLoader__.load({
               priority: 'extension',
               title: () => getLabels().tabLabel,
               guide: [{
+                id: 'desktop',
                 order: 20,
                 title: () => getLabels().guideTitle,
-                description: () => getLabels().guideDesc
+                description: () => getLabels().guideDesc,
+                icon: GuideArtworkContainerDesktop
               }]
             });
           } catch (e) {

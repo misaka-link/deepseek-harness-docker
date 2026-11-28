@@ -164,13 +164,77 @@ try {
     assert.deepEqual(Object.keys(tools).sort(), ['browser_control', 'browser_open', 'browser_screenshot']);
   });
 
-  await check('plugins/dsh-browser-desktop/client.js 具备超时、重叠守卫与自有样式命名空间', () => {
+  await check('plugins/dsh-browser-desktop/client.js 具备超时、重叠守卫、自有样式命名空间与侧栏向导图标', async () => {
     const src = fs.readFileSync(CLIENT, 'utf8');
     assert.ok(/AbortSignal\.timeout\(5000\)/.test(src));
     assert.ok(/pollDesktopStatus/.test(src) && /desktopPollInFlight/.test(src));
     assert.ok(/cleanupGlobals/.test(src));
     assert.ok(!/:has\(/.test(src));
     assert.ok(/dsbd-section-card/.test(src));
+    assert.ok(/GuideArtworkContainerDesktop/.test(src));
+
+    // Execute client module factory in isolated mock environment to verify guide icon & id contract
+    let capturedFactory = null;
+    const prevWindow = globalThis.window;
+    const prevFetch = globalThis.fetch;
+    try {
+      globalThis.window = {
+        __ModuleLoader__: { load: (def) => { capturedFactory = def.factory; } },
+        navigator: { language: 'zh-CN' },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => {}
+      };
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({ desktop: { enabled: true, enableSidebarTab: true }, paths: { admin: '/admin', vnc: '/vnc' } })
+      });
+      const fn = new Function(src);
+      fn();
+      assert.equal(typeof capturedFactory, 'function');
+
+      const mockReact = {
+        createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+        useState: (init) => [init, () => {}],
+        useEffect: () => {},
+        useLayoutEffect: () => {},
+        useRef: (init) => ({ current: init })
+      };
+      const exported = capturedFactory((modName) => {
+        if (modName === 'react') return mockReact;
+        throw new Error('Unexpected require: ' + modName);
+      });
+
+      let registeredTabDef = null;
+      const mockScopedCtx = {
+        sidebarRight: { openTab: () => {} },
+        sidebarRightTabs: { register: (def) => { registeredTabDef = def; return () => {}; } },
+        slots: { inject: () => {}, register: () => () => {} }
+      };
+      exported.apply({
+        slots: { inject: () => {}, register: () => () => {} },
+        inject: (_deps, cb) => cb(mockScopedCtx)
+      });
+      await sleep(30);
+
+      assert.ok(registeredTabDef, 'sidebarRightTabs.register 应被调用');
+      assert.equal(Array.isArray(registeredTabDef.guide), true);
+      assert.equal(registeredTabDef.guide[0].id, 'desktop');
+      assert.equal(registeredTabDef.guide[0].title(), '容器浏览器桌面');
+      assert.equal(typeof registeredTabDef.guide[0].icon, 'function');
+
+      const svgTree = registeredTabDef.guide[0].icon({ size: 22, className: 'guide-icon' });
+      assert.equal(svgTree.type, 'svg');
+      assert.equal(svgTree.props.viewBox, '0 0 36 36');
+      assert.equal(svgTree.props.width, 22);
+      assert.equal(svgTree.props.height, 22);
+      assert.equal(svgTree.props.className, 'guide-icon');
+      assert.ok(svgTree.children.length >= 4);
+    } finally {
+      if (prevWindow === undefined) delete globalThis.window;
+      else globalThis.window = prevWindow;
+      globalThis.fetch = prevFetch;
+    }
   });
 
   console.log('\n[前端 v1.0.0 模块化模板与 JS 回归]');

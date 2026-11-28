@@ -49,16 +49,18 @@ export function renderSidebar({
   onPrefsChanged
 }) {
   const proj = versionCheck?.project || {};
+  const statusProj = status?.project || {};
   const dshMeta = versionCheck?.dsh || {};
-  const curSuite = proj.current || status?.project?.version || '';
+  const curSuite = proj.current || statusProj.version || '';
   const curDsh = dshMeta.current || status?.dsh?.version || '';
+  const hasMismatch = Boolean(proj.versionMismatch || statusProj.versionMismatch);
 
   const suiteText = suiteVerText(curSuite, t);
   const dshText = curDsh && curDsh !== 'unknown' ? curDsh : t('common', 'unknown');
 
   const level = versionCheck?.overallLevel === 'danger' || proj.level === 'danger' || dshMeta.level === 'danger'
     ? 'danger'
-    : dshMeta.level === 'warning'
+    : (versionCheck?.overallLevel === 'warning' || proj.level === 'warning' || dshMeta.level === 'warning' || hasMismatch)
       ? 'warning'
       : (proj.hasUpdate || dshMeta.hasUpdate) ? 'update' : '';
 

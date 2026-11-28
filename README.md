@@ -5,14 +5,14 @@
 官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的开箱即用容器化套件<br>
 统一安全网关 · DSH 同源 Web Admin 控制台 · 容器虚拟桌面 · 配置快照，一条命令启动。
 
-[![Suite](https://img.shields.io/badge/Suite-v1.0.0-111827?style=flat-square)](CHANGELOG.md)
+[![Suite](https://img.shields.io/badge/Suite-v1.0.1-111827?style=flat-square)](CHANGELOG.md)
 [![DSH Engine](https://img.shields.io/badge/DSH_Engine-%E2%89%A5_0.2.3--alpha.2-4D6BFE?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness/releases)
 [![Node.js](https://img.shields.io/badge/Node.js-24.22.3-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Debian](https://img.shields.io/badge/Debian-13_Trixie-A81D33?style=flat-square&logo=debian&logoColor=white)](https://www.debian.org/)
 [![Arch](https://img.shields.io/badge/Arch-amd64_%C2%B7_arm64_(mini)-6B7280?style=flat-square)](#镜像选型)
 [![GHCR](https://img.shields.io/badge/GHCR-deepseek--harness--docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/misaka-link/deepseek-harness-docker/pkgs/container/deepseek-harness-docker)
 
-本项目工程版本 `1.0.0` ｜ 兼容官方 DSH 核心 `>= 0.2.3-alpha.2`（当前内置 `0.2.3-alpha.2`）
+本项目工程版本 `1.0.1` ｜ 兼容官方 DSH 核心 `>= 0.2.3-alpha.2`（当前内置 `0.2.3-alpha.2`）
 
 **[镜像选型](#镜像选型)** · **[快速启动](#快速启动)** · **[界面预览](#界面预览)** · **[环境变量](#环境变量)** · **[进阶部署](#进阶部署)** · **[更新日志](#更新日志)**
 
@@ -71,10 +71,10 @@
 
 | 变体 | 浮动标签 | 工程版本锁定 | 内置 DSH 版本锁定 | 别名 | 架构 |
 |---|---|---|---|---|---|
-| 标准版 | `:latest` | `:1.0.0` · `:v1.0.0` | `:0.2.3-alpha.2` · `:dsh-0.2.3-alpha.2` | `:standard` · `:latest-standard` | `linux/amd64` |
-| 插件商店版 | `:latest-market` | `:1.0.0-market` · `:v1.0.0-market` | `:0.2.3-alpha.2-market` · `:dsh-0.2.3-alpha.2-market` | `:market` | `linux/amd64` |
-| 完全体版 | `:latest-full` | `:1.0.0-full` · `:v1.0.0-full` | `:0.2.3-alpha.2-full` · `:dsh-0.2.3-alpha.2-full` | `:full` | `linux/amd64` |
-| 轻量精简版 | `:latest-mini` | `:1.0.0-mini` · `:v1.0.0-mini` | `:0.2.3-alpha.2-mini` · `:dsh-0.2.3-alpha.2-mini` | `:mini` | `linux/amd64` · `linux/arm64` |
+| 标准版 | `:latest` | `:1.0.1` · `:v1.0.1` | `:0.2.3-alpha.2` · `:dsh-0.2.3-alpha.2` | `:standard` · `:latest-standard` | `linux/amd64` |
+| 插件商店版 | `:latest-market` | `:1.0.1-market` · `:v1.0.1-market` | `:0.2.3-alpha.2-market` · `:dsh-0.2.3-alpha.2-market` | `:market` | `linux/amd64` |
+| 完全体版 | `:latest-full` | `:1.0.1-full` · `:v1.0.1-full` | `:0.2.3-alpha.2-full` · `:dsh-0.2.3-alpha.2-full` | `:full` | `linux/amd64` |
+| 轻量精简版 | `:latest-mini` | `:1.0.1-mini` · `:v1.0.1-mini` | `:0.2.3-alpha.2-mini` · `:dsh-0.2.3-alpha.2-mini` | `:mini` | `linux/amd64` · `linux/arm64` |
 
 底座镜像：Standard / Market / Mini 基于 `node:24.22.3-trixie-slim`，Full 基于 `node:24.22.3-trixie`。
 
@@ -105,7 +105,7 @@ docker run -d \
   ghcr.io/misaka-link/deepseek-harness-docker:latest
 ```
 
-<sub>锁定版本：`:1.0.0` 或 `:0.2.3-alpha.2`</sub>
+<sub>锁定版本：`:1.0.1` 或 `:0.2.3-alpha.2`</sub>
 
 <details>
 <summary><b>插件商店版</b>（<code>:latest-market</code>）· 预装 <code>dshmarket</code> 与思考强度插件</summary>
@@ -124,7 +124,7 @@ docker run -d \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-market
 ```
 
-<sub>锁定版本：`:1.0.0-market` 或 `:0.2.3-alpha.2-market`</sub>
+<sub>锁定版本：`:1.0.1-market` 或 `:0.2.3-alpha.2-market`</sub>
 
 </details>
 
@@ -145,7 +145,7 @@ docker run -d \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-full
 ```
 
-<sub>锁定版本：`:1.0.0-full` 或 `:0.2.3-alpha.2-full`</sub>
+<sub>锁定版本：`:1.0.1-full` 或 `:0.2.3-alpha.2-full`</sub>
 
 </details>
 
@@ -165,7 +165,7 @@ docker run -d \
   ghcr.io/misaka-link/deepseek-harness-docker:latest-mini
 ```
 
-<sub>Mini 镜像不含 Chromium，**无需挂载 `./data/browser`**。锁定版本：`:1.0.0-mini` 或 `:0.2.3-alpha.2-mini`</sub>
+<sub>Mini 镜像不含 Chromium，**无需挂载 `./data/browser`**。锁定版本：`:1.0.1-mini` 或 `:0.2.3-alpha.2-mini`</sub>
 
 </details>
 
@@ -333,7 +333,7 @@ DeepSeek 平台 OAuth 仅接受 `localhost` 回调地址。本套件内置回调
 
 ### ARM64 主机
 
-仅 `mini` 变体（`:latest-mini` / `:1.0.0-mini`）提供 `linux/amd64` + `linux/arm64` 双架构 Manifest，适用于 Apple Silicon、树莓派、RK3588 等 ARM64 主机：
+仅 `mini` 变体（`:latest-mini` / `:1.0.1-mini`）提供 `linux/amd64` + `linux/arm64` 双架构 Manifest，适用于 Apple Silicon、树莓派、RK3588 等 ARM64 主机：
 
 ```bash
 docker image inspect ghcr.io/misaka-link/deepseek-harness-docker:latest-mini -f '{{.Architecture}}'
@@ -347,6 +347,12 @@ docker run --rm ghcr.io/misaka-link/deepseek-harness-docker:latest-mini node -p 
 <a id="更新日志"></a>
 
 ## 更新日志（仅最近 3 个版本）
+
+### v1.0.1
+
+- **修复克隆旧容器配置重建时误报「发现新版」（#24）**：`DSH_SUITE_VERSION` 采信前与镜像内 `gateway/package.json#version` 交叉校验，不一致时降级采用镜像真实版本并阻断快照元数据污染；`/admin/api/status` 与 `/admin/api/version/check` 新增 `project.versionMismatch` 与 `versionSources[].conflict` 标记，管理后台提供 8 语言冲突告警与 `--force-recreate` 重建提示。
+- **补齐「容器浏览器桌面」侧栏向导与顺序管理图标**：为 `dsh-browser-desktop` 补齐稳定 `guide.id` 与 `36×36` 双色桌面浏览器矢量图标组件，消除右侧栏向导与顺序调整列表中的图标留白。
+- **修复经典 `docker build`（非 BuildKit）构建兼容性**：移除 `Dockerfile` 中的 BuildKit 专属 heredoc 脚本写法，兼容未安装 `docker-buildx` 的 `amd64` / `arm64` 主机。
 
 ### v1.0.0
 

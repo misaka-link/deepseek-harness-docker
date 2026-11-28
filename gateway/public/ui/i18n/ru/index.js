@@ -634,6 +634,7 @@ export const version = {
   badgeUpToDate: 'Актуально',
   badgeUpdateAvailable: 'Есть обновление',
   badgeAdvisory: 'Рекомендация',
+  badgeEnvMismatch: 'Конфликт ENV',
   badgeIncompatible: 'Несовместимо',
   badgeUnadapted: 'Не проверено',
   badgeDshNewRelease: 'Новый релиз',
@@ -655,7 +656,12 @@ export const version = {
   dshNewVersionTitle: 'Что нового в официальном DSH {version}',
   dshHighlightsTitle: 'Особенности ядра DSH {version}',
   originalLangTag: 'Оригинал',
-  defaultChangelogItem: 'Постоянное повышение стабильности и удобства консоли'
+  defaultChangelogItem: 'Постоянное повышение стабильности и удобства консоли',
+  envMismatchTitle: 'Переменная ENV контейнера не совпадает с версией образа',
+  envMismatchBody: 'Переменная окружения контейнера <code>DSH_SUITE_VERSION={envVersion}</code> отличается от версии внутри образа <code>v{imageVersion}</code> (часто возникает при пересоздании контейнера с клонированием старого ENV). Принята версия из образа; выполните <code>docker compose up -d --force-recreate</code> для чистого пересоздания.',
+  sourceMismatchBody: 'Источники версии пакета различаются; принята версия образа <code>v{version}</code>. Выполните <code>docker compose up -d --force-recreate</code> для обновления контейнера.',
+  sourceConflictIgnored: 'Конфликт · Игнор',
+  sourceAdopted: 'Принято'
 };
 
 export const errors = {

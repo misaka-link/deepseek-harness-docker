@@ -31,14 +31,28 @@ export function renderTopbar({ activeTab, status, versionCheck, isMini, vncPath,
   const rt = dshRuntimeState(status);
 
   const proj = versionCheck?.project || {};
+  const statusProj = status?.project || {};
+  const hasMismatch = Boolean(proj.versionMismatch || statusProj.versionMismatch);
   const hasAnyUpdate = Boolean(proj.hasUpdate || versionCheck?.dsh?.hasUpdate);
   const hasDanger = versionCheck?.overallLevel === 'danger';
-  const suiteText = suiteVerText(proj.current || status?.project?.version || '', t);
+  const hasWarning = Boolean(
+    !hasDanger && (
+      hasMismatch ||
+      versionCheck?.overallLevel === 'warning' ||
+      proj.level === 'warning' ||
+      versionCheck?.dsh?.level === 'warning'
+    )
+  );
+  const suiteText = suiteVerText(proj.current || statusProj.version || '', t);
   const effectiveVnc = status?.paths?.vnc || vncPath || '/vnc/';
 
   const chipTitle = hasDanger ? t('version', 'badgeIncompatible')
-    : hasAnyUpdate ? t('version', 'badgeUpdateAvailable')
-      : t('shell', 'openVersionHub');
+    : hasMismatch ? t('version', 'badgeEnvMismatch')
+      : hasAnyUpdate ? t('version', 'badgeUpdateAvailable')
+        : hasWarning ? t('version', 'badgeUnadapted')
+          : t('shell', 'openVersionHub');
+
+  const dotLevel = hasDanger ? 'danger' : hasWarning ? 'warning' : hasAnyUpdate ? 'update' : '';
 
   return h(
     'header',
@@ -77,8 +91,8 @@ export function renderTopbar({ activeTab, status, versionCheck, isMini, vncPath,
         },
         icon('layers', 14),
         h('span', null, suiteText),
-        hasDanger || hasAnyUpdate
-          ? h('span', { className: 'update-dot', dataset: { level: hasDanger ? 'danger' : 'update' }, 'aria-hidden': 'true' })
+        dotLevel
+          ? h('span', { className: 'update-dot', dataset: { level: dotLevel }, 'aria-hidden': 'true' })
           : null
       ),
       !isMini

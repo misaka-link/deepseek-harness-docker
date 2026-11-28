@@ -232,43 +232,77 @@ const restoreEnv = () => {
 try {
   delete process.env.DSH_SUITE_VERSION;
   pv.resetWarnings();
-  const noEnv = quiet(() => pv.resolveProjectVersion());
-  ok(noEnv === pkgVer, '未注入 ENV 时取 gateway/package.json#version', String(noEnv));
+  const noEnvDesc = quiet(() => pv.describeProjectVersion());
+  ok(noEnvDesc.version === pkgVer, '未注入 ENV 时取 gateway/package.json#version', String(noEnvDesc.version));
+  ok(noEnvDesc.versionMismatch === false, '未注入 ENV 时无版本冲突标记');
 
-  process.env.DSH_SUITE_VERSION = '9.9.9';
+  process.env.DSH_SUITE_VERSION = pkgVer;
   pv.resetWarnings();
-  const envFirst = quiet(() => pv.resolveProjectVersion());
-  ok(envFirst === '9.9.9', '注入 ENV 时 ENV 优先级最高', String(envFirst));
+  const matchingEnv = quiet(() => pv.describeProjectVersion());
+  const matchingEnvSrc = matchingEnv.sources.find((s) => s.source === 'env');
+  ok(
+    matchingEnv.version === pkgVer && Boolean(matchingEnvSrc?.adopted) && matchingEnvSrc?.conflict === false && !matchingEnv.versionMismatch,
+    'ENV 与镜像内 package.json 一致时正常采信且无冲突',
+    JSON.stringify(matchingEnv)
+  );
 
-  process.env.DSH_SUITE_VERSION = 'v9.9.9';
+  process.env.DSH_SUITE_VERSION = 'v' + pkgVer;
   pv.resetWarnings();
-  const vPrefix = quiet(() => pv.resolveProjectVersion());
-  ok(vPrefix === '9.9.9', 'ENV 带前导 v 时归一化', String(vPrefix));
+  const vPrefix = quiet(() => pv.describeProjectVersion());
+  ok(
+    vPrefix.version === pkgVer && !vPrefix.versionMismatch,
+    'ENV 带前导 v 且与镜像一致时归一化采信',
+    String(vPrefix.version)
+  );
+
+  const staleCandidate = pkgVer === '0.2.15' ? '0.2.14' : '0.2.15';
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  process.env.DSH_SUITE_VERSION = staleCandidate;
+  pv.resetWarnings();
+  const staleDesc = pv.describeProjectVersion();
+  console.warn = origWarn;
+  const staleEnvSrc = staleDesc.sources.find((s) => s.source === 'env');
+  const stalePkgSrc = staleDesc.sources.find((s) => s.source === 'package.json');
+  ok(
+    staleDesc.version === pkgVer,
+    'Issue #24: 陈旧容器 ENV 与 package.json 不一致时拒绝采信旧 ENV 并降级采用镜像内版本',
+    `expected ${pkgVer}, got ${staleDesc.version}`
+  );
+  ok(
+    staleDesc.versionMismatch === true && staleDesc.envConflict === true,
+    'Issue #24: 陈旧容器 ENV 触发 versionMismatch=true 与 envConflict=true'
+  );
+  ok(
+    staleEnvSrc?.adopted === false && staleEnvSrc?.conflict === true && stalePkgSrc?.adopted === true && stalePkgSrc?.conflict === false,
+    'Issue #24: versionSources 准确标记 env.conflict=true/adopted=false 且 package.json.adopted=true'
+  );
+  ok(
+    warnings.some((w) => w.includes('不一致') && w.includes('force-recreate')),
+    '多来源不一致时会产生告警并提示重建容器',
+    warnings.join(' | ') || '(无告警)'
+  );
 
   process.env.DSH_SUITE_VERSION = 'not-a-version';
   pv.resetWarnings();
-  const badEnv = quiet(() => pv.resolveProjectVersion());
-  ok(badEnv === pkgVer, '非法 ENV 被忽略并回落到 package.json', String(badEnv));
+  const badEnv = quiet(() => pv.describeProjectVersion());
+  ok(
+    badEnv.version === pkgVer && badEnv.versionMismatch === false,
+    '非法 ENV 被忽略并回落到 package.json（不误标为版本冲突）',
+    String(badEnv.version)
+  );
 
   const desc = quiet(() => pv.describeProjectVersion());
   ok(
     desc.sources.length === 3 && desc.sources.map((s) => s.source).join(',') === 'env,package.json,version.json',
     'describeProjectVersion() 覆盖 env / package.json / version.json 三源'
   );
-  ok(desc.sources.filter((s) => s.adopted).length >= 1, '至少一个来源被采纳');
-
-  const warnings = [];
-  const origWarn = console.warn;
-  console.warn = (...args) => warnings.push(args.join(' '));
-  process.env.DSH_SUITE_VERSION = buildVer === '9.9.8' ? '9.9.7' : '9.9.8';
-  pv.resetWarnings();
-  pv.resolveProjectVersion();
-  console.warn = origWarn;
   ok(
-    warnings.some((w) => w.includes('不一致')),
-    '多来源不一致时会产生告警',
-    warnings.join(' | ') || '(无告警)'
+    desc.sources.every((s) => typeof s.conflict === 'boolean' && typeof s.adopted === 'boolean'),
+    'describeProjectVersion() 每个来源均携带 adopted 与 conflict 布尔字段'
   );
+  ok(desc.sources.filter((s) => s.adopted).length >= 1, '至少一个来源被采纳');
 } finally {
   restoreEnv();
 }

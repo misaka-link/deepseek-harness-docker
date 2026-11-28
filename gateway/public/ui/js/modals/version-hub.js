@@ -3,7 +3,7 @@
  * Consumes live/offline metadata exclusively from backend APIs (zero hardcoded version arrays).
  */
 
-import { h, icon, clear } from '../lib/dom.js';
+import { h, icon, clear, richText } from '../lib/dom.js';
 import { t, getLocale } from '../lib/i18n.js';
 import { suiteVerText } from '../lib/format.js';
 import { openModal } from '../components/modal.js';
@@ -57,21 +57,77 @@ function versionCard({ title, iconName, state, stateText, curLabel, curVal, latL
   );
 }
 
-function buildHubBody(data, currentDshVersion) {
+function buildMismatchCallout(proj, projectStatus) {
+  const hasMismatch = Boolean(proj?.versionMismatch || projectStatus?.versionMismatch);
+  if (!hasMismatch) return null;
+
+  const isEnvConflict = Boolean(proj?.envConflict || projectStatus?.envConflict);
+  const sources = Array.isArray(proj?.versionSources)
+    ? proj.versionSources
+    : (Array.isArray(projectStatus?.versionSources) ? projectStatus.versionSources : []);
+  const envSrc = sources.find((s) => s && s.source === 'env');
+  const envVer = proj?.envVersion || projectStatus?.envVersion || envSrc?.raw || '';
+  const imageVer = proj?.imageVersion || projectStatus?.imageVersion || proj?.current || projectStatus?.version || '';
+
+  const descEl = h(
+    'div',
+    null,
+    isEnvConflict && envVer
+      ? richText(t('version', 'envMismatchBody'), { envVersion: envVer, imageVersion: imageVer })
+      : richText(t('version', 'sourceMismatchBody'), { version: imageVer })
+  );
+
+  const visibleSources = sources.filter((s) => s && (s.valid || s.raw));
+  const sourceRows = visibleSources.length > 0
+    ? h(
+      'div',
+      { className: 'hub-source-list' },
+      visibleSources.map((s) => h(
+        'div',
+        { className: 'hub-source-row' },
+        h('code', null, s.label || s.source),
+        h(
+          'span',
+          { className: 'hub-source-meta' },
+          h('span', { className: 'mono' }, s.raw ? `v${s.raw}` : '—'),
+          s.conflict
+            ? createTag({ tone: 'warning', text: t('version', 'sourceConflictIgnored') })
+            : s.adopted
+              ? createTag({ tone: 'outline', text: t('version', 'sourceAdopted') })
+              : null
+        )
+      ))
+    )
+    : null;
+
+  return createNotice({
+    level: 'warn',
+    title: t('version', 'envMismatchTitle'),
+    body: h('div', null, descEl, sourceRows)
+  });
+}
+
+function buildHubBody(data, currentDshVersion, projectStatus = null) {
   const lang = getLocale();
   const proj = data?.project || {};
   const dsh = data?.dsh || {};
   const compat = data?.compatibility || {};
+  const hasMismatch = Boolean(proj.versionMismatch || projectStatus?.versionMismatch);
 
-  const curSuite = suiteVerText(proj.current, t);
-  const latSuite = suiteVerText(proj.latest || proj.current, t);
+  const curSuite = suiteVerText(proj.current || projectStatus?.version || '', t);
+  const latSuite = suiteVerText(proj.latest || proj.current || projectStatus?.version || '', t);
   const curDsh = dsh.current || currentDshVersion || '';
   const latDsh = dsh.latest || '';
 
+  const projEffectiveLevel = proj.level === 'danger' ? 'danger'
+    : (hasMismatch || proj.level === 'warning') ? 'warning'
+      : proj.level;
+
   const projStatusText = proj.level === 'danger' ? t('version', 'badgeIncompatible')
     : proj.hasUpdate ? t('version', 'badgeUpdateAvailable')
-      : proj.level === 'warning' ? t('version', 'badgeAdvisory')
-        : t('version', 'badgeUpToDate');
+      : hasMismatch ? t('version', 'badgeEnvMismatch')
+        : proj.level === 'warning' ? t('version', 'badgeAdvisory')
+          : t('version', 'badgeUpToDate');
 
   const dshStatusText = dsh.level === 'danger' ? t('version', 'badgeIncompatible')
     : dsh.level === 'warning' ? t('version', 'badgeUnadapted')
@@ -95,7 +151,7 @@ function buildHubBody(data, currentDshVersion) {
     versionCard({
       title: t('version', 'suiteCardTitle'),
       iconName: 'package',
-      state: levelToState(proj.level, proj.hasUpdate),
+      state: levelToState(projEffectiveLevel, proj.hasUpdate),
       stateText: projStatusText,
       curLabel: t('version', 'localRunning'),
       curVal: curSuite,
@@ -217,9 +273,12 @@ function buildHubBody(data, currentDshVersion) {
       dshBody
     );
 
+  const mismatchBanner = buildMismatchCallout(proj, projectStatus);
+
   return h(
     'div',
     { className: 'hub' },
+    mismatchBanner,
     cards,
     h('div', { className: 'hub-columns' },
       h('div', { className: 'hub-col' }, compatBlock),
@@ -228,9 +287,9 @@ function buildHubBody(data, currentDshVersion) {
   );
 }
 
-export function openVersionHubModal({ versionCheck, currentDshVersion, onRefresh }) {
+export function openVersionHubModal({ versionCheck, projectStatus = null, currentDshVersion, onRefresh }) {
   const bodyHost = h('div', null, versionCheck
-    ? buildHubBody(versionCheck, currentDshVersion)
+    ? buildHubBody(versionCheck, currentDshVersion, projectStatus)
     : h('div', { className: 'empty-state' }, t('common', 'loading')));
 
   const refreshLabel = h('span', { className: 'btn-label' }, t('version', 'recheckBtn'));
@@ -246,7 +305,7 @@ export function openVersionHubModal({ versionCheck, currentDshVersion, onRefresh
           const fresh = await onRefresh(true);
           if (fresh) {
             clear(bodyHost);
-            bodyHost.appendChild(buildHubBody(fresh, fresh?.dsh?.current || currentDshVersion));
+            bodyHost.appendChild(buildHubBody(fresh, fresh?.dsh?.current || currentDshVersion, projectStatus));
           }
         } finally {
           refreshBtn.disabled = false;
@@ -276,7 +335,7 @@ export function openVersionHubModal({ versionCheck, currentDshVersion, onRefresh
     onRefresh(false).then((fresh) => {
       if (fresh && document.body.contains(bodyHost)) {
         clear(bodyHost);
-        bodyHost.appendChild(buildHubBody(fresh, fresh?.dsh?.current || currentDshVersion));
+        bodyHost.appendChild(buildHubBody(fresh, fresh?.dsh?.current || currentDshVersion, projectStatus));
       }
     }).catch(() => {});
   }

@@ -189,7 +189,9 @@ class VersionService {
   async check(force = false, dshManager = null) {
     const meta = await this.fetchRemoteMeta(force);
     const effectiveCompat = getEffectiveCompat(meta);
-    const currentProjectVer = this.getLocalProjectVersion();
+    const versionDesc = this.describeProjectVersion();
+    const currentProjectVer = versionDesc.version;
+    const versionMismatch = Boolean(versionDesc.versionMismatch);
     const rawLatestProjectVer = meta.latest?.version;
     const latestProjectVer = isSemver(rawLatestProjectVer) ? rawLatestProjectVer : currentProjectVer;
     const hasProjectUpdate = Boolean(
@@ -197,7 +199,9 @@ class VersionService {
       && compareSemver(latestProjectVer, currentProjectVer) > 0
     );
 
-    const projectLevel = hasProjectUpdate ? 'info' : 'success';
+    const projectLevel = versionMismatch
+      ? 'warning'
+      : (hasProjectUpdate ? 'info' : 'success');
 
     let currentDshVer = 'unknown';
     let latestDshVer = '';
@@ -269,6 +273,11 @@ class VersionService {
         current: currentProjectVer,
         latest: latestProjectVer,
         hasUpdate: hasProjectUpdate,
+        versionMismatch,
+        envConflict: Boolean(versionDesc.envConflict),
+        envVersion: versionDesc.envVersion ?? null,
+        imageVersion: versionDesc.imageVersion ?? null,
+        versionSources: versionDesc.sources,
         level: projectLevel,
         updateTitle,
         releaseDate: activeReleaseDate,

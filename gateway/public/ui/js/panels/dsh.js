@@ -512,7 +512,32 @@ export function renderDshPanel(container, ctx) {
   const isUpToDate = Boolean(curVer && latestVer && compareSemver(curVer, latestVer) >= 0);
   const rt = runtimeDot(status);
 
-  // 0. Crash auto-isolation banner (genuine warning)
+  // 0a. Suite container ENV vs image version mismatch banner (Issue #24)
+  const projStatus = status?.project || {};
+  const projCheck = versionCheck?.project || {};
+  const hasVersionMismatch = Boolean(projCheck.versionMismatch || projStatus.versionMismatch);
+  let versionMismatchBanner = null;
+  if (hasVersionMismatch) {
+    const isEnvConflict = Boolean(projCheck.envConflict || projStatus.envConflict);
+    const envVer = projCheck.envVersion || projStatus.envVersion || '';
+    const imageVer = projCheck.imageVersion || projStatus.imageVersion || projCheck.current || projStatus.version || '';
+    versionMismatchBanner = createNotice({
+      level: 'warn',
+      title: t('version', 'envMismatchTitle'),
+      body: isEnvConflict && envVer
+        ? richText(t('version', 'envMismatchBody'), { envVersion: envVer, imageVersion: imageVer })
+        : richText(t('version', 'sourceMismatchBody'), { version: imageVer }),
+      actions: actionGroup(
+        button({
+          size: 'sm',
+          label: t('shell', 'versionHub'),
+          onClick: () => ctx.actions.openVersionHub()
+        })
+      )
+    });
+  }
+
+  // 0b. Crash auto-isolation banner (genuine warning)
   const isolatedEvents = status?.autoIsolatedEvents || [];
   let autoIsolatedBanner = null;
   if (isolatedEvents.length > 0) {
@@ -1149,6 +1174,7 @@ export function renderDshPanel(container, ctx) {
   clear(container);
   container.append(
     pageHeader({ title: t('dsh', 'coreCardTitle'), desc: t('dsh', 'coreCardDesc') }),
+    ...(versionMismatchBanner ? [h('div', { className: 'page-banner' }, versionMismatchBanner)] : []),
     ...(autoIsolatedBanner ? [h('div', { className: 'page-banner' }, autoIsolatedBanner)] : []),
     overview,
     serviceSection,

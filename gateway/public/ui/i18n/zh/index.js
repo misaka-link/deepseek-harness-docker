@@ -634,6 +634,7 @@ export const version = {
   badgeUpToDate: '已是最新',
   badgeUpdateAvailable: '发现新版',
   badgeAdvisory: '存在建议',
+  badgeEnvMismatch: '环境变量冲突',
   badgeIncompatible: '不兼容',
   badgeUnadapted: '未经适配',
   badgeDshNewRelease: '有官方新版',
@@ -655,7 +656,12 @@ export const version = {
   dshNewVersionTitle: '官方 DSH 新发布 {version} 更新要点',
   dshHighlightsTitle: '官方 DSH 核心 {version} 特性要点',
   originalLangTag: '原文',
-  defaultChangelogItem: '持续优化系统稳定性与管理控制台体验'
+  defaultChangelogItem: '持续优化系统稳定性与管理控制台体验',
+  envMismatchTitle: '容器环境变量与镜像内版本不一致',
+  envMismatchBody: '检测到容器环境变量 <code>DSH_SUITE_VERSION={envVersion}</code> 与镜像内版本 <code>v{imageVersion}</code> 不一致（常见于升级时克隆了旧容器配置），已自动采用镜像内版本。请执行 <code>docker compose up -d --force-recreate</code> 按新镜像配置重建容器。',
+  sourceMismatchBody: '检测到套件版本来源不一致，已采用镜像内权威版本 <code>v{version}</code>。建议执行 <code>docker compose up -d --force-recreate</code> 重建容器以消除陈旧配置。',
+  sourceConflictIgnored: '冲突 · 已忽略',
+  sourceAdopted: '已采用'
 };
 
 export const errors = {

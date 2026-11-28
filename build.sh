@@ -14,7 +14,7 @@ set -e
 # 允许用环境变量覆盖：测试构建若靠 sed 改这一行，同步仓库时会被覆盖回默认值，
 # 结果把测试镜像打成了生产名字（实际踩过）。IMAGE_NAME=dsh-i18test ./build.sh 更安全。
 IMAGE_NAME="${IMAGE_NAME:-deepseek-harness-docker}"
-PROJ_VER="1.0.0"
+PROJ_VER="1.0.1"
 NOVNC_ASSET_REVISION="${NOVNC_ASSET_REVISION:-1.6.0}"
 # 预装层缓存刷新键：默认用当前时间戳，保证每次构建都重新执行预装层，
 # 让 plugins.market.list 里的 @latest 插件（dshmarket）拉到最新版。

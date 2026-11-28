@@ -3,10 +3,16 @@
 /**
  * Single authoritative reader for the suite project version.
  *
- * Resolution order:
- * 1. Build-time injected ENV (DSH_SUITE_VERSION)
- * 2. gateway/package.json#version (ONLY file in gateway/ allowed to read gateway/package.json)
- * 3. version.json#latest.version
+ * Cross-validated resolution policy (Issue #19 + Issue #24):
+ * 1. Image-baked files (`gateway/package.json#version`, then `version.json#latest.version`)
+ *    define the immutable identity of the running container image.
+ * 2. Build-time injected ENV (`DSH_SUITE_VERSION`) is cross-validated against the image-baked
+ *    version before adoption: container recreation tools that clone `Config.Env` from an older
+ *    container (e.g. dpanel / Portainer recreate) leave stale `DSH_SUITE_VERSION` values in the
+ *    new container environment. When ENV disagrees with the image-baked version, ENV is flagged
+ *    as `conflict: true`, ignored in favor of the image-baked version, and logged via `console.warn`.
+ * 3. If both image-baked files are unavailable/unreadable, a valid `DSH_SUITE_VERSION` is still
+ *    accepted as a last-resort fallback.
  *
  * Never fabricates a hardcoded fallback version: returns null when all sources are unavailable.
  */
@@ -71,52 +77,11 @@ const SOURCES = [
 
 let mismatchWarned = false;
 
-/**
- * Resolve the suite project version.
- *
- * @returns {string|null} Valid semver string, or null if all sources are unavailable.
- */
-function resolveProjectVersion() {
-  const hits = [];
-  for (const item of SOURCES) {
-    let value = '';
-    try {
-      value = item.read();
-    } catch {
-      value = '';
-    }
-    if (isValidProjectVersion(value)) {
-      hits.push({ source: item.source, version: normalize(value) });
-    }
-  }
-
-  if (hits.length === 0) return null;
-
-  if (!mismatchWarned) {
-    const distinct = new Set(hits.map((h) => h.version));
-    if (distinct.size > 1) {
-      mismatchWarned = true;
-      console.warn(
-        '[project-version] 套件版本号来源不一致（已采用最高优先级 ' + hits[0].source + '）：' +
-        hits.map((h) => `${h.source}=${h.version}`).join(' | ')
-      );
-    }
-  }
-
-  return hits[0].version;
-}
-
-/**
- * Diagnostic report of all version sources and the adopted value.
- *
- * @returns {{version: string|null, sources: Array<{source: string, label: string, raw: string, valid: boolean, adopted: boolean}>}}
- */
-function describeProjectVersion() {
-  const resolved = resolveProjectVersion();
-  const sources = SOURCES.map((item) => {
+function evaluateSources() {
+  const rawEntries = SOURCES.map((item) => {
     let raw = '';
     try {
-      raw = item.read();
+      raw = normalize(item.read());
     } catch {
       raw = '';
     }
@@ -124,12 +89,98 @@ function describeProjectVersion() {
     return {
       source: item.source,
       label: item.label,
-      raw: normalize(raw),
-      valid,
-      adopted: valid && resolved !== null && normalize(raw) === resolved
+      raw,
+      valid
     };
   });
-  return { version: resolved, sources };
+
+  const envItem = rawEntries.find((e) => e.source === 'env');
+  const pkgItem = rawEntries.find((e) => e.source === 'package.json' && e.valid);
+  const verJsonItem = rawEntries.find((e) => e.source === 'version.json' && e.valid);
+  const imageItem = pkgItem || verJsonItem || null;
+
+  let resolved = null;
+  if (imageItem) {
+    // Cross-validate ENV against image-baked identity: if ENV matches imageItem, both equal imageItem.raw;
+    // if ENV disagrees (stale cloned container Config.Env), downgrade to imageItem.raw.
+    resolved = imageItem.raw;
+  } else if (envItem && envItem.valid) {
+    resolved = envItem.raw;
+  }
+
+  const sources = rawEntries.map((item) => {
+    const adopted = Boolean(item.valid && resolved !== null && item.raw === resolved);
+    const conflict = Boolean(item.valid && resolved !== null && item.raw !== resolved);
+    return {
+      source: item.source,
+      label: item.label,
+      raw: item.raw,
+      valid: item.valid,
+      adopted,
+      conflict
+    };
+  });
+
+  const versionMismatch = sources.some((s) => s.conflict);
+  const envOut = sources.find((s) => s.source === 'env');
+  const envConflict = Boolean(envOut && envOut.conflict);
+  const envVersion = envOut && envOut.valid ? envOut.raw : null;
+  const imageVersion = imageItem ? imageItem.raw : null;
+
+  if (versionMismatch && !mismatchWarned) {
+    mismatchWarned = true;
+    const validSummary = sources
+      .filter((s) => s.valid)
+      .map((s) => `${s.source}=${s.raw}`)
+      .join(' | ');
+    if (envConflict && imageItem) {
+      console.warn(
+        `[project-version] 套件版本号来源不一致：容器环境变量 ${ENV_KEY}=${envOut.raw} 与镜像内 ${imageItem.source}=${imageItem.raw} 冲突` +
+        `（常见于升级时克隆了旧容器配置），已忽略陈旧 ENV 并采用镜像内版本 ${resolved}；` +
+        `建议执行 docker compose up -d --force-recreate 重建容器：${validSummary}`
+      );
+    } else {
+      console.warn(
+        `[project-version] 套件版本号来源不一致（已采用镜像内 ${imageItem ? imageItem.source : '权威源'} ${resolved}）：${validSummary}`
+      );
+    }
+  }
+
+  return {
+    version: resolved,
+    versionMismatch,
+    envConflict,
+    envVersion,
+    imageVersion,
+    sources
+  };
+}
+
+/**
+ * Resolve the suite project version.
+ *
+ * @returns {string|null} Valid semver string, or null if all sources are unavailable.
+ */
+function resolveProjectVersion() {
+  const { version } = evaluateSources();
+  if (!version) return null;
+  return version;
+}
+
+/**
+ * Diagnostic report of all version sources, conflict state, and the adopted value.
+ *
+ * @returns {{
+ *   version: string|null,
+ *   versionMismatch: boolean,
+ *   envConflict: boolean,
+ *   envVersion: string|null,
+ *   imageVersion: string|null,
+ *   sources: Array<{source: string, label: string, raw: string, valid: boolean, adopted: boolean, conflict: boolean}>
+ * }}
+ */
+function describeProjectVersion() {
+  return evaluateSources();
 }
 
 function resetWarnings() {

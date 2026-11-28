@@ -2434,6 +2434,29 @@ body[data-ds-dark-theme] .menu {
   color: var(--dsw-alias-label-secondary);
 }
 
+.hub-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.hub-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.hub-source-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .hub-cards,
   .hub-columns {

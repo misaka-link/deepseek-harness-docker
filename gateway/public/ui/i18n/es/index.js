@@ -634,6 +634,7 @@ export const version = {
   badgeUpToDate: 'Actualizado',
   badgeUpdateAvailable: 'Actualización disponible',
   badgeAdvisory: 'Aviso',
+  badgeEnvMismatch: 'Conflicto de ENV',
   badgeIncompatible: 'Incompatible',
   badgeUnadapted: 'Sin verificar',
   badgeDshNewRelease: 'Nueva versión',
@@ -655,7 +656,12 @@ export const version = {
   dshNewVersionTitle: 'Novedades de DSH oficial {version}',
   dshHighlightsTitle: 'Aspectos destacados de DSH {version}',
   originalLangTag: 'Original',
-  defaultChangelogItem: 'Mejoras continuas de estabilidad y consola'
+  defaultChangelogItem: 'Mejoras continuas de estabilidad y consola',
+  envMismatchTitle: 'La variable ENV del contenedor no coincide con la imagen',
+  envMismatchBody: 'La variable de entorno <code>DSH_SUITE_VERSION={envVersion}</code> difiere de la versión integrada en la imagen <code>v{imageVersion}</code> (habitual al recrear clonando la configuración anterior). Se ha adoptado la versión de la imagen; ejecuta <code>docker compose up -d --force-recreate</code> para recrear el contenedor.',
+  sourceMismatchBody: 'Las fuentes de versión no coinciden; se adoptó la versión de la imagen <code>v{version}</code>. Ejecuta <code>docker compose up -d --force-recreate</code> para actualizar el contenedor.',
+  sourceConflictIgnored: 'Conflicto · Ignorado',
+  sourceAdopted: 'Adoptada'
 };
 
 export const errors = {

@@ -634,6 +634,7 @@ export const version = {
   badgeUpToDate: '最新',
   badgeUpdateAvailable: '更新あり',
   badgeAdvisory: '推奨通知',
+  badgeEnvMismatch: '環境変数の不整合',
   badgeIncompatible: '非互換',
   badgeUnadapted: '未検証',
   badgeDshNewRelease: '公式新版あり',
@@ -655,7 +656,12 @@ export const version = {
   dshNewVersionTitle: '公式 DSH {version} の新機能・変更点',
   dshHighlightsTitle: '公式 DSH コア {version} の特徴',
   originalLangTag: '原文',
-  defaultChangelogItem: '安定性と管理コンソールの継続的な改善'
+  defaultChangelogItem: '安定性と管理コンソールの継続的な改善',
+  envMismatchTitle: 'コンテナ環境変数とイメージ内バージョンの不一致',
+  envMismatchBody: 'コンテナ環境変数 <code>DSH_SUITE_VERSION={envVersion}</code> がイメージ内バージョン <code>v{imageVersion}</code> と一致しません（旧コンテナ設定を複製して更新した際によく発生します）。イメージ内バージョンを採用しました。<code>docker compose up -d --force-recreate</code> を実行してコンテナを再作成してください。',
+  sourceMismatchBody: 'スイートのバージョン情報源に不一致が検出されたため、イメージ内の <code>v{version}</code> を採用しました。<code>docker compose up -d --force-recreate</code> でコンテナを再作成してください。',
+  sourceConflictIgnored: '競合・無視',
+  sourceAdopted: '採用中'
 };
 
 export const errors = {

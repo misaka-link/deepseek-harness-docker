@@ -320,6 +320,7 @@ async function bootAdmin() {
     openVersionHub() {
       openVersionHubModal({
         versionCheck: state.versionCheck,
+        projectStatus: state.status?.project || null,
         currentDshVersion: state.status?.dsh?.version || state.dshVersions?.current || '',
         onRefresh: (force) => actions.refreshVersionCheck(force)
       });

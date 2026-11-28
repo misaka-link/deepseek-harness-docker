@@ -312,12 +312,13 @@ try {
   });
 
   console.log('\n=== 4. 核心 API 契约 (/healthz, /__ui/prefs, status, registry, install 下限) ===');
-  await test('GET /healthz 返回 200、projectVersion=1.0.0 与 patches.needleResidue=0', async () => {
+  const expectedSuiteVer = JSON.parse(fs.readFileSync(path.join(root, 'gateway/package.json'), 'utf8')).version;
+  await test(`GET /healthz 返回 200、projectVersion=${expectedSuiteVer} 与 patches.needleResidue=0`, async () => {
     const r = await rawRequest(mainPort, '/healthz');
     assert.equal(r.status, 200);
     const j = JSON.parse(r.text);
     assert.equal(j.ok, true);
-    assert.equal(j.projectVersion, '1.0.0');
+    assert.equal(j.projectVersion, expectedSuiteVer);
     assert.equal(j.patches && j.patches.needleResidue, 0);
   });
 

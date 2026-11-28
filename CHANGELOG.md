@@ -4,6 +4,14 @@
 
 ---
 
+## [v1.0.1] - 2026-11-28
+
+### 缺陷修复
+- **修复克隆旧容器配置重建时遗留陈旧 `DSH_SUITE_VERSION` 导致误报「发现新版」（#24）**：`gateway/src/core/project-version.js` 在采信 `DSH_SUITE_VERSION` 前与镜像内烘焙的 `gateway/package.json#version`（回退 `version.json#latest.version`）交叉校验；当容器级环境变量与镜像内真实版本不一致时，拒绝采信陈旧 `ENV`、降级采用镜像真实版本，防止管理面板假报更新及污染新建快照元数据。
+- **暴露版本来源冲突诊断与多语言重建指引（#24）**：`versionSources` 新增 `conflict` 布尔标记，`/admin/api/status` 与 `/admin/api/version/check` 新增 `project.versionMismatch`、`project.envConflict`、`project.envVersion` 与 `project.imageVersion`；管理后台顶栏、侧边栏、DSH 首页横幅与版本中心同步提供 8 语言冲突告警，提示执行 `docker compose up -d --force-recreate` 按新镜像配置重建容器。
+- **补齐「容器浏览器桌面」侧栏向导与顺序管理图标**：为 `@dsh-custom/dsh-browser-desktop` 的 `sidebarRightTabs` 向导条目补齐稳定 `id` 与 `36×36` 双色桌面浏览器矢量图标组件，消除 DSH 右侧栏入口与顺序调整列表中的图标留白。
+- **修复经典 `docker build`（非 BuildKit）构建兼容性**：将 `Dockerfile` 中多行 heredoc 辅助脚本生成步骤改写为标准 POSIX `printf` 续行并附带非空与 `sh -n` 语法断言，兼容未安装 `docker-buildx` 的 `amd64` / `arm64` 主机。
+
 ## [v1.0.0] - 2026-11-27
 
 ### 新增特性

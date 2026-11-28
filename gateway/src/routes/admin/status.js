@@ -21,12 +21,25 @@ const routes = [
         runtimeConfig.npmRegistry ||
         '';
 
+      const versionDesc = typeof versionService.describeProjectVersion === 'function'
+        ? versionService.describeProjectVersion()
+        : {
+            version: versionService.getLocalProjectVersion(),
+            versionMismatch: false,
+            envConflict: false,
+            envVersion: null,
+            imageVersion: null,
+            sources: undefined
+          };
+
       return sendJson(res, 200, {
         project: {
-          version: versionService.getLocalProjectVersion(),
-          versionSources: typeof versionService.describeProjectVersion === 'function'
-            ? versionService.describeProjectVersion().sources
-            : undefined
+          version: versionDesc.version,
+          versionMismatch: Boolean(versionDesc.versionMismatch),
+          envConflict: Boolean(versionDesc.envConflict),
+          envVersion: versionDesc.envVersion ?? null,
+          imageVersion: versionDesc.imageVersion ?? null,
+          versionSources: versionDesc.sources
         },
         dsh: dshManager.getStatus(),
         desktop: desktopManager.getStatus(),
